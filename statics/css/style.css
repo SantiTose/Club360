@@ -50,7 +50,7 @@ html {
 
 html, body {
     height: 100%;
-    background: var(--white);
+    background: #f8f9fa;
 }
 
 body {
@@ -58,7 +58,7 @@ body {
     font-size: 16px;
     line-height: 1.6;
     color: var(--dark);
-    background: var(--white);
+    background: #f8f9fa;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -66,7 +66,7 @@ body {
 
 main {
     flex: 1;
-    background: var(--white);
+    background: #f8f9fa;
 }
 
 /* ================================
@@ -354,10 +354,11 @@ a:hover {
 
 section {
     padding: 4rem 0;
+    background: var(--white);
 }
 
 section:nth-child(even) {
-    background: var(--gray-50);
+    background: #ffffff;
 }
 
 /* ================================
