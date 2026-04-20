@@ -416,7 +416,8 @@ a:hover {
     border-color: var(--warning);
 }
 
-.alert-danger {
+.alert-danger,
+.alert-error {
     background: #fee2e2;
     color: #991b1b;
     border-color: var(--danger);
