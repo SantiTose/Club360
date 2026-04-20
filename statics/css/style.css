@@ -38,7 +38,7 @@
 
 html, body {
     height: 100%;
-    background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
+    background: #f3f7fa;
 }
 
 body {
@@ -46,7 +46,7 @@ body {
     font-size: 16px;
     line-height: 1.6;
     color: var(--dark);
-    background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
+    background: #f3f7fa;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -314,9 +314,8 @@ a:hover {
    ================================ */
 
 section {
-    background: var(--white);
+    background: transparent;
     padding: 3rem 0;
-    border-radius: var(--radius);
     margin: 2rem 0;
 }
 
@@ -337,12 +336,13 @@ section {
 }
 
 .feature-card {
-    background: var(--white);
+    background: rgba(255, 255, 255, 0.7);
     padding: 2rem;
     border-radius: var(--radius);
-    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     transition: var(--transition);
-    border: 1px solid rgba(46, 125, 50, 0.1);
+    border: none;
+    backdrop-filter: blur(10px);
 }
 
 .feature-card:hover {
@@ -1018,7 +1018,7 @@ tbody tr:hover {
 
 @media (prefers-color-scheme: dark) {
     body {
-        background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
+        background: #f3f7fa;
         color: var(--dark);
     }
 
