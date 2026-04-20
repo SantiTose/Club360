@@ -20,10 +20,14 @@
                         type="text" 
                         id="nombre" 
                         name="nombre" 
-                        class="form-control" 
+                        class="form-control {% if field_errors.get('nombre') %}is-invalid{% endif %}" 
                         placeholder="Juan"
+                        value="{{ form_data.get('nombre', '') }}"
                         required
                     >
+                    {% if field_errors.get('nombre') %}
+                        <small class="form-text error">{{ field_errors['nombre'] }}</small>
+                    {% endif %}
                 </div>
 
                 <div class="form-group">
@@ -32,10 +36,14 @@
                         type="text" 
                         id="apellido" 
                         name="apellido" 
-                        class="form-control" 
+                        class="form-control {% if field_errors.get('apellido') %}is-invalid{% endif %}" 
                         placeholder="Pérez"
+                        value="{{ form_data.get('apellido', '') }}"
                         required
                     >
+                    {% if field_errors.get('apellido') %}
+                        <small class="form-text error">{{ field_errors['apellido'] }}</small>
+                    {% endif %}
                 </div>
             </div>
 
@@ -46,12 +54,17 @@
                     type="text" 
                     id="dni" 
                     name="dni" 
-                    class="form-control" 
+                    class="form-control {% if field_errors.get('dni') %}is-invalid{% endif %}" 
                     placeholder="12345678"
                     pattern="[0-9]{8}"
+                    value="{{ form_data.get('dni', '') }}"
                     required
                 >
-                <small class="form-text">8 dígitos sin puntos</small>
+                {% if field_errors.get('dni') %}
+                    <small class="form-text error">{{ field_errors['dni'] }}</small>
+                {% else %}
+                    <small class="form-text">8 dígitos sin puntos</small>
+                {% endif %}
             </div>
 
             <!-- Email -->
@@ -61,12 +74,17 @@
                     type="email" 
                     id="email" 
                     name="email" 
-                    class="form-control" 
+                    class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" 
                     placeholder="tu@email.com"
+                    value="{{ form_data.get('email', '') }}"
                     required
                     autocomplete="email"
                 >
-                <small class="form-text">Te enviaremos un correo de confirmación</small>
+                {% if field_errors.get('email') %}
+                    <small class="form-text error">{{ field_errors['email'] }}</small>
+                {% else %}
+                    <small class="form-text">Te enviaremos un correo de confirmación</small>
+                {% endif %}
             </div>
 
             <!-- Contraseña y Confirmación en una fila -->
@@ -78,7 +96,7 @@
                             type="password" 
                             id="password" 
                             name="password" 
-                            class="form-control" 
+                            class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" 
                             placeholder="••••••••"
                             minlength="6"
                             required
@@ -88,7 +106,11 @@
                             <span class="eye-icon">👁️</span>
                         </button>
                     </div>
-                    <small class="form-text">Mínimo 6 caracteres</small>
+                    {% if field_errors.get('password') %}
+                        <small class="form-text error">{{ field_errors['password'] }}</small>
+                    {% else %}
+                        <small class="form-text">Mínimo 6 caracteres</small>
+                    {% endif %}
                 </div>
 
                 <div class="form-group">
@@ -98,7 +120,7 @@
                             type="password" 
                             id="password_confirm" 
                             name="password_confirm" 
-                            class="form-control" 
+                            class="form-control {% if field_errors.get('password_confirm') %}is-invalid{% endif %}" 
                             placeholder="••••••••"
                             minlength="6"
                             required
@@ -108,7 +130,11 @@
                             <span class="eye-icon">👁️</span>
                         </button>
                     </div>
-                    <small class="form-text" id="password-match-text">Repite tu contraseña</small>
+                    {% if field_errors.get('password_confirm') %}
+                        <small class="form-text error" id="password-match-text">{{ field_errors['password_confirm'] }}</small>
+                    {% else %}
+                        <small class="form-text" id="password-match-text">Repite tu contraseña</small>
+                    {% endif %}
                     <small class="form-text error" id="password-error" style="display: none;">Las contraseñas no coinciden</small>
                 </div>
             </div>

@@ -511,6 +511,18 @@ input[type="password"].form-control::placeholder {
     color: #9ca3af !important;
 }
 
+/* Invalid field state */
+.form-control.is-invalid {
+    border-color: var(--danger) !important;
+    background-color: #fef2f2 !important;
+}
+
+.form-control.is-invalid:focus {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
+    background: linear-gradient(to bottom, #fef2f2, #fee2e2) !important;
+}
+
 textarea.form-control {
     resize: vertical;
     min-height: 120px;

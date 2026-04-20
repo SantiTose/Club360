@@ -25,12 +25,17 @@
                         type="email" 
                         id="email" 
                         name="email" 
-                        class="form-control" 
+                        class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" 
                         placeholder="tu@email.com"
+                        value="{{ form_data.get('email', '') }}"
                         required
                         autocomplete="email"
                     >
-                    <small class="form-text">Ingresa tu correo electrónico registrado</small>
+                    {% if field_errors.get('email') %}
+                        <small class="form-text error">{{ field_errors['email'] }}</small>
+                    {% else %}
+                        <small class="form-text">Ingresa tu correo electrónico registrado</small>
+                    {% endif %}
                 </div>
 
                 <div class="form-group">
@@ -40,7 +45,7 @@
                             type="password" 
                             id="password" 
                             name="password" 
-                            class="form-control" 
+                            class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" 
                             placeholder="••••••••"
                             required
                             autocomplete="current-password"
@@ -49,7 +54,11 @@
                             <span class="eye-icon">👁️</span>
                         </button>
                     </div>
-                    <small class="form-text">Ingresa tu contraseña</small>
+                    {% if field_errors.get('password') %}
+                        <small class="form-text error">{{ field_errors['password'] }}</small>
+                    {% else %}
+                        <small class="form-text">Ingresa tu contraseña</small>
+                    {% endif %}
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0;">

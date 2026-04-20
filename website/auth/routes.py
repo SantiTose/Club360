@@ -19,38 +19,45 @@ def register():
         password = request.form.get('password', '')
         password_confirm = request.form.get('password_confirm', '')
         
-        # Validaciones
-        errors = []
+        # Diccionario de errores por campo
+        field_errors = {}
         
+        # Validaciones
         if not nombre or len(nombre) < 2:
-            errors.append('El nombre debe tener al menos 2 caracteres')
+            field_errors['nombre'] = 'El nombre debe tener al menos 2 caracteres'
         
         if not apellido or len(apellido) < 2:
-            errors.append('El apellido debe tener al menos 2 caracteres')
+            field_errors['apellido'] = 'El apellido debe tener al menos 2 caracteres'
         
         if not dni or not re.match(r'^\d{8}$', dni):
-            errors.append('El DNI debe tener 8 dígitos')
+            field_errors['dni'] = 'El DNI debe tener 8 dígitos'
         
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
-            errors.append('El email no es válido')
+            field_errors['email'] = 'El email no es válido'
         
         if len(password) < 6:
-            errors.append('La contraseña debe tener al menos 6 caracteres')
+            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
         
         if password != password_confirm:
-            errors.append('Las contraseñas no coinciden')
+            field_errors['password_confirm'] = 'Las contraseñas no coinciden'
         
         # Verificar duplicados
-        if Usuario.query.filter_by(email=email).first():
-            errors.append('El email ya está registrado')
+        if not field_errors.get('email') and Usuario.query.filter_by(email=email).first():
+            field_errors['email'] = 'El email ya está registrado'
         
-        if Usuario.query.filter_by(dni=dni).first():
-            errors.append('El DNI ya está registrado')
+        if not field_errors.get('dni') and Usuario.query.filter_by(dni=dni).first():
+            field_errors['dni'] = 'El DNI ya está registrado'
         
-        if errors:
-            for error in errors:
-                flash(error, 'error')
-            return redirect(url_for('auth.register'))
+        # Si hay errores, devolver el formulario con los datos
+        if field_errors:
+            return render_template('auth/register.html', 
+                                 field_errors=field_errors,
+                                 form_data={
+                                     'nombre': nombre,
+                                     'apellido': apellido,
+                                     'dni': dni,
+                                     'email': email
+                                 })
         
         try:
             nuevo_usuario = Usuario(
@@ -72,9 +79,15 @@ def register():
         except Exception as e:
             db.session.rollback()
             flash('❌ Error al registrar usuario. Por favor, intenta de nuevo.', 'error')
-            return redirect(url_for('auth.register'))
+            return render_template('auth/register.html', 
+                                 form_data={
+                                     'nombre': nombre,
+                                     'apellido': apellido,
+                                     'dni': dni,
+                                     'email': email
+                                 })
     
-    return render_template('auth/register.html')
+    return render_template('auth/register.html', field_errors={}, form_data={})
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -88,9 +101,18 @@ def login():
         password = request.form.get('password', '')
         remember = request.form.get('remember')
         
-        if not email or not password:
-            flash('❌ Por favor, completa todos los campos', 'error')
-            return redirect(url_for('auth.login'))
+        field_errors = {}
+        
+        if not email:
+            field_errors['email'] = 'Por favor, ingresa tu email'
+        
+        if not password:
+            field_errors['password'] = 'Por favor, ingresa tu contraseña'
+        
+        if field_errors:
+            return render_template('auth/login.html', 
+                                 field_errors=field_errors,
+                                 form_data={'email': email})
         
         usuario = Usuario.query.filter_by(email=email).first()
         
@@ -99,9 +121,12 @@ def login():
             flash(f'✅ ¡Bienvenido {usuario.nombre}!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            flash('❌ Email o contraseña incorrectos', 'error')
+            field_errors['email'] = 'Email o contraseña incorrectos'
+            return render_template('auth/login.html', 
+                                 field_errors=field_errors,
+                                 form_data={'email': email})
     
-    return render_template('auth/login.html')
+    return render_template('auth/login.html', field_errors={}, form_data={})
 
 
 @auth_bp.route('/logout')
