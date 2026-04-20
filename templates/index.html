@@ -5,25 +5,25 @@
 {% block content %}
 <!-- Hero Section -->
 <div class="hero">
-    <h1>🏆 Bienvenido a Club 360</h1>
+    <h1>Bienvenido a Club 360</h1>
     <p>Tu plataforma integral de gestión de turnos deportivos</p>
     
     {% if not current_user.is_authenticated %}
         <div class="button-group">
-            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">🔑 Iniciar Sesión</a>
-            <a href="{{ url_for('auth.register') }}" class="btn btn-secondary">✍️ Registrarse</a>
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Iniciar Sesión</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-secondary">Registrarse</a>
         </div>
     {% else %}
         <div class="button-group">
-            <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">📅 Ver Turnos Disponibles</a>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">📊 Mi Dashboard</a>
+            <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Ver Turnos Disponibles</a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Mi Dashboard</a>
         </div>
     {% endif %}
 </div>
 
 <!-- Complejo Section -->
 <section class="mt-5 mb-5">
-    <h2 style="text-align: center; margin-bottom: 2rem;">🏢 Nuestro Complejo Deportivo</h2>
+    <h2 style="text-align: center; margin-bottom: 2rem;">Nuestro Complejo Deportivo</h2>
     <div style="border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg);">
         <img src="{{ url_for('static', filename='images/complejo.png') }}" alt="Club 360 Complejo" style="width: 100%; height: auto; display: block;">
     </div>
@@ -34,20 +34,37 @@
 
 <!-- Features Section -->
 <section class="features">
-    <h2>✨ Nuestros Servicios</h2>
+    <h2>Nuestros Servicios</h2>
     <div class="features-grid">
         <div class="feature-card">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">📅</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+            </div>
             <h3>Reserva de Turnos</h3>
             <p>Reserva tus turnos favoritos en línea con solo unos clics. Gestiona fácilmente tu calendario deportivo.</p>
         </div>
         <div class="feature-card">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">💳</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff9800" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+            </div>
             <h3>Gestión de Pagos</h3>
             <p>Paga tus deudas de forma segura con múltiples opciones de pago disponibles.</p>
         </div>
         <div class="feature-card">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">⚽</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#004d73" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </div>
             <h3>Múltiples Deportes</h3>
             <p>Accede a Fútbol, Básquet, Vóley y Pádel en una sola plataforma integrada.</p>
         </div>
@@ -56,22 +73,22 @@
 
 <!-- Sports Categories Section -->
 <section class="mt-5 mb-5">
-    <h2 style="text-align: center; margin-bottom: 3rem;">🏅 Nuestros Deportes</h2>
+    <h2 style="text-align: center; margin-bottom: 3rem;">Nuestros Deportes</h2>
     <div class="features-grid">
         <div class="feature-card" style="border-left: 4px solid #3b82f6;">
-            <h3 style="color: #3b82f6;">⚽ Fútbol</h3>
+            <h3 style="color: #3b82f6;">Fútbol</h3>
             <p>Partidos de 5 vs 5 o 11 vs 11. Horarios flexibles en nuestras mejores canchas.</p>
         </div>
         <div class="feature-card" style="border-left: 4px solid #8b5cf6;">
-            <h3 style="color: #8b5cf6;">🏀 Básquet</h3>
+            <h3 style="color: #8b5cf6;">Básquet</h3>
             <p>Torneos y partidos amistosos. Acceso a canchas con calidad profesional.</p>
         </div>
         <div class="feature-card" style="border-left: 4px solid #10b981;">
-            <h3 style="color: #10b981;">🏐 Vóley</h3>
+            <h3 style="color: #10b981;">Vóley</h3>
             <p>Entrenamientos y partidos. Infraestructura moderna con red reglamentaria.</p>
         </div>
         <div class="feature-card" style="border-left: 4px solid #f59e0b;">
-            <h3 style="color: #f59e0b;">🎾 Pádel</h3>
+            <h3 style="color: #f59e0b;">Pádel</h3>
             <p>Canchas con excelente superficie. Torneos competitivos y entrenamientos.</p>
         </div>
     </div>

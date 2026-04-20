@@ -1,23 +1,26 @@
+/* Google Fonts - Montserrat */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
 /* ================================
    GLOBAL STYLES & VARIABLES
    ================================ */
 
 :root {
-    --primary: #3b82f6;
-    --primary-dark: #2563eb;
-    --primary-light: #60a5fa;
-    --secondary: #8b5cf6;
-    --accent: #ec4899;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --dark: #1f2937;
-    --gray-100: #f3f4f6;
-    --gray-200: #e5e7eb;
-    --gray-300: #d1d5db;
-    --gray-400: #9ca3af;
-    --gray-500: #6b7280;
-    --gray-600: #4b5563;
+    --primary: #2e7d32;
+    --primary-dark: #1b5e20;
+    --primary-light: #66bb6a;
+    --secondary: #004d73;
+    --accent: #ff9800;
+    --success: #2e7d32;
+    --warning: #ff9800;
+    --danger: #c62828;
+    --dark: #2c2c2c;
+    --gray-100: #f5f5f5;
+    --gray-200: #eeeeee;
+    --gray-300: #e0e0e0;
+    --gray-400: #9e9e9e;
+    --gray-500: #757575;
+    --gray-600: #616161;
     --white: #ffffff;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -35,16 +38,15 @@
 
 html, body {
     height: 100%;
+    background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-                 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-                 sans-serif;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     font-size: 16px;
     line-height: 1.6;
     color: var(--dark);
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -52,6 +54,7 @@ body {
 
 main {
     flex: 1;
+    background: transparent;
 }
 
 /* ================================
@@ -119,7 +122,7 @@ a:hover {
    ================================ */
 
 .navbar {
-    background: var(--white);
+    background: var(--dark);
     box-shadow: var(--shadow-md);
     position: sticky;
     top: 0;
@@ -136,11 +139,12 @@ a:hover {
 .navbar-brand a {
     font-size: 1.75rem;
     font-weight: 800;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--primary);
     transition: var(--transition);
+}
+
+.navbar-brand a:hover {
+    color: var(--primary-light);
 }
 
 .navbar-brand a:hover {
@@ -156,15 +160,15 @@ a:hover {
 
 .navbar-menu li a {
     font-weight: 500;
-    color: var(--gray-600);
+    color: var(--white);
     padding: 0.5rem 1rem;
     border-radius: var(--radius);
     transition: var(--transition);
 }
 
 .navbar-menu li a:hover {
-    color: var(--primary);
-    background: var(--gray-100);
+    color: var(--primary-light);
+    background: rgba(46, 125, 50, 0.1);
 }
 
 .user-menu {
@@ -173,7 +177,8 @@ a:hover {
     gap: 1rem;
     margin-left: 1rem;
     padding-left: 1rem;
-    border-left: 2px solid var(--gray-200);
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+    color: var(--white);
 }
 
 .user-menu span {
@@ -204,7 +209,7 @@ a:hover {
     border-radius: var(--radius);
     text-align: center;
     margin: 3rem 0;
-    box-shadow: var(--shadow-xl);
+    box-shadow: 0 16px 40px rgba(46, 125, 50, 0.2);
 }
 
 .hero h1 {
@@ -276,7 +281,7 @@ a:hover {
 }
 
 .btn-success:hover {
-    background: #059669;
+    background: #1b5e20;
     color: var(--white);
 }
 
@@ -286,7 +291,7 @@ a:hover {
 }
 
 .btn-danger:hover {
-    background: #dc2626;
+    background: #a02020;
     color: var(--white);
 }
 
@@ -296,7 +301,7 @@ a:hover {
 }
 
 .btn-warning:hover {
-    background: #d97706;
+    background: #e68900;
     color: var(--white);
 }
 
@@ -307,6 +312,13 @@ a:hover {
 /* ================================
    FEATURES SECTION
    ================================ */
+
+section {
+    background: var(--white);
+    padding: 3rem 0;
+    border-radius: var(--radius);
+    margin: 2rem 0;
+}
 
 .features {
     margin: 4rem 0;
@@ -328,14 +340,14 @@ a:hover {
     background: var(--white);
     padding: 2rem;
     border-radius: var(--radius);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.08);
     transition: var(--transition);
-    border: 1px solid var(--gray-100);
+    border: 1px solid rgba(46, 125, 50, 0.1);
 }
 
 .feature-card:hover {
     transform: translateY(-8px);
-    box-shadow: var(--shadow-xl);
+    box-shadow: 0 12px 28px rgba(46, 125, 50, 0.15);
     border-color: var(--primary);
 }
 
@@ -636,12 +648,45 @@ select.form-control {
     gap: 1.5rem;
 }
 
-@media (max-width: 600px) {
-    .form-group-row,
-    .form-row {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
+/* Auth Page Container - Full screen centered */
+.auth-page-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+.auth-form-wrapper {
+    width: 100%;
+    max-width: 450px;
+    animation: slideInUp 0.5s ease;
+}
+
+/* Auth Divider */
+.auth-divider {
+    text-align: center;
+    border-top: 1px solid var(--gray-200);
+    padding-top: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.auth-divider p {
+    margin-bottom: 1rem;
+}
+
+/* Link Subtle */
+.link-subtle {
+    color: var(--primary);
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: var(--transition);
+    border-bottom: 1px solid transparent;
+}
+
+.link-subtle:hover {
+    color: var(--primary-dark);
+    border-bottom-color: var(--primary-dark);
 }
 
 /* ================================
@@ -973,8 +1018,8 @@ tbody tr:hover {
 
 @media (prefers-color-scheme: dark) {
     body {
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        color: var(--gray-100);
+        background: linear-gradient(135deg, #f8fafb 0%, #f0f4f8 100%);
+        color: var(--dark);
     }
 
     .navbar {

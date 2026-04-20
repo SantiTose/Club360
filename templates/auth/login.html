@@ -3,98 +3,81 @@
 {% block title %}Iniciar Sesión - Club 360{% endblock %}
 
 {% block content %}
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; margin: 3rem 0;">
-    <!-- Left: Image/Info -->
-    <div style="display: none;">
-        <!-- Reserved for future content -->
-    </div>
+<div class="auth-page-container">
+    <div class="form-container auth-form-wrapper">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360" style="height: 60px; width: auto; margin-bottom: 1.5rem;">
+            <h1 class="form-title">Bienvenido</h1>
+            <p class="form-subtitle">Inicia sesión en tu cuenta</p>
+        </div>
 
-    <!-- Right: Form -->
-    <div style="max-width: 500px;">
-        <div class="form-container">
-            <div style="text-align: center; margin-bottom: 2rem;">
-                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360" style="height: 60px; width: auto; margin-bottom: 1rem;">
-                <h1 class="form-title">Bienvenido</h1>
-                <p class="form-subtitle">Inicia sesión en tu cuenta</p>
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label for="email" class="form-label">Email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" 
+                    placeholder="tu@email.com"
+                    value="{{ form_data.get('email', '') }}"
+                    required
+                    autocomplete="email"
+                >
+                {% if field_errors.get('email') %}
+                    <small class="form-text error">{{ field_errors['email'] }}</small>
+                {% else %}
+                    <small class="form-text">Ingresa tu correo electrónico registrado</small>
+                {% endif %}
             </div>
 
-            <form method="POST" class="auth-form">
-                <div class="form-group">
-                    <label for="email" class="form-label">📧 Email</label>
+            <div class="form-group">
+                <label for="password" class="form-label">Contraseña</label>
+                <div class="password-input-group">
                     <input 
-                        type="email" 
-                        id="email" 
-                        name="email" 
-                        class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" 
-                        placeholder="tu@email.com"
-                        value="{{ form_data.get('email', '') }}"
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" 
+                        placeholder="••••••••"
                         required
-                        autocomplete="email"
+                        autocomplete="current-password"
                     >
-                    {% if field_errors.get('email') %}
-                        <small class="form-text error">{{ field_errors['email'] }}</small>
-                    {% else %}
-                        <small class="form-text">Ingresa tu correo electrónico registrado</small>
-                    {% endif %}
+                    <button type="button" class="password-toggle" onclick="togglePassword('password')">
+                        <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
                 </div>
-
-                <div class="form-group">
-                    <label for="password" class="form-label">🔐 Contraseña</label>
-                    <div class="password-input-group">
-                        <input 
-                            type="password" 
-                            id="password" 
-                            name="password" 
-                            class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" 
-                            placeholder="••••••••"
-                            required
-                            autocomplete="current-password"
-                        >
-                        <button type="button" class="password-toggle" onclick="togglePassword('password')">
-                            <span class="eye-icon">👁️</span>
-                        </button>
-                    </div>
-                    {% if field_errors.get('password') %}
-                        <small class="form-text error">{{ field_errors['password'] }}</small>
-                    {% else %}
-                        <small class="form-text">Ingresa tu contraseña</small>
-                    {% endif %}
-                </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
-                        <input type="checkbox" name="remember" style="width: 18px; height: 18px; cursor: pointer;">
-                        Recuérdame
-                    </label>
-                    <a href="{{ url_for('auth.reset_password') }}" style="font-size: 0.95rem;">¿Olvidaste tu contraseña?</a>
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-block" style="padding: 1rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 600;">
-                    🔑 Iniciar Sesión
-                </button>
-            </form>
-
-            <div style="text-align: center; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
-                <p style="margin: 0 0 0.5rem 0; color: var(--gray-600);">¿No tienes cuenta?</p>
-                <a href="{{ url_for('auth.register') }}" style="display: inline-block; padding: 0.75rem 1.5rem; background: var(--gray-100); color: var(--primary); border-radius: var(--radius); font-weight: 600; transition: var(--transition);">
-                    Crear nueva cuenta →
-                </a>
+                {% if field_errors.get('password') %}
+                    <small class="form-text error">{{ field_errors['password'] }}</small>
+                {% else %}
+                    <small class="form-text">Ingresa tu contraseña</small>
+                {% endif %}
             </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; cursor: pointer;">
+                    <input type="checkbox" name="remember" style="width: 18px; height: 18px; cursor: pointer;">
+                    Recuérdame
+                </label>
+                <a href="{{ url_for('auth.reset_password') }}" class="link-subtle">¿Olvidaste tu contraseña?</a>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">
+                Iniciar Sesión
+            </button>
+        </form>
+
+        <div class="auth-divider">
+            <p style="margin: 0; color: var(--gray-600);">¿No tienes cuenta?</p>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-secondary btn-block">
+                Crear nueva cuenta
+            </a>
         </div>
     </div>
 </div>
-
-<style>
-    .auth-form {
-        animation: slideInUp 0.5s ease;
-    }
-
-    @media (max-width: 768px) {
-        div[style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
-        }
-    }
-</style>
 
 <script>
 function togglePassword(fieldId) {
@@ -103,10 +86,8 @@ function togglePassword(fieldId) {
     
     if (input.type === 'password') {
         input.type = 'text';
-        button.textContent = '🙈';
     } else {
         input.type = 'password';
-        button.textContent = '👁️';
     }
 }
 </script>
