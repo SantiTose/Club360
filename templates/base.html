@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Club 360{% endblock %}</title>
+    <title>{% block title %}Club 360 - Sistema de Gestión de Turnos{% endblock %}</title>
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
@@ -12,27 +12,28 @@
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                <a href="{{ url_for('index') }}">Club 360</a>
+                <a href="{{ url_for('index') }}">⚽ Club 360</a>
             </div>
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
-                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}">Mis Turnos</a></li>
-                    <li><a href="{{ url_for('pagos.ver_deuda') }}">Pagos</a></li>
-                    <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}">Suspensiones</a></li>
+                    <li><a href="{{ url_for('dashboard') }}">📊 Dashboard</a></li>
+                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}">📅 Mis Turnos</a></li>
+                    <li><a href="{{ url_for('pagos.ver_deuda') }}">💳 Pagos</a></li>
+                    <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}">⚠️ Suspensiones</a></li>
                     <li class="user-menu">
-                        <span>{{ current_user.nombre }} {{ current_user.apellido }}</span>
-                        <a href="{{ url_for('auth.logout') }}" class="logout">Cerrar Sesión</a>
+                        <span>👤 {{ current_user.nombre }} {{ current_user.apellido }}</span>
+                        <a href="{{ url_for('auth.logout') }}" class="logout">Salir</a>
                     </li>
                 {% else %}
-                    <li><a href="{{ url_for('auth.login') }}">Iniciar Sesión</a></li>
-                    <li><a href="{{ url_for('auth.register') }}">Registrarse</a></li>
+                    <li><a href="{{ url_for('auth.login') }}">🔑 Iniciar Sesión</a></li>
+                    <li><a href="{{ url_for('auth.register') }}">✍️ Registrarse</a></li>
                 {% endif %}
             </ul>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="container">
+    <main class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -49,7 +50,7 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2026 Club 360 - Todos los derechos reservados</p>
+            <p>&copy; 2026 Club 360 - Sistema de Gestión de Turnos Deportivos | Todos los derechos reservados</p>
         </div>
     </footer>
 

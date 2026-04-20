@@ -1,43 +1,106 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="container mt-5">
-    <h1>Dashboard</h1>
-    
-    {% if current_user.is_authenticated %}
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h5>Mi Información</h5>
-                    </div>
-                    <div class="card-body">
-                        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
-                        <p><strong>Email:</strong> {{ current_user.email }}</p>
-                        <p><strong>Teléfono:</strong> {{ current_user.telefono }}</p>
-                        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
-                    </div>
-                </div>
-            </div>
+{% block title %}Club 360 - Dashboard{% endblock %}
 
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5>Acciones Rápidas</h5>
-                    </div>
-                    <div class="card-body">
-                        <a href="{{ url_for('turnos.ver_disponibles') }}" class="btn btn-primary btn-block mb-2">📅 Ver Turnos Disponibles</a>
-                        <a href="{{ url_for('turnos.mis_turnos') }}" class="btn btn-info btn-block mb-2">✅ Mis Turnos</a>
-                        <a href="{{ url_for('pagos.deuda') }}" class="btn btn-warning btn-block mb-2">💳 Ver Deuda</a>
-                        <a href="{{ url_for('suspensiones.solicitar_alta') }}" class="btn btn-danger btn-block">⚠️ Solicitar Alta</a>
-                    </div>
-                </div>
+{% block content %}
+<h1 class="mb-5">📊 Dashboard</h1>
+
+{% if current_user.is_authenticated %}
+    <!-- User Info Section -->
+    <div class="features-grid mb-5">
+        <div class="card">
+            <div class="card-header">
+                <h5>👤 Mi Información</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Nombre:</strong> {{ current_user.nombre }} {{ current_user.apellido }}</p>
+                <p><strong>Email:</strong> {{ current_user.email }}</p>
+                <p><strong>Teléfono:</strong> {{ current_user.telefono }}</p>
+                <p><strong>Rol:</strong> <span class="badge badge-primary">{{ current_user.rol }}</span></p>
             </div>
         </div>
-    {% else %}
-        <div class="alert alert-info">
-            <p>Por favor <a href="{{ url_for('auth.login') }}">inicia sesión</a> para ver tu dashboard</p>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>📈 Mi Estado</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Miembro desde:</strong> Enero 2026</p>
+                <p><strong>Turnos Reservados:</strong> <span class="badge badge-success">12</span></p>
+                <p><strong>Deuda Pendiente:</strong> <span class="badge badge-warning">$450</span></p>
+            </div>
         </div>
-    {% endif %}
-</div>
+    </div>
+
+    <!-- Quick Actions -->
+    <h2 class="mb-4">⚡ Acciones Rápidas</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="card" style="text-decoration: none; transition: var(--transition);">
+            <div class="card-header" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
+                <h5 style="margin: 0; font-size: 1.5rem;">📅</h5>
+            </div>
+            <div class="card-body text-center">
+                <h4 style="margin: 0; color: var(--primary);">Ver Turnos</h4>
+                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Disponibles ahora</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('turnos.mis_turnos') }}" class="card" style="text-decoration: none; transition: var(--transition);">
+            <div class="card-header" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
+                <h5 style="margin: 0; font-size: 1.5rem;">✅</h5>
+            </div>
+            <div class="card-body text-center">
+                <h4 style="margin: 0; color: var(--secondary);">Mis Turnos</h4>
+                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Confirmados</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('pagos.ver_deuda') }}" class="card" style="text-decoration: none; transition: var(--transition);">
+            <div class="card-header" style="background: linear-gradient(135deg, #ec4899, #f472b6);">
+                <h5 style="margin: 0; font-size: 1.5rem;">💳</h5>
+            </div>
+            <div class="card-body text-center">
+                <h4 style="margin: 0; color: var(--accent);">Pagos</h4>
+                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Gestiona tu deuda</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="card" style="text-decoration: none; transition: var(--transition);">
+            <div class="card-header" style="background: linear-gradient(135deg, #f59e0b, #fbbf24);">
+                <h5 style="margin: 0; font-size: 1.5rem;">⚠️</h5>
+            </div>
+            <div class="card-body text-center">
+                <h4 style="margin: 0; color: var(--warning);">Suspensiones</h4>
+                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Solicitar alta</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+        <div class="card-header">
+            <h5>📋 Actividad Reciente</h5>
+        </div>
+        <div class="card-body">
+            <ul style="list-style: none; padding: 0;">
+                <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
+                    <strong>✅ Turno confirmado</strong> - Fútbol, viernes 22 de abril
+                </li>
+                <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
+                    <strong>💳 Pago procesado</strong> - $150 por membresía
+                </li>
+                <li style="padding: 1rem 0;">
+                    <strong>📅 Turno disponible</strong> - Básquet, sábado 23 de abril
+                </li>
+            </ul>
+        </div>
+    </div>
+
+{% else %}
+    <div class="alert alert-info" style="text-align: center; padding: 2rem;">
+        <h3>Acceso restringido</h3>
+        <p>Por favor <a href="{{ url_for('auth.login') }}">inicia sesión</a> para ver tu dashboard</p>
+    </div>
+{% endif %}
+
 {% endblock %}
