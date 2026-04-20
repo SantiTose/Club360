@@ -2,10 +2,13 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from website.auth import auth_bp
 from website import db
-from website.models import Usuario, TipoUsuario
-from website.auth.forms import LoginForm, RegistroForm
+from website.models import Usuario, TipoUsuario, EstadoUsuario
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
+
+
+def _es_empleado_o_admin(user):
+    return user.tipo_usuario in {TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR}
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -67,7 +70,7 @@ def register():
                 email=email,
                 password=generate_password_hash(password),
                 tipo_usuario=TipoUsuario.CLIENTE,
-                tipo_cliente='no_abonado'
+                estado=EstadoUsuario.ACTIVO
             )
             
             db.session.add(nuevo_usuario)
@@ -153,3 +156,79 @@ def reset_password():
         return redirect(url_for('auth.login'))
     
     return render_template('auth/reset_password.html')
+
+
+@auth_bp.route('/crear-usuario', methods=['GET', 'POST'])
+@login_required
+def crear_usuario():
+    """Crear cuentas para clientes/empleados (empleados y administradores)."""
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para crear usuarios', 'error')
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        apellido = request.form.get('apellido', '').strip()
+        dni = request.form.get('dni', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
+
+        field_errors = {}
+        if not nombre or len(nombre) < 2:
+            field_errors['nombre'] = 'El nombre debe tener al menos 2 caracteres'
+        if not apellido or len(apellido) < 2:
+            field_errors['apellido'] = 'El apellido debe tener al menos 2 caracteres'
+        if not dni or not re.match(r'^\d{8}$', dni):
+            field_errors['dni'] = 'El DNI debe tener 8 dígitos'
+        if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+            field_errors['email'] = 'El email no es válido'
+        if len(password) < 6:
+            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
+
+        tipos_permitidos = {TipoUsuario.CLIENTE, TipoUsuario.EMPLEADO}
+        if current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR:
+            tipos_permitidos.add(TipoUsuario.ADMINISTRADOR)
+        if tipo_usuario not in tipos_permitidos:
+            field_errors['tipo_usuario'] = 'No puedes crear este tipo de usuario'
+
+        if Usuario.query.filter_by(email=email).first():
+            field_errors['email'] = 'El email ya está registrado'
+        if Usuario.query.filter_by(dni=dni).first():
+            field_errors['dni'] = 'El DNI ya está registrado'
+
+        if field_errors:
+            return render_template(
+                'auth/crear_usuario.html',
+                field_errors=field_errors,
+                form_data={
+                    'nombre': nombre,
+                    'apellido': apellido,
+                    'dni': dni,
+                    'email': email,
+                    'tipo_usuario': tipo_usuario,
+                },
+                puede_crear_admin=current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR,
+            )
+
+        nuevo_usuario = Usuario(
+            nombre=nombre,
+            apellido=apellido,
+            dni=dni,
+            email=email,
+            password=generate_password_hash(password),
+            tipo_usuario=tipo_usuario,
+            estado=EstadoUsuario.ACTIVO,
+        )
+        db.session.add(nuevo_usuario)
+        db.session.commit()
+
+        flash('Usuario creado exitosamente', 'success')
+        return redirect(url_for('dashboard'))
+
+    return render_template(
+        'auth/crear_usuario.html',
+        field_errors={},
+        form_data={},
+        puede_crear_admin=current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR,
+    )

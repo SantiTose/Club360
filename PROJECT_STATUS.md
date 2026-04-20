@@ -82,14 +82,14 @@ Club360/
 - id, nombre, apellido, dni, email
 - password (hash)
 - tipo_usuario: cliente | empleado | administrador
-- estado: activo | suspendido | inactivo
-- tipo_cliente: abonado | no_abonado
+- estado de cliente: activo | suspendido
 - fecha_creacion, fecha_actualizacion
 ```
 
 ### 2. **Turno** 🎯
 ```python
 - id, actividad (futbol|basquet|voley|padel)
+- tipo_clase: abonada | no_abonada
 - hora_inicio, hora_fin
 - capacidad_maxima, cupos_disponibles
 - usuario_id (reservado por)
@@ -99,7 +99,7 @@ Club360/
 ### 3. **ListaEspera** ⏳
 ```python
 - id, usuario_id, turno_id
-- tipo_lista: general | abonado | no_abonado
+- tipo_lista: general
 - posicion, fecha_registro
 ```
 

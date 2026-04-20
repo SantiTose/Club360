@@ -4,7 +4,7 @@ Ejecutar: python init_db.py
 """
 
 from website import create_app, db
-from website.models import Usuario, Turno, Pago
+from website.models import Usuario, Turno, Pago, Reserva
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 
@@ -18,6 +18,7 @@ def init_database():
         db.create_all()
         
         # Limpiar datos existentes
+        db.session.query(Reserva).delete()
         db.session.query(Pago).delete()
         db.session.query(Turno).delete()
         db.session.query(Usuario).delete()
@@ -59,7 +60,6 @@ def init_database():
             email='carlos@example.com',
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
-            tipo_cliente='abonado',
             estado='activo'
         )
         
@@ -70,7 +70,6 @@ def init_database():
             email='maria@example.com',
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
-            tipo_cliente='no_abonado',
             estado='activo'
         )
         
@@ -87,6 +86,7 @@ def init_database():
             # Turnos de Fútbol
             turno_futbol = Turno(
                 actividad='futbol',
+                tipo_clase='abonada' if i % 2 == 0 else 'no_abonada',
                 hora_inicio=fecha.replace(hour=10, minute=0),
                 hora_fin=fecha.replace(hour=11, minute=0),
                 capacidad_maxima=5,
@@ -96,6 +96,7 @@ def init_database():
             # Turnos de Básquet
             turno_basquet = Turno(
                 actividad='basquet',
+                tipo_clase='no_abonada',
                 hora_inicio=fecha.replace(hour=15, minute=0),
                 hora_fin=fecha.replace(hour=16, minute=0),
                 capacidad_maxima=8,
@@ -105,6 +106,7 @@ def init_database():
             # Turnos de Vóley
             turno_voley = Turno(
                 actividad='voley',
+                tipo_clase='abonada',
                 hora_inicio=fecha.replace(hour=18, minute=0),
                 hora_fin=fecha.replace(hour=19, minute=0),
                 capacidad_maxima=12,
@@ -114,6 +116,7 @@ def init_database():
             # Turnos de Pádel
             turno_padel = Turno(
                 actividad='padel',
+                tipo_clase='no_abonada',
                 hora_inicio=fecha.replace(hour=20, minute=0),
                 hora_fin=fecha.replace(hour=21, minute=0),
                 capacidad_maxima=4,
@@ -149,8 +152,8 @@ def init_database():
         print("\nCuentas de prueba:")
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")
-        print("- Cliente (Abonado): carlos@example.com / cliente123")
-        print("- Cliente (No Abonado): maria@example.com / cliente123")
+        print("- Cliente 1: carlos@example.com / cliente123")
+        print("- Cliente 2: maria@example.com / cliente123")
 
 
 if __name__ == '__main__':

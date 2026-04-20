@@ -232,6 +232,12 @@ a:hover {
     border-left-color: #c62828;
 }
 
+.alert-error {
+    background: #ffebee;
+    color: #c62828;
+    border-left-color: #c62828;
+}
+
 .alert-warning {
     background: #fff3e0;
     color: #e65100;
@@ -348,6 +354,37 @@ a:hover {
     color: var(--white);
 }
 
+.btn-success {
+    background: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+}
+
+.btn-success:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.btn-danger {
+    background: #c62828;
+    color: var(--white);
+    border: 2px solid #c62828;
+}
+
+.btn-danger:hover {
+    background: #8e0000;
+    border-color: #8e0000;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.btn-sm {
+    padding: 0.55rem 1rem;
+    font-size: 0.9rem;
+}
+
 .btn-block {
     display: block;
     width: 100%;
@@ -455,6 +492,10 @@ section:nth-child(even) {
     padding: 2rem;
 }
 
+.form-container {
+    width: 100%;
+}
+
 .auth-form-wrapper {
     width: 100%;
     max-width: 450px;
@@ -463,6 +504,50 @@ section:nth-child(even) {
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.form-title {
+    margin-bottom: 0.25rem;
+    color: var(--white);
+    font-size: 2rem;
+}
+
+.form-subtitle {
+    color: var(--gray-400);
+    margin-bottom: 0;
+}
+
+.form-group-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.form-text {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--gray-500);
+}
+
+.form-text.error {
+    color: #ff7f7f;
+}
+
+.link-subtle {
+    font-size: 0.9rem;
+    color: var(--gray-300);
+}
+
+.link-subtle:hover {
+    color: var(--primary-light);
 }
 
 .auth-form-wrapper h2 {
@@ -589,6 +674,66 @@ section:nth-child(even) {
     color: #c0c0c0;
 }
 
+.turnos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+    margin: 1.5rem 0;
+}
+
+.turno-card {
+    background: #262626;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.deuda-summary,
+.suspension-info,
+.payment-card {
+    background: #262626;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.payment-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.payment-card {
+    width: 100%;
+    max-width: 520px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.badge-primary {
+    background: rgba(46, 125, 50, 0.2);
+    color: var(--primary-light);
+}
+
+.badge-success {
+    background: rgba(46, 125, 50, 0.25);
+    color: #9be4a0;
+}
+
+.badge-warning {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ffcf7d;
+}
+
 /* ================================
    TABLES
    ================================ */
@@ -662,6 +807,10 @@ tbody tr:hover {
 
 .text-muted {
     color: #999;
+}
+
+.text-warning {
+    color: #ffcf7d;
 }
 
 .bg-primary {
@@ -744,6 +893,10 @@ tbody tr:hover {
 
     .auth-form-wrapper {
         padding: 2rem;
+    }
+
+    .form-group-row {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -2,8 +2,12 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from website.pagos import pagos_bp
 from website import db
-from website.models import Pago, Usuario
+from website.models import Pago, Usuario, TipoUsuario
 from datetime import datetime
+
+
+def _es_empleado_o_admin(user):
+    return user.tipo_usuario in {TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR}
 
 
 @pagos_bp.route('/deuda')
@@ -53,10 +57,32 @@ def pagar(pago_id):
 @login_required
 def registrar_pago():
     """Registrar pago de cliente (para empleados)."""
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para registrar pagos', 'error')
+        return redirect(url_for('index'))
+
     if request.method == 'POST':
-        usuario_id = request.form.get('usuario_id')
-        monto = float(request.form.get('monto'))
-        metodo_pago = request.form.get('metodo_pago')
+        usuario_id = request.form.get('usuario_id', type=int)
+        monto_raw = request.form.get('monto', '').strip()
+        metodo_pago = request.form.get('metodo_pago', '').strip()
+
+        if not usuario_id or not Usuario.query.get(usuario_id):
+            flash('Usuario inválido', 'error')
+            return redirect(url_for('pagos.registrar_pago'))
+
+        try:
+            monto = float(monto_raw)
+        except ValueError:
+            flash('Monto inválido', 'error')
+            return redirect(url_for('pagos.registrar_pago'))
+
+        if monto <= 0:
+            flash('El monto debe ser mayor a cero', 'error')
+            return redirect(url_for('pagos.registrar_pago'))
+
+        if metodo_pago not in ['efectivo', 'tarjeta_credito']:
+            flash('Método de pago inválido', 'error')
+            return redirect(url_for('pagos.registrar_pago'))
         
         nuevo_pago = Pago(
             usuario_id=usuario_id,
@@ -72,4 +98,5 @@ def registrar_pago():
         flash('Pago registrado exitosamente', 'success')
         return redirect(url_for('pagos.registrar_pago'))
     
-    return render_template('pagos/registrar.html')
+    usuarios = Usuario.query.order_by(Usuario.apellido.asc(), Usuario.nombre.asc()).all()
+    return render_template('pagos/registrar.html', usuarios=usuarios)

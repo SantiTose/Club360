@@ -20,9 +20,13 @@
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
                     <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}">Mis Turnos</a></li>
+                    <li><a href="{{ url_for('turnos.mis_turnos') }}">Mis Turnos</a></li>
+                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}">Turnos Disponibles</a></li>
                     <li><a href="{{ url_for('pagos.ver_deuda') }}">Pagos</a></li>
                     <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}">Suspensiones</a></li>
+                    {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
+                    <li><a href="{{ url_for('auth.crear_usuario') }}">Crear Usuario</a></li>
+                    {% endif %}
                     <li class="user-menu">
                         <span>{{ current_user.nombre }} {{ current_user.apellido }}</span>
                         <a href="{{ url_for('auth.logout') }}" class="logout">Salir</a>

@@ -26,8 +26,8 @@ Después de ejecutar `init_db.py`, tendrás:
 |-----|-------|-----------|
 | Administrador | admin@club360.com | admin123 |
 | Empleado | juan@club360.com | empleado123 |
-| Cliente (Abonado) | carlos@example.com | cliente123 |
-| Cliente (No Abonado) | maria@example.com | cliente123 |
+| Cliente 1 | carlos@example.com | cliente123 |
+| Cliente 2 | maria@example.com | cliente123 |
 
 ## 3. Características Disponibles
 
@@ -66,6 +66,7 @@ website/
 | `/` | Página de inicio |
 | `/auth/register` | Registrar nuevo usuario |
 | `/auth/login` | Iniciar sesión |
+| `/auth/crear-usuario` | Crear cuentas (empleado/admin) |
 | `/turnos/disponibles` | Ver turnos disponibles |
 | `/turnos/mis-turnos` | Mis turnos reservados |
 | `/pagos/deuda` | Ver deudas |

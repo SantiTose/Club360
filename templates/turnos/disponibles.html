@@ -9,10 +9,15 @@
     <form method="GET" class="form-inline">
         <select name="actividad" class="form-control">
             <option value="">Todas las actividades</option>
-            <option value="futbol">Fútbol</option>
-            <option value="basquet">Básquet</option>
-            <option value="voley">Vóley</option>
-            <option value="padel">Pádel</option>
+            <option value="futbol" {% if filtro_actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
+            <option value="basquet" {% if filtro_actividad == 'basquet' %}selected{% endif %}>Básquet</option>
+            <option value="voley" {% if filtro_actividad == 'voley' %}selected{% endif %}>Vóley</option>
+            <option value="padel" {% if filtro_actividad == 'padel' %}selected{% endif %}>Pádel</option>
+        </select>
+        <select name="tipo_clase" class="form-control">
+            <option value="">Todos los tipos</option>
+            <option value="abonada" {% if filtro_tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
+            <option value="no_abonada" {% if filtro_tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
         </select>
         <button type="submit" class="btn btn-secondary">Filtrar</button>
     </form>
@@ -23,6 +28,7 @@
         {% for turno in turnos %}
         <div class="turno-card">
             <h3>{{ turno.actividad|upper }}</h3>
+            <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
             <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
             <p><strong>Disponibles:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
             

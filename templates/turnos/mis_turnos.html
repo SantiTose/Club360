@@ -10,6 +10,7 @@
         {% for turno in turnos %}
         <div class="turno-card">
             <h3>{{ turno.actividad|upper }}</h3>
+            <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
             <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
             <p><strong>Fecha:</strong> {{ turno.hora_inicio.strftime('%d/%m/%Y') }}</p>
             

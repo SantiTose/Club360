@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle de Turno - Club 360{% endblock %}
+
+{% block content %}
+<h2>Detalle del Turno</h2>
+
+<div class="turno-card" style="max-width: 700px;">
+    <h3>{{ turno.actividad|upper }}</h3>
+    <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
+    <p><strong>Inicio:</strong> {{ turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p><strong>Fin:</strong> {{ turno.hora_fin.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p><strong>Cupos:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
+    <p><strong>Estado:</strong> {% if turno.cancelado %}Cancelado{% else %}Activo{% endif %}</p>
+
+    <h4 style="margin-top: 1.5rem;">Lista de espera</h4>
+    {% if turno.listas_espera %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Posición</th>
+                <th>Usuario</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in turno.listas_espera|sort(attribute='posicion') %}
+            <tr>
+                <td>{{ item.posicion }}</td>
+                <td>{{ item.usuario.apellido }}, {{ item.usuario.nombre }}</td>
+                <td>{{ item.usuario.email }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No hay usuarios en lista de espera.</p>
+    {% endif %}
+</div>
+{% endblock %}

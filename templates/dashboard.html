@@ -15,8 +15,8 @@
             <div class="card-body">
                 <p><strong>Nombre:</strong> {{ current_user.nombre }} {{ current_user.apellido }}</p>
                 <p><strong>Email:</strong> {{ current_user.email }}</p>
-                <p><strong>Teléfono:</strong> {{ current_user.telefono }}</p>
-                <p><strong>Rol:</strong> <span class="badge badge-primary">{{ current_user.rol }}</span></p>
+                <p><strong>DNI:</strong> {{ current_user.dni }}</p>
+                <p><strong>Rol:</strong> <span class="badge badge-primary">{{ current_user.tipo_usuario|capitalize }}</span></p>
             </div>
         </div>
 

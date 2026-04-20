@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Crear Usuario - Club 360{% endblock %}
+
+{% block content %}
+<div class="auth-page-container">
+    <div class="form-container auth-form-wrapper" style="max-width: 700px;">
+        <h1 class="form-title">Crear Usuario</h1>
+        <p class="form-subtitle">Alta de cuentas por empleados o administradores</p>
+
+        <form method="POST" class="auth-form">
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="nombre" class="form-label">Nombre</label>
+                    <input type="text" id="nombre" name="nombre" class="form-control {% if field_errors.get('nombre') %}is-invalid{% endif %}" value="{{ form_data.get('nombre', '') }}" required>
+                    {% if field_errors.get('nombre') %}<small class="form-text error">{{ field_errors['nombre'] }}</small>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="apellido" class="form-label">Apellido</label>
+                    <input type="text" id="apellido" name="apellido" class="form-control {% if field_errors.get('apellido') %}is-invalid{% endif %}" value="{{ form_data.get('apellido', '') }}" required>
+                    {% if field_errors.get('apellido') %}<small class="form-text error">{{ field_errors['apellido'] }}</small>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="dni" class="form-label">DNI</label>
+                    <input type="text" id="dni" name="dni" pattern="[0-9]{8}" class="form-control {% if field_errors.get('dni') %}is-invalid{% endif %}" value="{{ form_data.get('dni', '') }}" required>
+                    {% if field_errors.get('dni') %}<small class="form-text error">{{ field_errors['dni'] }}</small>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" id="email" name="email" class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" value="{{ form_data.get('email', '') }}" required>
+                    {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="tipo_usuario" class="form-label">Tipo de usuario</label>
+                    <select id="tipo_usuario" name="tipo_usuario" class="form-control {% if field_errors.get('tipo_usuario') %}is-invalid{% endif %}">
+                        <option value="cliente" {% if form_data.get('tipo_usuario') == 'cliente' %}selected{% endif %}>Cliente</option>
+                        <option value="empleado" {% if form_data.get('tipo_usuario') == 'empleado' %}selected{% endif %}>Empleado</option>
+                        {% if puede_crear_admin %}
+                        <option value="administrador" {% if form_data.get('tipo_usuario') == 'administrador' %}selected{% endif %}>Administrador</option>
+                        {% endif %}
+                    </select>
+                    {% if field_errors.get('tipo_usuario') %}<small class="form-text error">{{ field_errors['tipo_usuario'] }}</small>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Contraseña inicial</label>
+                <input type="password" id="password" name="password" class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" minlength="6" required>
+                {% if field_errors.get('password') %}<small class="form-text error">{{ field_errors['password'] }}</small>{% else %}<small class="form-text">Mínimo 6 caracteres</small>{% endif %}
+            </div>
+
+            <div class="button-group" style="justify-content: flex-start;">
+                <button type="submit" class="btn btn-primary">Crear usuario</button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

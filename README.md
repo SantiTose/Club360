@@ -11,23 +11,25 @@ Club 360 es un sistema web de gestión de turnos deportivos diseñado para un ce
 - Inicio de sesión seguro
 - Restablecimiento de contraseña
 - Creación de cuentas por empleados
+- Creación de cuentas por administradores
 - Tipos de usuario: Cliente, Empleado, Administrador
-- Estados: Activo, Suspendido, Inactivo
+- Estados de cliente: Activo, Suspendido
 
 ### 2. Gestión de Turnos
 - Visualización de turnos disponibles
 - Reserva de turnos con cupo limitado
 - Cancelación de reservas
-- Lista de espera (General, Abonados, No Abonados)
+- Lista de espera (General)
+- Tipos de clase por turno: Abonada / No Abonada
 - Búsqueda de turnos (para empleados)
-- Notificaciones cuando la lista de espera llega a 10 personas
+- Notificación en la app cuando la lista de espera llega a 10 personas
 
 ### 3. Gestión de Pagos
 - Visualización de deudas pendientes
 - Registro de pagos en efectivo o tarjeta de crédito
 - Métodos de pago: Efectivo, Tarjeta de Crédito
 - Estados: Pendiente, Completado
-- Políticas de cobro diferenciadas para abonados y no abonados
+- Políticas de cobro diferenciadas por tipo de clase (abonada/no abonada) al reservar turnos
 
 ### 4. Gestión de Suspensiones
 - Solicitud de alta de suspensión por usuarios
@@ -113,19 +115,18 @@ La aplicación estará disponible en `http://localhost:5000`
 ### Usuario
 - id, nombre, apellido, dni, email, password
 - tipo_usuario (cliente, empleado, administrador)
-- estado (activo, suspendido, inactivo)
-- tipo_cliente (abonado, no_abonado)
+- estado de cliente (activo, suspendido)
 - fecha_creacion, fecha_actualizacion
 
 ### Turno
-- id, actividad, hora_inicio, hora_fin
+- id, actividad, tipo_clase (abonada, no_abonada), hora_inicio, hora_fin
 - capacidad_maxima, cupos_disponibles
 - usuario_id (reservado por), cancelado
 - fecha_creacion
 
 ### ListaEspera
 - id, usuario_id, turno_id
-- tipo_lista (general, abonado, no_abonado)
+- tipo_lista (general)
 - posicion, fecha_registro
 
 ### Pago

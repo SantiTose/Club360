@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Registrar Pago - Club 360{% endblock %}
+
+{% block content %}
+<h2>Registrar Pago</h2>
+<p class="text-muted">Funcionalidad para empleados y administradores.</p>
+
+<div class="payment-container">
+    <div class="payment-card">
+        <form method="POST" class="form">
+            <div class="form-group">
+                <label for="usuario_id">Cliente</label>
+                <select id="usuario_id" name="usuario_id" required class="form-control">
+                    <option value="">-- Selecciona un usuario --</option>
+                    {% for usuario in usuarios %}
+                    <option value="{{ usuario.id }}">{{ usuario.apellido }}, {{ usuario.nombre }} - {{ usuario.email }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="monto">Monto</label>
+                <input type="number" min="0.01" step="0.01" id="monto" name="monto" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label for="metodo_pago">Método de pago</label>
+                <select id="metodo_pago" name="metodo_pago" required class="form-control">
+                    <option value="">-- Selecciona --</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                </select>
+            </div>
+
+            <div class="button-group" style="justify-content: flex-start;">
+                <button type="submit" class="btn btn-success">Registrar pago</button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

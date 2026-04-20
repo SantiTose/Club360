@@ -7,7 +7,6 @@ from enum import Enum
 class EstadoUsuario(str, Enum):
     ACTIVO = "activo"
     SUSPENDIDO = "suspendido"
-    INACTIVO = "inactivo"
 
 
 class TipoUsuario(str, Enum):
@@ -16,9 +15,9 @@ class TipoUsuario(str, Enum):
     ADMINISTRADOR = "administrador"
 
 
-class TipoCliente(str, Enum):
-    ABONADO = "abonado"
-    NO_ABONADO = "no_abonado"
+class TipoClase(str, Enum):
+    ABONADA = "abonada"
+    NO_ABONADA = "no_abonada"
 
 
 class Actividad(str, Enum):
@@ -38,13 +37,15 @@ class Usuario(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     tipo_usuario = db.Column(db.String(20), nullable=False, default=TipoUsuario.CLIENTE)
+    # Estado operativo del cliente (activo/suspendido). Para empleado/admin no se utiliza.
     estado = db.Column(db.String(20), nullable=False, default=EstadoUsuario.ACTIVO)
-    tipo_cliente = db.Column(db.String(20))  # Solo para clientes
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relaciones
+    # `turnos` se mantiene por compatibilidad con datos antiguos (campo Turno.usuario_id).
     turnos = db.relationship('Turno', backref='usuario', lazy=True)
+    reservas = db.relationship('Reserva', backref='usuario', lazy=True, cascade='all, delete-orphan')
     pagos = db.relationship('Pago', backref='usuario', lazy=True)
     listas_espera = db.relationship('ListaEspera', backref='usuario', lazy=True)
     suspensiones = db.relationship('Suspension', backref='usuario', lazy=True)
@@ -58,6 +59,7 @@ class Turno(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     actividad = db.Column(db.String(20), nullable=False)
+    tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     hora_inicio = db.Column(db.DateTime, nullable=False)
     hora_fin = db.Column(db.DateTime, nullable=False)
     capacidad_maxima = db.Column(db.Integer, nullable=False)
@@ -65,6 +67,7 @@ class Turno(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     cancelado = db.Column(db.Boolean, default=False)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    reservas = db.relationship('Reserva', backref='turno', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Turno {self.actividad} - {self.hora_inicio}>'
@@ -76,7 +79,7 @@ class ListaEspera(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
-    tipo_lista = db.Column(db.String(20), nullable=False)  # general, abonado, no_abonado
+    tipo_lista = db.Column(db.String(20), nullable=False)  # general
     posicion = db.Column(db.Integer, nullable=False)
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -84,6 +87,22 @@ class ListaEspera(db.Model):
 
     def __repr__(self):
         return f'<ListaEspera {self.usuario_id} - Turno {self.turno_id}>'
+
+
+class Reserva(db.Model):
+    __tablename__ = 'reservas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
+    fecha_reserva = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('usuario_id', 'turno_id', name='uq_reserva_usuario_turno'),
+    )
+
+    def __repr__(self):
+        return f'<Reserva usuario={self.usuario_id} turno={self.turno_id}>'
 
 
 class Pago(db.Model):
