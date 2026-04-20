@@ -1,4 +1,4 @@
-#!/Users/nicobasaj/Desktop/Club360/Club360/venv/bin/python3.14
+#!/Users/nicobasaj/Desktop/Club360/Club360/venv/bin/python3.12
 import sys
 from flask.cli import main
 if __name__ == '__main__':

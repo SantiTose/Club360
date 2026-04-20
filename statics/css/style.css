@@ -348,6 +348,14 @@ a:hover {
     color: var(--white);
 }
 
+.btn-block {
+    display: block;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 100%;
+}
+
 /* ================================
    SECTIONS
    ================================ */
@@ -492,6 +500,38 @@ section:nth-child(even) {
     transition: var(--transition);
     background: #1a1a1a;
     color: #e0e0e0;
+}
+
+.password-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-group .form-control {
+    padding-right: 2.5rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #999;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.password-toggle:hover {
+    color: #e0e0e0;
+}
+
+.eye-icon {
+    stroke: currentColor;
 }
 
 .form-control:focus {
