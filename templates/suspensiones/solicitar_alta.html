@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Alta - Club 360{% endblock %}
+
+{% block content %}
+<h2>Solicitar Alta de Suspensión</h2>
+
+{% if suspension %}
+    <div class="suspension-info">
+        <h3>Información de tu Suspensión</h3>
+        <p><strong>Motivo:</strong> {{ suspension.motivo }}</p>
+        <p><strong>Fecha de Inicio:</strong> {{ suspension.fecha_inicio.strftime('%d/%m/%Y') }}</p>
+        
+        <form method="POST" class="form">
+            <button type="submit" class="btn btn-primary">Solicitar Alta</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
+        </form>
+    </div>
+{% else %}
+    <p>No tienes suspensiones activas</p>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
+{% endif %}
+{% endblock %}

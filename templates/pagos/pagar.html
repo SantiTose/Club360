@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Pagar - Club 360{% endblock %}
+
+{% block content %}
+<h2>Realizar Pago</h2>
+
+<div class="payment-container">
+    <div class="payment-card">
+        <h3>Monto a Pagar: ${{ "%.2f"|format(pago.monto) }}</h3>
+        
+        <form method="POST" class="form">
+            <div class="form-group">
+                <label for="metodo_pago">Selecciona un método de pago</label>
+                <select id="metodo_pago" name="metodo_pago" required class="form-control">
+                    <option value="">-- Selecciona --</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-success">Confirmar Pago</button>
+            <a href="{{ url_for('pagos.ver_deuda') }}" class="btn btn-secondary">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

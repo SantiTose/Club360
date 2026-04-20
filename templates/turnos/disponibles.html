@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Turnos Disponibles - Club 360{% endblock %}
+
+{% block content %}
+<h2>Turnos Disponibles</h2>
+
+<div class="filters">
+    <form method="GET" class="form-inline">
+        <select name="actividad" class="form-control">
+            <option value="">Todas las actividades</option>
+            <option value="futbol">Fútbol</option>
+            <option value="basquet">Básquet</option>
+            <option value="voley">Vóley</option>
+            <option value="padel">Pádel</option>
+        </select>
+        <button type="submit" class="btn btn-secondary">Filtrar</button>
+    </form>
+</div>
+
+<div class="turnos-grid">
+    {% if turnos %}
+        {% for turno in turnos %}
+        <div class="turno-card">
+            <h3>{{ turno.actividad|upper }}</h3>
+            <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
+            <p><strong>Disponibles:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
+            
+            {% if turno.cupos_disponibles > 0 %}
+                <form method="POST" action="{{ url_for('turnos.reservar_turno', turno_id=turno.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-success">Reservar</button>
+                </form>
+            {% else %}
+                <p class="text-warning">Sin cupos disponibles</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No hay turnos disponibles</p>
+    {% endif %}
+</div>
+{% endblock %}

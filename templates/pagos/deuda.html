@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Pagos - Club 360{% endblock %}
+
+{% block content %}
+<h2>Mi Deuda</h2>
+
+{% if deuda %}
+    <div class="deuda-summary">
+        <h3>Monto Total a Pagar: ${{ "%.2f"|format(monto_total) }}</h3>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Monto</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pago in deuda %}
+            <tr>
+                <td>${{ "%.2f"|format(pago.monto) }}</td>
+                <td>{{ pago.estado }}</td>
+                <td>{{ pago.fecha_pago.strftime('%d/%m/%Y') if pago.fecha_pago else 'Pendiente' }}</td>
+                <td>
+                    <a href="{{ url_for('pagos.pagar', pago_id=pago.id) }}" class="btn btn-primary btn-sm">Pagar</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No tienes deudas pendientes</p>
+{% endif %}
+{% endblock %}

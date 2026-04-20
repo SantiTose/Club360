@@ -1,0 +1,368 @@
+═════════════════════════════════════════════════════════════════════════════
+  CLUB 360 - ESTRUCTURA COMPLETA DE ARCHIVOS
+  Sistema de Gestión de Turnos Deportivos
+═════════════════════════════════════════════════════════════════════════════
+
+📋 TOTAL: 34 archivos + 12 directorios
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ARCHIVOS RAÍZ DEL PROYECTO
+═══════════════════════════════════════════════════════════════════════════════
+
+app.py                          Punto de entrada de la aplicación Flask
+config.py                       Configuraciones (desarrollo, producción, testing)
+init_db.py                      Script para inicializar BD con datos de ejemplo
+requirements.txt                Dependencias del proyecto
+.gitignore                      Archivos a ignorar en control de versiones
+
+README.md                        Documentación principal del proyecto
+QUICKSTART.md                    Guía rápida de inicio
+CONTRIBUTING.md                 Guía para desarrolladores que contribuyen
+PROJECT_STATUS.md               Estado actual del proyecto (ESTE ARCHIVO)
+FILES_STRUCTURE.txt             Listado completo de archivos
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DIRECTORIO: website/
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHIVO PRINCIPAL:
+  website/__init__.py           Configuración Flask, creación app, registro blueprints
+  website/models.py             Definición de modelos SQLAlchemy (5 modelos)
+
+MÓDULO AUTH (Autenticación y Gestión de Usuarios):
+  website/auth/__init__.py      Inicialización y registro del blueprint
+  website/auth/routes.py        Rutas: login, register, logout, reset_password
+  website/auth/forms.py         Formularios con validación WTForms
+
+MÓDULO TURNOS (Gestión de Turnos):
+  website/turnos/__init__.py    Inicialización del blueprint
+  website/turnos/routes.py      Rutas: ver disponibles, reservar, cancelar, lista espera
+
+MÓDULO PAGOS (Gestión de Pagos):
+  website/pagos/__init__.py     Inicialización del blueprint
+  website/pagos/routes.py       Rutas: ver deuda, pagar, registrar pago
+
+MÓDULO SUSPENSIONES (Gestión de Suspensiones):
+  website/suspensiones/__init__.py  Inicialización del blueprint
+  website/suspensiones/routes.py    Rutas: solicitar alta, dar de alta, suspender
+
+DIRECTORIO ESTÁTICO:
+  website/static/css/          Directorio para CSS adicional
+  website/static/js/           Directorio para JavaScript adicional
+  website/static/images/       Directorio para imágenes de la app
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DIRECTORIO: templates/
+═══════════════════════════════════════════════════════════════════════════════
+
+TEMPLATES GLOBALES:
+  templates/base.html           Template base con navbar y footer
+  templates/index.html          Página de inicio
+
+TEMPLATES AUTH:
+  templates/auth/login.html         Formulario de login
+  templates/auth/register.html      Formulario de registro
+  templates/auth/reset_password.html  Formulario de reset de contraseña
+
+TEMPLATES TURNOS:
+  templates/turnos/disponibles.html   Listar turnos disponibles
+  templates/turnos/mis_turnos.html    Ver mis turnos reservados
+
+TEMPLATES PAGOS:
+  templates/pagos/deuda.html    Ver deudas pendientes
+  templates/pagos/pagar.html    Formulario para pagar
+
+TEMPLATES SUSPENSIONES:
+  templates/suspensiones/solicitar_alta.html  Solicitar alta de suspensión
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DIRECTORIO: statics/
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHIVOS ESTÁTICOS GLOBALES:
+  statics/style.css             CSS principal (responsive, 6500+ líneas)
+  statics/js/main.js            JavaScript principal
+  statics/images/               Directorio para imágenes
+
+
+═══════════════════════════════════════════════════════════════════════════════
+RESUMEN POR TIPO DE ARCHIVO
+═══════════════════════════════════════════════════════════════════════════════
+
+ARCHIVOS PYTHON (.py):
+  ✓ website/__init__.py                 (Configuración Flask)
+  ✓ website/models.py                   (Modelos - 230 líneas)
+  ✓ website/auth/__init__.py
+  ✓ website/auth/routes.py              (Rutas auth - 70 líneas)
+  ✓ website/auth/forms.py               (Formularios - 35 líneas)
+  ✓ website/turnos/__init__.py
+  ✓ website/turnos/routes.py            (Rutas turnos - 60 líneas)
+  ✓ website/pagos/__init__.py
+  ✓ website/pagos/routes.py             (Rutas pagos - 60 líneas)
+  ✓ website/suspensiones/__init__.py
+  ✓ website/suspensiones/routes.py      (Rutas suspensiones - 60 líneas)
+  ✓ app.py                              (Punto de entrada - 25 líneas)
+  ✓ config.py                           (Configuración - 35 líneas)
+  ✓ init_db.py                          (Inicialización BD - 130 líneas)
+
+ARCHIVOS HTML (.html):
+  ✓ templates/base.html                 (50 líneas)
+  ✓ templates/index.html                (40 líneas)
+  ✓ templates/auth/login.html           (30 líneas)
+  ✓ templates/auth/register.html        (45 líneas)
+  ✓ templates/auth/reset_password.html  (25 líneas)
+  ✓ templates/turnos/disponibles.html   (40 líneas)
+  ✓ templates/turnos/mis_turnos.html    (35 líneas)
+  ✓ templates/pagos/deuda.html          (35 líneas)
+  ✓ templates/pagos/pagar.html          (35 líneas)
+  ✓ templates/suspensiones/solicitar_alta.html (30 líneas)
+
+ARCHIVOS CSS (.css):
+  ✓ statics/style.css                   (6531 líneas - Estilos completos)
+
+ARCHIVOS JAVASCRIPT (.js):
+  ✓ statics/js/main.js                  (25 líneas)
+
+ARCHIVOS DE CONFIGURACIÓN:
+  ✓ requirements.txt                    (Dependencias Python)
+  ✓ .gitignore                          (Archivos a ignorar)
+  ✓ config.py                           (Configuración de la app)
+
+ARCHIVOS DE DOCUMENTACIÓN (.md):
+  ✓ README.md                           (Descripción y guía del proyecto)
+  ✓ QUICKSTART.md                       (Guía rápida)
+  ✓ CONTRIBUTING.md                     (Guía para contribuidores)
+  ✓ PROJECT_STATUS.md                   (Estado del proyecto)
+  ✓ FILES_STRUCTURE.txt                 (Este archivo)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ESTADÍSTICAS DEL PROYECTO
+═══════════════════════════════════════════════════════════════════════════════
+
+Módulos Python:           14 archivos
+Templates HTML:           10 archivos
+Archivos CSS:             1 archivo
+Archivos JavaScript:      1 archivo
+Documentación:            5 archivos
+Configuración:            3 archivos
+───────────────────────────────────
+TOTAL:                    34 archivos + 12 directorios
+
+Líneas de código estimadas:
+  - Python (backend):     ~850 líneas
+  - HTML (templates):     ~350 líneas
+  - CSS (styling):        ~6500 líneas
+  - JavaScript:           ~25 líneas
+  - Documentación:        ~2500 líneas
+  ═══════════════════════════════
+  TOTAL:                  ~10,200 líneas
+
+
+═══════════════════════════════════════════════════════════════════════════════
+MAPEO DE CARACTERÍSTICAS A ARCHIVOS
+═══════════════════════════════════════════════════════════════════════════════
+
+AUTENTICACIÓN:
+  ✓ Registro            → website/auth/routes.py (register)
+  ✓ Login               → website/auth/routes.py (login)
+  ✓ Logout              → website/auth/routes.py (logout)
+  ✓ Reset Password      → website/auth/routes.py (reset_password)
+  ✓ Validación Forms    → website/auth/forms.py
+
+TURNOS:
+  ✓ Listar disponibles  → website/turnos/routes.py (ver_turnos_disponibles)
+  ✓ Reservar            → website/turnos/routes.py (reservar_turno)
+  ✓ Cancelar            → website/turnos/routes.py (cancelar_turno)
+  ✓ Mis turnos          → website/turnos/routes.py (mis_turnos)
+  ✓ Lista de espera     → website/models.py (ListaEspera model)
+
+PAGOS:
+  ✓ Ver deuda           → website/pagos/routes.py (ver_deuda)
+  ✓ Realizar pago       → website/pagos/routes.py (pagar)
+  ✓ Registrar pago      → website/pagos/routes.py (registrar_pago)
+
+SUSPENSIONES:
+  ✓ Solicitar alta      → website/suspensiones/routes.py (solicitar_alta_suspension)
+  ✓ Dar de alta         → website/suspensiones/routes.py (dar_alta_suspension)
+  ✓ Aplicar suspensión  → website/suspensiones/routes.py (aplicar_suspension)
+
+BASE DE DATOS:
+  ✓ Modelos             → website/models.py
+  ✓ Inicialización      → init_db.py
+  ✓ Configuración       → config.py
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ÁRBOLES DE DIRECTORIOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Club360/
+├── website/
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── forms.py
+│   ├── turnos/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── pagos/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── suspensiones/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── static/
+│   │   ├── css/
+│   │   ├── js/
+│   │   └── images/
+│   ├── __init__.py
+│   └── models.py
+├── templates/
+│   ├── auth/
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   └── reset_password.html
+│   ├── turnos/
+│   │   ├── disponibles.html
+│   │   └── mis_turnos.html
+│   ├── pagos/
+│   │   ├── deuda.html
+│   │   └── pagar.html
+│   ├── suspensiones/
+│   │   └── solicitar_alta.html
+│   ├── base.html
+│   └── index.html
+├── statics/
+│   ├── js/
+│   │   └── main.js
+│   ├── images/
+│   └── style.css
+├── venv/
+├── app.py
+├── config.py
+├── init_db.py
+├── requirements.txt
+├── .gitignore
+├── README.md
+├── QUICKSTART.md
+├── CONTRIBUTING.md
+├── PROJECT_STATUS.md
+└── FILES_STRUCTURE.txt
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PRÓXIMOS ARCHIVOS A CREAR
+═══════════════════════════════════════════════════════════════════════════════
+
+□ website/admin/                    (Módulo administrativo)
+  □ admin/__init__.py
+  □ admin/routes.py
+  □ admin/forms.py
+
+□ website/decorators.py             (Decoradores de autorización)
+□ website/utils.py                  (Funciones auxiliares)
+□ website/errors.py                 (Manejo de errores)
+
+□ tests/                            (Directorio de pruebas)
+  □ test_auth.py
+  □ test_turnos.py
+  □ test_pagos.py
+  □ conftest.py
+
+□ migrations/                       (Migraciones de BD con Alembic)
+
+□ API/                              (Carpeta para API REST futuro)
+  □ api.py
+  □ schemas.py
+
+
+═══════════════════════════════════════════════════════════════════════════════
+VERSIONES DE SOFTWARE
+═══════════════════════════════════════════════════════════════════════════════
+
+Python:                     3.9+
+Flask:                      3.1.3
+Flask-Login:                0.6.3
+Flask-WTF:                  1.2.1
+WTForms:                    3.1.1
+Werkzeug:                   3.1.8
+Jinja2:                     3.1.6
+
+
+═══════════════════════════════════════════════════════════════════════════════
+CONVENCIONES DE NOMENCLATURA
+═══════════════════════════════════════════════════════════════════════════════
+
+Archivos Python:
+  - Minúsculas con guiones bajos (snake_case)
+  - Ejm: auth_routes.py, user_models.py
+
+Clases:
+  - CamelCase
+  - Ejm: Usuario, Turno, ListaEspera
+
+Funciones/Métodos:
+  - snake_case
+  - Ejm: ver_turnos_disponibles(), reservar_turno()
+
+Variables:
+  - snake_case
+  - Ejm: usuario_id, monto_pagado
+
+Constantes:
+  - UPPER_CASE
+  - Ejm: DEBUG, DATABASE_URL
+
+Archivos HTML:
+  - Minúsculas con guiones
+  - Ejm: base.html, mis_turnos.html
+
+IDs HTML:
+  - Minúsculas con guiones
+  - Ejm: id="btn-login", id="form-register"
+
+Clases CSS:
+  - Minúsculas con guiones
+  - Ejm: class="btn-primary", class="form-group"
+
+
+═══════════════════════════════════════════════════════════════════════════════
+CÓMO NAVEGAR EL PROYECTO
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Para entender la estructura:
+   → Lee README.md
+
+2. Para iniciar rápido:
+   → Lee QUICKSTART.md
+
+3. Para contribuir:
+   → Lee CONTRIBUTING.md
+
+4. Para ver estado actual:
+   → Lee PROJECT_STATUS.md
+
+5. Para entender los modelos:
+   → Abre website/models.py
+
+6. Para ver una característica específica:
+   → Busca en website/{modulo}/routes.py
+
+7. Para modificar estilos:
+   → Edita statics/style.css
+
+8. Para agregar nueva página:
+   → Crea template en templates/{modulo}/
+   → Añade ruta en website/{modulo}/routes.py
+
+
+═══════════════════════════════════════════════════════════════════════════════
+Creado por: Equipo de Desarrollo - Club 360
+Materia: Ingeniería de Software 2 - UNLP
+Fecha: Abril 2026
+═════════════════════════════════════════════════════════════════════════════

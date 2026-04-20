@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Dashboard</h1>
+    
+    {% if current_user.is_authenticated %}
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5>Mi Información</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Nombre:</strong> {{ current_user.nombre }}</p>
+                        <p><strong>Email:</strong> {{ current_user.email }}</p>
+                        <p><strong>Teléfono:</strong> {{ current_user.telefono }}</p>
+                        <p><strong>Rol:</strong> {{ current_user.rol }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5>Acciones Rápidas</h5>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ url_for('turnos.ver_disponibles') }}" class="btn btn-primary btn-block mb-2">📅 Ver Turnos Disponibles</a>
+                        <a href="{{ url_for('turnos.mis_turnos') }}" class="btn btn-info btn-block mb-2">✅ Mis Turnos</a>
+                        <a href="{{ url_for('pagos.deuda') }}" class="btn btn-warning btn-block mb-2">💳 Ver Deuda</a>
+                        <a href="{{ url_for('suspensiones.solicitar_alta') }}" class="btn btn-danger btn-block">⚠️ Solicitar Alta</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <p>Por favor <a href="{{ url_for('auth.login') }}">inicia sesión</a> para ver tu dashboard</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

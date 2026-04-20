@@ -1,9 +1,40 @@
 {% extends "base.html" %}
 
+{% block title %}Club 360 - Inicio{% endblock %}
+
 {% block content %}
-    <h1 class="mb-3">Hola bienvenido a {{ nombre }} 👋</h1>
+<div class="hero">
+    <h1>Bienvenido a Club 360</h1>
+    <p>Sistema de Gestión de Turnos Deportivos</p>
+    
+    {% if not current_user.is_authenticated %}
+        <div class="button-group">
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Iniciar Sesión</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-secondary">Registrarse</a>
+        </div>
+    {% else %}
+        <div class="button-group">
+            <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Ver Turnos Disponibles</a>
+            <a href="{{ url_for('turnos.mis_turnos') }}" class="btn btn-secondary">Mis Turnos</a>
+        </div>
+    {% endif %}
+</div>
 
-    <p>Inicio</p>
-
-    <button class="btn btn-primary">Click de prueba</button>
+<section class="features">
+    <h2>Nuestros Servicios</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <h3>Reserva de Turnos</h3>
+            <p>Reserva tus turnos favoritos en línea con solo unos clics</p>
+        </div>
+        <div class="feature-card">
+            <h3>Gestión de Pagos</h3>
+            <p>Paga tus deudas de forma segura con múltiples opciones</p>
+        </div>
+        <div class="feature-card">
+            <h3>Actividades Variadas</h3>
+            <p>Fútbol, Básquet, Vóley y Pádel en una sola plataforma</p>
+        </div>
+    </div>
+</section>
 {% endblock %}

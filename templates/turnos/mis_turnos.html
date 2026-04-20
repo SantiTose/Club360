@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Turnos - Club 360{% endblock %}
+
+{% block content %}
+<h2>Mis Turnos Reservados</h2>
+
+<div class="turnos-grid">
+    {% if turnos %}
+        {% for turno in turnos %}
+        <div class="turno-card">
+            <h3>{{ turno.actividad|upper }}</h3>
+            <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
+            <p><strong>Fecha:</strong> {{ turno.hora_inicio.strftime('%d/%m/%Y') }}</p>
+            
+            <form method="POST" action="{{ url_for('turnos.cancelar_turno', turno_id=turno.id) }}" style="display: inline;">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('¿Deseas cancelar este turno?')">Cancelar</button>
+            </form>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No tienes turnos reservados</p>
+        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
+    {% endif %}
+</div>
+{% endblock %}
