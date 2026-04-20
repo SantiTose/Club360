@@ -73,30 +73,43 @@
             <div class="form-group-row">
                 <div class="form-group">
                     <label for="password" class="form-label">🔐 Contraseña</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        class="form-control" 
-                        placeholder="••••••••"
-                        minlength="6"
-                        required
-                    >
+                    <div class="password-input-group">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            class="form-control" 
+                            placeholder="••••••••"
+                            minlength="6"
+                            required
+                            oninput="validatePasswords()"
+                        >
+                        <button type="button" class="password-toggle" onclick="togglePassword('password')">
+                            <span class="eye-icon">👁️</span>
+                        </button>
+                    </div>
                     <small class="form-text">Mínimo 6 caracteres</small>
                 </div>
 
                 <div class="form-group">
                     <label for="password_confirm" class="form-label">✓ Confirmar</label>
-                    <input 
-                        type="password" 
-                        id="password_confirm" 
-                        name="password_confirm" 
-                        class="form-control" 
-                        placeholder="••••••••"
-                        minlength="6"
-                        required
-                    >
-                    <small class="form-text">Repite tu contraseña</small>
+                    <div class="password-input-group">
+                        <input 
+                            type="password" 
+                            id="password_confirm" 
+                            name="password_confirm" 
+                            class="form-control" 
+                            placeholder="••••••••"
+                            minlength="6"
+                            required
+                            oninput="validatePasswords()"
+                        >
+                        <button type="button" class="password-toggle" onclick="togglePassword('password_confirm')">
+                            <span class="eye-icon">👁️</span>
+                        </button>
+                    </div>
+                    <small class="form-text" id="password-match-text">Repite tu contraseña</small>
+                    <small class="form-text error" id="password-error" style="display: none;">Las contraseñas no coinciden</small>
                 </div>
             </div>
 
@@ -127,4 +140,62 @@
         animation: slideInUp 0.5s ease;
     }
 </style>
+
+<script>
+function togglePassword(fieldId) {
+    const input = document.getElementById(fieldId);
+    const button = event.target.closest('.password-toggle');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.querySelector('.eye-icon').textContent = '🙈';
+    } else {
+        input.type = 'password';
+        button.querySelector('.eye-icon').textContent = '👁️';
+    }
+}
+
+function validatePasswords() {
+    const password = document.getElementById('password').value;
+    const passwordConfirm = document.getElementById('password_confirm').value;
+    const errorElement = document.getElementById('password-error');
+    const matchText = document.getElementById('password-match-text');
+    const submitBtn = document.querySelector('button[type="submit"]');
+    
+    if (passwordConfirm.length > 0) {
+        if (password === passwordConfirm) {
+            errorElement.style.display = 'none';
+            matchText.style.display = 'block';
+            matchText.textContent = '✓ Las contraseñas coinciden';
+            matchText.style.color = '#10b981';
+            submitBtn.disabled = false;
+        } else {
+            errorElement.style.display = 'block';
+            matchText.style.display = 'none';
+            submitBtn.disabled = true;
+        }
+    } else {
+        errorElement.style.display = 'none';
+        matchText.style.display = 'block';
+        matchText.textContent = 'Repite tu contraseña';
+        matchText.style.color = 'var(--gray-500)';
+        submitBtn.disabled = false;
+    }
+}
+
+// Validar al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('.auth-form');
+    form.addEventListener('submit', function(e) {
+        const password = document.getElementById('password').value;
+        const passwordConfirm = document.getElementById('password_confirm').value;
+        
+        if (password !== passwordConfirm) {
+            e.preventDefault();
+            document.getElementById('password-error').style.display = 'block';
+            return false;
+        }
+    });
+});
+</script>
 {% endblock %}
