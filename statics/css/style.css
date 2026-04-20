@@ -423,7 +423,7 @@ a:hover {
 }
 
 /* ================================
-   FORMS
+   FORMS (ENHANCED)
    ================================ */
 
 .form-group {
@@ -432,36 +432,126 @@ a:hover {
 
 .form-label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     font-weight: 600;
     color: var(--dark);
+    font-size: 0.95rem;
+    letter-spacing: 0.3px;
 }
 
 .form-control {
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: 0.875rem 1.25rem;
     border: 2px solid var(--gray-200);
     border-radius: var(--radius);
     font-size: 1rem;
     transition: var(--transition);
     font-family: inherit;
+    background: var(--white);
+    color: var(--dark);
+}
+
+.form-control::placeholder {
+    color: var(--gray-400);
+}
+
+.form-control:hover {
+    border-color: var(--primary-light);
 }
 
 .form-control:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+    background: linear-gradient(to bottom, var(--white), var(--gray-100));
 }
 
 .form-control:disabled {
     background: var(--gray-100);
     color: var(--gray-400);
     cursor: not-allowed;
+    border-color: var(--gray-200);
 }
 
 textarea.form-control {
     resize: vertical;
     min-height: 120px;
+    font-family: 'Courier New', monospace;
+}
+
+select.form-control {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%233b82f6' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    padding-right: 2.5rem;
+}
+
+/* Form Helper Text */
+.form-text {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.form-text.error {
+    color: var(--danger);
+}
+
+.form-text.success {
+    color: var(--success);
+}
+
+/* Form Container */
+.form-container {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 2.5rem;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--gray-100);
+}
+
+@media (max-width: 768px) {
+    .form-container {
+        padding: 1.5rem;
+    }
+}
+
+/* Form Title */
+.form-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--dark);
+}
+
+.form-subtitle {
+    font-size: 1rem;
+    color: var(--gray-500);
+    margin-bottom: 2rem;
+}
+
+/* Form Row */
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.form-group-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .form-group-row,
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
 }
 
 /* ================================

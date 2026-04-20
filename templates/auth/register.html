@@ -3,45 +3,128 @@
 {% block title %}Registro - Club 360{% endblock %}
 
 {% block content %}
-<div class="auth-container">
-    <div class="auth-card">
-        <h2>Registrarse</h2>
-        
-        <form method="POST" class="form">
-            <div class="form-group">
-                <label for="nombre">Nombre</label>
-                <input type="text" id="nombre" name="nombre" required>
+<div style="max-width: 600px; margin: 3rem auto;">
+    <div class="form-container">
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360" style="height: 60px; width: auto; margin-bottom: 1rem;">
+            <h1 class="form-title">Únete a Club 360</h1>
+            <p class="form-subtitle">Crea tu cuenta y comienza a reservar turnos</p>
+        </div>
+
+        <form method="POST" class="auth-form">
+            <!-- Nombre y Apellido en una fila -->
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="nombre" class="form-label">👤 Nombre</label>
+                    <input 
+                        type="text" 
+                        id="nombre" 
+                        name="nombre" 
+                        class="form-control" 
+                        placeholder="Juan"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="apellido" class="form-label">👤 Apellido</label>
+                    <input 
+                        type="text" 
+                        id="apellido" 
+                        name="apellido" 
+                        class="form-control" 
+                        placeholder="Pérez"
+                        required
+                    >
+                </div>
             </div>
 
+            <!-- DNI -->
             <div class="form-group">
-                <label for="apellido">Apellido</label>
-                <input type="text" id="apellido" name="apellido" required>
+                <label for="dni" class="form-label">🆔 Número de DNI</label>
+                <input 
+                    type="text" 
+                    id="dni" 
+                    name="dni" 
+                    class="form-control" 
+                    placeholder="12345678"
+                    pattern="[0-9]{8}"
+                    required
+                >
+                <small class="form-text">8 dígitos sin puntos</small>
             </div>
 
+            <!-- Email -->
             <div class="form-group">
-                <label for="dni">DNI</label>
-                <input type="text" id="dni" name="dni" required>
+                <label for="email" class="form-label">📧 Email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    class="form-control" 
+                    placeholder="tu@email.com"
+                    required
+                    autocomplete="email"
+                >
+                <small class="form-text">Te enviaremos un correo de confirmación</small>
             </div>
 
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" required>
+            <!-- Contraseña y Confirmación en una fila -->
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="password" class="form-label">🔐 Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-control" 
+                        placeholder="••••••••"
+                        minlength="6"
+                        required
+                    >
+                    <small class="form-text">Mínimo 6 caracteres</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="password_confirm" class="form-label">✓ Confirmar</label>
+                    <input 
+                        type="password" 
+                        id="password_confirm" 
+                        name="password_confirm" 
+                        class="form-control" 
+                        placeholder="••••••••"
+                        minlength="6"
+                        required
+                    >
+                    <small class="form-text">Repite tu contraseña</small>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" required>
+            <!-- Terms and conditions -->
+            <div style="display: flex; align-items: flex-start; gap: 0.75rem; margin: 1.5rem 0; padding: 1rem; background: var(--gray-50); border-radius: var(--radius);">
+                <input type="checkbox" id="terms" name="terms" required style="width: 18px; height: 18px; margin-top: 0.25rem; cursor: pointer;">
+                <label for="terms" style="font-size: 0.9rem; cursor: pointer;">
+                    Acepto los <a href="#" style="text-decoration: underline;">términos y condiciones</a> y la <a href="#" style="text-decoration: underline;">política de privacidad</a>
+                </label>
             </div>
 
-            <div class="form-group">
-                <label for="password_confirm">Confirmar Contraseña</label>
-                <input type="password" id="password_confirm" name="password_confirm" required>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Registrarse</button>
+            <button type="submit" class="btn btn-primary btn-block" style="padding: 1rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 600;">
+                ✍️ Crear Cuenta
+            </button>
         </form>
 
-        <p>¿Ya tienes cuenta? <a href="{{ url_for('auth.login') }}">Inicia sesión aquí</a></p>
+        <div style="text-align: center; border-top: 1px solid var(--gray-200); padding-top: 1.5rem;">
+            <p style="margin: 0 0 0.5rem 0; color: var(--gray-600);">¿Ya tienes cuenta?</p>
+            <a href="{{ url_for('auth.login') }}" style="display: inline-block; padding: 0.75rem 1.5rem; background: var(--gray-100); color: var(--primary); border-radius: var(--radius); font-weight: 600; transition: var(--transition);">
+                Inicia sesión aquí →
+            </a>
+        </div>
     </div>
 </div>
+
+<style>
+    .auth-form {
+        animation: slideInUp 0.5s ease;
+    }
+</style>
 {% endblock %}

@@ -12,7 +12,10 @@
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                <a href="{{ url_for('index') }}">⚽ Club 360</a>
+                <a href="{{ url_for('index') }}" style="display: flex; align-items: center; gap: 0.75rem;">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo" style="height: 40px; width: auto;">
+                    <span>Club 360</span>
+                </a>
             </div>
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
