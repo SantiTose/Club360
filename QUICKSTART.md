@@ -37,7 +37,7 @@ Después de ejecutar `init_db.py`, tendrás:
 - ✓ Reservar un turno
 - ✓ Cancelar reservas
 - ✓ Ver deudas pendientes
-- ✓ Registrar pagos
+- ✓ Pagar deudas online con tarjeta de crédito
 - ✓ Solicitar alta de suspensión
 
 ### Para Empleados
@@ -54,7 +54,7 @@ Después de ejecutar `init_db.py`, tendrás:
 - Solo de lunes a sábado
 - Franja horaria de 08:00 a 22:00
 - Duración fija de 1 hora (08-09, 09-10, etc.)
-- Los domingos no se pueden crear ni reservar turnos
+- Los domingos y feriados nacionales no se pueden crear ni reservar turnos
 
 ## 4. Estructura de Módulos
 
@@ -86,7 +86,7 @@ website/
 - **Base de Datos:** SQLite (desarrollo)
 - **ORM:** SQLAlchemy
 - **Autenticación:** Flask-Login
-- **Validación de Formularios:** WTForms
+- **Validación de Formularios:** Validaciones HTML + backend (Flask)
 - **Frontend:** HTML5 + CSS + Vanilla JavaScript
 
 ## 7. Desarrollo Local

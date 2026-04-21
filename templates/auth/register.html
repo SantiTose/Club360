@@ -131,6 +131,7 @@
                             <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
+                                <path class="eye-slash" d="M3 3l18 18" stroke-linecap="round"></path>
                             </svg>
                         </button>
                     </div>
@@ -158,6 +159,7 @@
                             <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
+                                <path class="eye-slash" d="M3 3l18 18" stroke-linecap="round"></path>
                             </svg>
                         </button>
                     </div>
@@ -195,11 +197,14 @@
 <script>
 function togglePassword(fieldId, button) {
     const input = document.getElementById(fieldId);
+    const slash = button.querySelector('.eye-slash');
 
     if (input.type === 'password') {
         input.type = 'text';
+        if (slash) slash.style.display = 'none';
     } else {
         input.type = 'password';
+        if (slash) slash.style.display = 'block';
     }
 }
 
@@ -232,6 +237,14 @@ function validatePasswords() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.password-toggle').forEach((button) => {
+        const input = button.parentElement.querySelector('input');
+        const slash = button.querySelector('.eye-slash');
+        if (slash) {
+            slash.style.display = input && input.type === 'password' ? 'block' : 'none';
+        }
+    });
+
     const form = document.querySelector('.auth-form');
     form.addEventListener('submit', function(e) {
         const password = document.getElementById('password').value;

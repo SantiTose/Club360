@@ -19,15 +19,15 @@ Club 360 es un sistema web de gestión de turnos deportivos diseñado para un ce
 - Visualización de turnos disponibles
 - Reserva de turnos con cupo limitado
 - Cancelación de reservas
-- Lista de espera (General)
+- Listas de espera por tipo (General, Abonados, No Abonados)
 - Tipos de clase por turno: Abonada / No Abonada
 - Búsqueda de turnos (para empleados)
-- Notificación en la app cuando la lista de espera llega a 10 personas
+- Notificación administrativa cuando la lista de espera llega a 10 personas
 
 ### 3. Gestión de Pagos
 - Visualización de deudas pendientes
-- Registro de pagos en efectivo o tarjeta de crédito
-- Métodos de pago: Efectivo, Tarjeta de Crédito
+- Pago online de clientes con tarjeta de crédito
+- Registro presencial por empleados: efectivo o tarjeta de crédito
 - Estados: Pendiente, Completado
 - Políticas de cobro diferenciadas por tipo de clase (abonada/no abonada) al reservar turnos
 
@@ -41,47 +41,40 @@ Club 360 es un sistema web de gestión de turnos deportivos diseñado para un ce
 
 ```
 Club360/
-├── website/                      # Directorio principal de la aplicación
-│   ├── __init__.py              # Configuración de Flask y registración de Blueprints
-│   ├── models.py                # Modelos de base de datos (SQLAlchemy)
-│   ├── auth/                    # Épica: Gestión de Usuarios
-│   │   ├── __init__.py
-│   │   ├── routes.py            # Rutas de login, registro, logout
-│   │   └── forms.py             # Formularios de Flask-WTF
-│   ├── turnos/                  # Épica: Gestión de Turnos
-│   │   ├── __init__.py
-│   │   └── routes.py            # Rutas de reservar, cancelar, verificar
-│   ├── pagos/                   # Épica: Gestión de Pagos
-│   │   ├── __init__.py
-│   │   └── routes.py            # Rutas de pago y registro
-│   ├── suspensiones/            # Épica: Gestión de Suspensiones
-│   │   ├── __init__.py
-│   │   └── routes.py            # Rutas de suspensiones
-│   ├── static/                  # Archivos estáticos
-│   │   ├── css/
-│   │   │   └── style.css
-│   │   ├── js/
-│   │   │   └── main.js
-│   │   └── images/
-│   └── templates/               # Archivos HTML
-│       ├── base.html            # Navbar y Footer principal
-│       ├── index.html           # Página de inicio
-│       ├── auth/                # Templates de usuarios
-│       │   ├── login.html
-│       │   ├── register.html
-│       │   └── reset_password.html
-│       ├── turnos/              # Templates de turnos
-│       │   ├── disponibles.html
-│       │   └── mis_turnos.html
-│       ├── pagos/               # Templates de pagos
-│       │   ├── deuda.html
-│       │   └── pagar.html
-│       └── suspensiones/        # Templates de suspensiones
-│           └── solicitar_alta.html
-├── app.py                       # Punto de entrada (solo arranca la app)
+├── app.py                       # Punto de entrada
+├── config.py                    # Configuración por entorno
 ├── requirements.txt             # Dependencias del proyecto
-├── .gitignore                   # Archivos a ignorar en git
-└── README.md                    # Este archivo
+├── website/                     # Lógica backend Flask
+│   ├── __init__.py              # App factory + blueprints
+│   ├── models.py                # Modelos SQLAlchemy
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── turnos/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── pagos/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── suspensiones/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   └── services/
+│       ├── __init__.py
+│       └── notificaciones.py
+├── templates/                   # Templates Jinja2
+│   ├── base.html
+│   ├── index.html
+│   ├── auth/
+│   ├── turnos/
+│   ├── pagos/
+│   └── suspensiones/
+└── statics/                     # CSS, JS e imágenes
+    ├── css/
+    │   └── style.css
+    ├── js/
+    │   └── main.js
+    └── images/
 ```
 
 ## Instalación
@@ -126,12 +119,13 @@ La aplicación estará disponible en `http://localhost:5000`
 
 ### ListaEspera
 - id, usuario_id, turno_id
-- tipo_lista (general)
+- tipo_lista (general, abonados, no_abonados)
 - posicion, fecha_registro
 
 ### Pago
 - id, usuario_id, monto
 - metodo_pago (efectivo, tarjeta_credito)
+- tipo_clase (abonada, no_abonada)
 - estado (pendiente, completado)
 - fecha_pago, referencia_transaccion
 
@@ -145,9 +139,7 @@ La aplicación estará disponible en `http://localhost:5000`
 - Flask 3.1.3
 - Flask-SQLAlchemy 3.1.1
 - Flask-Login 0.6.3
-- Flask-Migrate 4.0.5
-- Flask-WTF 1.2.1
-- WTForms 3.1.1
+- Flask-Migrate 4.1.0
 - Werkzeug 3.1.8
 
 ## Próximos Pasos para Desarrollo
