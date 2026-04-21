@@ -3,7 +3,10 @@ from flask_login import login_user, logout_user, login_required, current_user
 from website.auth import auth_bp
 from website import db
 from website.models import Usuario, TipoUsuario, EstadoUsuario
+from website.services import enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import secrets
 import re
 
 
@@ -13,6 +16,10 @@ def _es_empleado_o_admin(user):
 
 def _es_admin(user):
     return user.tipo_usuario == TipoUsuario.ADMINISTRADOR
+
+
+def _generar_password_temporal():
+    return secrets.token_urlsafe(8)
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -125,6 +132,9 @@ def login():
         
         if usuario and check_password_hash(usuario.password, password):
             login_user(usuario, remember=bool(remember))
+            if usuario.requiere_cambio_password:
+                flash('Debes cambiar tu contraseña temporal para continuar', 'warning')
+                return redirect(url_for('auth.cambiar_password_inicial'))
             flash(f'✅ ¡Bienvenido {usuario.nombre}!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -175,7 +185,6 @@ def crear_usuario():
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
         email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
         tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
 
         field_errors = {}
@@ -187,8 +196,6 @@ def crear_usuario():
             field_errors['dni'] = 'El DNI debe tener 8 dígitos'
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
-        if len(password) < 6:
-            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
 
         tipos_permitidos = {TipoUsuario.CLIENTE}
         if _es_admin(current_user):
@@ -216,19 +223,32 @@ def crear_usuario():
                 puede_crear_empleado=_es_admin(current_user),
             )
 
+        password_temporal = _generar_password_temporal()
         nuevo_usuario = Usuario(
             nombre=nombre,
             apellido=apellido,
             dni=dni,
             email=email,
-            password=generate_password_hash(password),
+            password=generate_password_hash(password_temporal),
             tipo_usuario=tipo_usuario,
             estado=EstadoUsuario.ACTIVO,
+            requiere_cambio_password=True,
         )
         db.session.add(nuevo_usuario)
         db.session.commit()
 
-        flash('Usuario creado exitosamente', 'success')
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        asunto = 'Alta de cuenta Club 360 - contraseña temporal'
+        cuerpo = (
+            f"Hola {nombre},\n\n"
+            "Tu cuenta fue creada por el personal de Club 360.\n"
+            f"Email de acceso: {email}\n"
+            f"Contraseña temporal: {password_temporal}\n\n"
+            "Al iniciar sesión deberás cambiar esta contraseña de forma obligatoria."
+        )
+        enviar_email_simulado(base_dir, email, asunto, cuerpo)
+
+        flash('Usuario creado exitosamente. Se envió contraseña temporal por email.', 'success')
         return redirect(url_for('dashboard'))
 
     return render_template(
@@ -238,3 +258,31 @@ def crear_usuario():
         puede_crear_admin=current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR,
         puede_crear_empleado=_es_admin(current_user),
     )
+
+
+@auth_bp.route('/cambiar-password-inicial', methods=['GET', 'POST'])
+@login_required
+def cambiar_password_inicial():
+    if not current_user.requiere_cambio_password:
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        password_confirm = request.form.get('password_confirm', '')
+        field_errors = {}
+
+        if len(password) < 6:
+            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
+        if password != password_confirm:
+            field_errors['password_confirm'] = 'Las contraseñas no coinciden'
+
+        if field_errors:
+            return render_template('auth/cambiar_password_inicial.html', field_errors=field_errors)
+
+        current_user.password = generate_password_hash(password)
+        current_user.requiere_cambio_password = False
+        db.session.commit()
+        flash('Contraseña actualizada correctamente', 'success')
+        return redirect(url_for('dashboard'))
+
+    return render_template('auth/cambiar_password_inicial.html', field_errors={})

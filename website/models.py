@@ -42,6 +42,7 @@ class Usuario(UserMixin, db.Model):
     credito_abonado = db.Column(db.Float, nullable=False, default=0.0)
     cancelaciones_abonado = db.Column(db.Integer, nullable=False, default=0)
     beneficio_abonado_activo = db.Column(db.Boolean, nullable=False, default=True)
+    requiere_cambio_password = db.Column(db.Boolean, nullable=False, default=False)
     ultimo_recordatorio_mora = db.Column(db.DateTime)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

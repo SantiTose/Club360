@@ -52,9 +52,8 @@
             </div>
 
             <div class="form-group">
-                <label for="password" class="form-label">Contraseña inicial</label>
-                <input type="password" id="password" name="password" class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" minlength="6" required>
-                {% if field_errors.get('password') %}<small class="form-text error">{{ field_errors['password'] }}</small>{% else %}<small class="form-text">Mínimo 6 caracteres</small>{% endif %}
+                <label class="form-label">Credenciales iniciales</label>
+                <p class="form-text">El sistema generará automáticamente una contraseña temporal y la enviará por email para que el usuario la cambie en su primer ingreso.</p>
             </div>
 
             <div class="button-group" style="justify-content: flex-start;">
