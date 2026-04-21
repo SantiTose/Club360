@@ -68,13 +68,23 @@
 document.addEventListener('DOMContentLoaded', function() {
     const fechaInput = document.querySelector('input[name="fecha"]');
     const horaSelect = document.querySelector('select[name="hora_inicio_slot"]');
+    const formEl = document.querySelector('form');
     const calendarEl = document.getElementById('calendar-selector');
+
+    function esDomingo(fechaIso) {
+        if (!fechaIso) return false;
+        const [y, m, d] = fechaIso.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        return dt.getDay() === 0;
+    }
 
     const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridWeek',
         locale: 'es',
         firstDay: 1,
         hiddenDays: [0],
+        dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit' },
+        slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
         allDaySlot: false,
@@ -86,12 +96,29 @@ document.addEventListener('DOMContentLoaded', function() {
             if (start.getMinutes() !== 0 || start.getHours() < 8 || start.getHours() > 21) {
                 return;
             }
+            if (start.getDay() === 0) {
+                return;
+            }
 
             const y = start.getFullYear();
             const m = String(start.getMonth() + 1).padStart(2, '0');
             const d = String(start.getDate()).padStart(2, '0');
             fechaInput.value = `${y}-${m}-${d}`;
             horaSelect.value = String(start.getHours());
+        }
+    });
+
+    fechaInput.addEventListener('change', function() {
+        if (esDomingo(fechaInput.value)) {
+            alert('Los domingos no están habilitados para turnos.');
+            fechaInput.value = '';
+        }
+    });
+
+    formEl.addEventListener('submit', function(e) {
+        if (esDomingo(fechaInput.value)) {
+            e.preventDefault();
+            alert('No se pueden crear turnos en domingo.');
         }
     });
 
