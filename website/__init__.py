@@ -211,6 +211,18 @@ def create_app(config_name='development'):
             dashboard_context=dashboard_context,
         )
 
+    @app.before_request
+    def _run_daily_automatic_suspension_audit():
+        today_key = datetime.utcnow().date().isoformat()
+        last_run = app.extensions.get('club360_last_daily_suspension_audit')
+        if last_run == today_key:
+            return
+
+        from website.turnos.routes import procesar_suspensiones_automaticas_diarias
+
+        procesar_suspensiones_automaticas_diarias()
+        app.extensions['club360_last_daily_suspension_audit'] = today_key
+
     # Register blueprints
     from website.auth import auth_bp
     from website.turnos import turnos_bp
@@ -234,6 +246,7 @@ def create_app(config_name='development'):
         _ensure_usuario_edad_columns()
         _ensure_reserva_qr_columns()
         _ensure_reserva_tipo_clase_column()
+        _ensure_reserva_abono_column()
         _ensure_lista_espera_tipo_clase_column()
         _ensure_pago_tipo_clase_column()
         _backfill_reserva_qr_tokens()
@@ -399,6 +412,17 @@ def _ensure_reserva_tipo_clase_column():
     columnas = {c['name'] for c in inspector.get_columns('reservas')}
     if 'tipo_clase' not in columnas:
         db.session.execute(text("ALTER TABLE reservas ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
+        db.session.commit()
+
+
+def _ensure_reserva_abono_column():
+    inspector = inspect(db.engine)
+    if 'reservas' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('reservas')}
+    if 'abono_id' not in columnas:
+        db.session.execute(text("ALTER TABLE reservas ADD COLUMN abono_id INTEGER"))
         db.session.commit()
 
     columnas_turno = {c['name'] for c in inspector.get_columns('turnos')} if 'turnos' in inspector.get_table_names() else set()

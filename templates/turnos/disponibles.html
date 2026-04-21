@@ -82,12 +82,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const canReserve = !p.sin_cupos;
             const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
             const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
+            const mensajeAbono = p.tiene_abono
+                ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya tenés un abono mensual activo para esta franja. Si reservás como abonada, se tomará dentro de esa suscripción.</p>'
+                : '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se activará una suscripción mensual para esta franja y se reservarán automáticamente las clases coincidentes hasta fin de mes.</p>';
             const boton = canReserve
                 ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${helpers.escapeHtml(event.title)}." data-confirm-action="Reservar">
+                        ${mensajeAbono}
                         <div class="form-group" style="margin-bottom: .8rem;">
                             <label for="tipo_clase_reserva"><strong>Modalidad de reserva</strong></label>
                             <select id="tipo_clase_reserva" name="tipo_clase" class="form-control" required>
-                                <option value="abonada">Abonada</option>
+                                <option value="abonada">Abonada mensual</option>
                                 <option value="no_abonada" selected>No abonada</option>
                             </select>
                         </div>

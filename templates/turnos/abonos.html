@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Abonos - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Suscripciones</span>
+            <h2>Mis Abonos Mensuales</h2>
+            <p class="text-muted">Acá ves tus asistencias recurrentes activas. Se generan cuando elegís modalidad abonada sobre una franja disponible.</p>
+        </div>
+    </div>
+
+    <div class="calendar-toolbar-card">
+        {% if abonos %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Actividad</th>
+                    <th>Franja recurrente</th>
+                    <th>Vigencia</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for abono in abonos %}
+                <tr>
+                    <td>{{ abono.actividad|capitalize }}</td>
+                    <td>
+                        {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
+                        {{ dias[abono.dia_semana] }} {{ '%02d'|format(abono.hora_inicio) }}:00 - {{ '%02d'|format(abono.hora_inicio + 1) }}:00
+                    </td>
+                    <td>{{ abono.fecha_desde.strftime('%d/%m/%Y') }} al {{ abono.fecha_hasta.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ abono.estado|capitalize }}</td>
+                    <td>
+                        {% if abono.estado == 'activo' %}
+                        <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono mensual" data-confirm-message="Se darán de baja tus reservas futuras generadas por este abono." data-confirm-action="Cancelar abono">
+                            <button type="submit" class="btn btn-danger">Cancelar</button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted">Sin acción</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="calendar-empty-state" style="margin-top: 0;">
+            <p>Todavía no activaste ningún abono mensual.</p>
+            <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Explorar turnos</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

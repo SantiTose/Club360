@@ -1,5 +1,6 @@
 import os
 import secrets
+import calendar
 from datetime import datetime, timedelta
 
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
@@ -9,11 +10,13 @@ from sqlalchemy import func
 from website.turnos import turnos_bp
 from website import db
 from website.models import (
+    AbonoCliente,
     Turno,
     ListaEspera,
     Reserva,
     Pago,
     Suspension,
+    EstadoAbono,
     EstadoUsuario,
     Usuario,
     TipoUsuario,
@@ -26,6 +29,7 @@ HORA_APERTURA = 8
 HORA_CIERRE = 22
 HORAS_DISPONIBLES = list(range(HORA_APERTURA, HORA_CIERRE))
 TIPO_LISTA_GENERAL = 'general'
+DIAS_SEMANA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
 FERIADOS_FIJOS_MM_DD = {
     (1, 1),    # Año Nuevo
     (3, 24),   # Día Nacional de la Memoria por la Verdad y la Justicia
@@ -79,6 +83,7 @@ def _buscar_pago_reserva(usuario_id, turno_id):
     patrones = [
         f"reserva-{turno_id}-{usuario_id}-%",
         f"espera-{turno_id}-{usuario_id}-%",
+        f"abono-%-{turno_id}-{usuario_id}-%",
     ]
 
     for patron in patrones:
@@ -161,13 +166,87 @@ def _procesar_suspension_automatica(cliente):
         elif debe_suspender_no_abonado:
             motivo = 'Suspensión automática por 3 deudas no abonadas'
 
+        abonos_suspendidos = []
+        if debe_suspender_abonado:
+            abonos_suspendidos = _suspender_abonos_activos(cliente)
+
         cliente.estado = EstadoUsuario.SUSPENDIDO
         db.session.add(Suspension(
             usuario_id=cliente.id,
             motivo=motivo,
             estado='activa'
         ))
+        _notificar_suspension_automatica(
+            cliente,
+            debe_suspender_abonado,
+            debe_suspender_no_abonado,
+            abonos_suspendidos,
+        )
+        cliente.ultimo_recordatorio_mora = datetime.utcnow()
         db.session.commit()
+
+
+def _notificar_suspension_automatica(cliente, suspendido_abonado, suspendido_no_abonado, abonos_suspendidos):
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    deudas_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+        .filter(Pago.monto > 0)
+        .all()
+    )
+    deudas_no_abonadas = _pagos_no_abonados_vencidos(cliente.id)
+    monto_abonado = round(sum(p.monto for p in deudas_abonadas), 2)
+    monto_no_abonado = round(sum(p.monto for p in deudas_no_abonadas), 2)
+    monto_total = round(monto_abonado + monto_no_abonado, 2)
+    consecuencias = []
+    if suspendido_abonado:
+        consecuencias.append(
+            'tu abono mensual quedó suspendido, se liberaron tus reservas abonadas futuras y no podrás activar nuevos abonos hasta regularizar la deuda'
+        )
+    if suspendido_no_abonado:
+        consecuencias.append(
+            'no podrás reservar clases no abonadas hasta regularizar las clases vencidas impagas'
+        )
+    if suspendido_abonado and not suspendido_no_abonado:
+        consecuencias.append('todavía podrás reservar clases no abonadas si tienes cupos disponibles y no presentas deuda de ese tipo')
+
+    asunto = 'Suspensión automática por mora - Club 360'
+    detalle_abonos = ''
+    if abonos_suspendidos:
+        detalle_abonos = (
+            "\n\nAbonos mensuales suspendidos:\n"
+            + "\n".join(
+                f"- {abono.actividad.upper()} | {DIAS_SEMANA[abono.dia_semana].capitalize()} "
+                f"{abono.hora_inicio:02d}:00 a {abono.hora_inicio + 1:02d}:00 | vigencia hasta {abono.fecha_hasta.strftime('%d/%m/%Y')}"
+                for abono in abonos_suspendidos
+            )
+        )
+    cuerpo = (
+        f"Hola {cliente.nombre},\n\n"
+        "Tu cuenta fue suspendida automáticamente por registrar deuda vencida.\n\n"
+        "Resumen de deuda detectada:\n"
+        f"- Deuda abonada pendiente: ${monto_abonado:.2f} ({len(deudas_abonadas)} cargos)\n"
+        f"- Deuda no abonada vencida: ${monto_no_abonado:.2f} ({len(deudas_no_abonadas)} cargos)\n"
+        f"- Total considerado para la suspensión: ${monto_total:.2f}\n\n"
+        "Consecuencias actuales:\n"
+        + "\n".join(f"- {item}" for item in consecuencias)
+        + detalle_abonos
+        + "\n\nIngresá a Club 360 para revisar tu deuda y regularizar tu situación."
+    )
+    enviar_email_simulado(base_dir, cliente.email, asunto, cuerpo)
+
+
+def procesar_suspensiones_automaticas_diarias():
+    clientes = Usuario.query.filter_by(tipo_usuario=TipoUsuario.CLIENTE).all()
+    procesados = 0
+    for cliente in clientes:
+        estado_previo = cliente.estado
+        suspensiones_previas = Suspension.query.filter_by(usuario_id=cliente.id, estado='activa').count()
+        _procesar_suspension_automatica(cliente)
+        suspensiones_actuales = Suspension.query.filter_by(usuario_id=cliente.id, estado='activa').count()
+        if estado_previo != cliente.estado or suspensiones_actuales > suspensiones_previas:
+            procesados += 1
+    return procesados
 
 
 def _validar_tipo_clase(valor):
@@ -257,6 +336,203 @@ def _agregar_a_lista_espera(turno, usuario_id, tipo_clase):
         tipo_clase=tipo_clase,
         posicion=posicion,
     ))
+
+
+def _abono_cubre_turno(abono, turno):
+    fecha_turno = turno.hora_inicio.date()
+    return (
+        abono.estado == EstadoAbono.ACTIVO
+        and abono.actividad == turno.actividad
+        and abono.dia_semana == turno.hora_inicio.weekday()
+        and abono.hora_inicio == turno.hora_inicio.hour
+        and abono.fecha_desde <= fecha_turno <= abono.fecha_hasta
+    )
+
+
+def _fin_de_mes(fecha):
+    ultimo_dia = calendar.monthrange(fecha.year, fecha.month)[1]
+    return fecha.replace(day=ultimo_dia)
+
+
+def _buscar_abono_activo_para_turno(usuario_id, turno):
+    abonos = (
+        AbonoCliente.query
+        .filter_by(usuario_id=usuario_id, estado=EstadoAbono.ACTIVO, actividad=turno.actividad)
+        .all()
+    )
+    for abono in abonos:
+        if _abono_cubre_turno(abono, turno):
+            return abono
+    return None
+
+
+def _crear_abono_mensual_para_turno(usuario, turno):
+    fecha_desde = turno.hora_inicio.date()
+    fecha_hasta = _fin_de_mes(fecha_desde)
+
+    abonos_existentes = (
+        AbonoCliente.query
+        .filter_by(
+            usuario_id=usuario.id,
+            actividad=turno.actividad,
+            dia_semana=turno.hora_inicio.weekday(),
+            hora_inicio=turno.hora_inicio.hour,
+            estado=EstadoAbono.ACTIVO,
+        )
+        .all()
+    )
+    for existente in abonos_existentes:
+        if not (fecha_hasta < existente.fecha_desde or fecha_desde > existente.fecha_hasta):
+            return existente, False, []
+
+    abono = AbonoCliente(
+        usuario_id=usuario.id,
+        actividad=turno.actividad,
+        dia_semana=turno.hora_inicio.weekday(),
+        hora_inicio=turno.hora_inicio.hour,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=EstadoAbono.ACTIVO,
+    )
+    db.session.add(abono)
+    db.session.flush()
+    creadas, conflictos = _generar_reservas_para_abono(abono, crear_pagos=True)
+    return abono, True, conflictos
+
+
+def _crear_pago_pendiente_reserva(usuario, turno, tipo_clase, referencia):
+    monto_base = _calcular_monto_reserva(turno.actividad, tipo_clase, usuario)
+    credito_aplicado = 0.0
+    monto_final = monto_base
+
+    if tipo_clase == TipoClase.ABONADA and usuario.credito_abonado > 0:
+        credito_aplicado = min(usuario.credito_abonado, monto_base)
+        monto_final = round(monto_base - credito_aplicado, 2)
+        usuario.credito_abonado = round(usuario.credito_abonado - credito_aplicado, 2)
+
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=monto_final,
+        metodo_pago='tarjeta_credito',
+        estado='pendiente',
+        tipo_clase=tipo_clase,
+        referencia_transaccion=referencia,
+    ))
+    return credito_aplicado, monto_final
+
+
+def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True):
+    reserva_existente = Reserva.query.filter_by(turno_id=turno.id, usuario_id=usuario.id).first()
+    if reserva_existente:
+        if reserva_existente.tipo_clase != TipoClase.ABONADA:
+            return False, 'El cliente ya tiene una reserva no abonada en esta franja.'
+        if not reserva_existente.abono_id:
+            reserva_existente.abono_id = abono.id
+        return False, None
+
+    if turno.cupos_disponibles <= 0:
+        return False, f"El turno {turno.actividad.upper()} del {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')} no tiene cupos disponibles."
+
+    db.session.add(Reserva(
+        usuario_id=usuario.id,
+        turno_id=turno.id,
+        abono_id=abono.id,
+        tipo_clase=TipoClase.ABONADA,
+        qr_token=secrets.token_urlsafe(24),
+    ))
+    turno.cupos_disponibles -= 1
+
+    if crear_pago:
+        referencia = f"abono-{abono.id}-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
+        _crear_pago_pendiente_reserva(usuario, turno, TipoClase.ABONADA, referencia)
+    return True, None
+
+
+def _generar_reservas_para_abono(abono, crear_pagos=True):
+    usuario = abono.usuario or Usuario.query.get(abono.usuario_id)
+    turnos = (
+        Turno.query
+        .filter_by(actividad=abono.actividad, cancelado=False)
+        .filter(func.date(Turno.hora_inicio) >= abono.fecha_desde.isoformat())
+        .filter(func.date(Turno.hora_inicio) <= abono.fecha_hasta.isoformat())
+        .order_by(Turno.hora_inicio.asc())
+        .all()
+    )
+
+    creadas = 0
+    conflictos = []
+    for turno in turnos:
+        if not _abono_cubre_turno(abono, turno):
+            continue
+        creada, conflicto = _asegurar_reserva_abono(turno, usuario, abono, crear_pago=crear_pagos)
+        if conflicto:
+            conflictos.append(conflicto)
+        elif creada:
+            creadas += 1
+    return creadas, conflictos
+
+
+def _cancelar_reservas_futuras_de_abono(abono):
+    ahora = datetime.utcnow()
+    reservas = (
+        Reserva.query
+        .join(Turno, Reserva.turno_id == Turno.id)
+        .filter(Reserva.abono_id == abono.id)
+        .filter(Turno.hora_inicio >= ahora)
+        .all()
+    )
+
+    for reserva in reservas:
+        pagos = (
+            Pago.query
+            .filter_by(usuario_id=reserva.usuario_id)
+            .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-%"))
+            .filter(Pago.monto > 0)
+            .all()
+        )
+        for pago in pagos:
+            if pago.estado == 'pendiente':
+                db.session.delete(pago)
+            else:
+                db.session.add(Pago(
+                    usuario_id=pago.usuario_id,
+                    monto=-round(abs(pago.monto), 2),
+                    metodo_pago=pago.metodo_pago,
+                    estado='completado',
+                    tipo_clase=pago.tipo_clase,
+                    referencia_transaccion=f"reintegro-abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-{int(datetime.utcnow().timestamp())}",
+                ))
+        reserva.turno.cupos_disponibles += 1
+        db.session.delete(reserva)
+
+
+def _suspender_abonos_activos(cliente):
+    abonos = AbonoCliente.query.filter_by(usuario_id=cliente.id, estado=EstadoAbono.ACTIVO).all()
+    afectados = []
+    for abono in abonos:
+        abono.estado = EstadoAbono.SUSPENDIDO
+        _cancelar_reservas_futuras_de_abono(abono)
+        afectados.append(abono)
+    return afectados
+
+
+def _aplicar_abonos_a_turno(turno):
+    abonos = (
+        AbonoCliente.query
+        .filter_by(actividad=turno.actividad, estado=EstadoAbono.ACTIVO)
+        .all()
+    )
+    creadas = 0
+    conflictos = []
+    for abono in abonos:
+        if not _abono_cubre_turno(abono, turno):
+            continue
+        creada, conflicto = _asegurar_reserva_abono(turno, abono.usuario, abono, crear_pago=True)
+        if conflicto:
+            conflictos.append(f"{abono.usuario.apellido}, {abono.usuario.nombre}: {conflicto}")
+        elif creada:
+            creadas += 1
+    return creadas, conflictos
 
 
 def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
@@ -407,6 +683,7 @@ def eventos_turnos():
                     'qr_token': reserva.qr_token,
                     'asistencia': 'Validada' if reserva.asistencia_validada else 'Pendiente',
                     'tipo_clase': _label_tipo_clase(reserva.tipo_clase),
+                    'origen_reserva': 'Abono mensual' if reserva.abono_id else 'Reserva puntual',
                     'cancelar_url': url_for('turnos.cancelar_turno', turno_id=reserva.turno.id),
                 }
             }
@@ -459,6 +736,7 @@ def eventos_turnos():
                 'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                 'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                 'sin_cupos': turno.cupos_disponibles <= 0,
+                'tiene_abono': bool(_buscar_abono_activo_para_turno(current_user.id, turno)) if current_user.tipo_usuario == TipoUsuario.CLIENTE else False,
             }
         }
         for turno in turnos
@@ -512,40 +790,71 @@ def reservar_turno(turno_id):
     if turno_existente:
         flash('Ya tienes reservado este turno', 'error')
         return redirect(url_for('turnos.ver_turnos_disponibles'))
-    
+
     if turno.cupos_disponibles > 0:
-        monto_base = _calcular_monto_reserva(turno.actividad, tipo_clase, current_user)
         credito_aplicado = 0.0
-        monto_final = monto_base
-        if tipo_clase == TipoClase.ABONADA and current_user.credito_abonado > 0:
-            credito_aplicado = min(current_user.credito_abonado, monto_base)
-            monto_final = round(monto_base - credito_aplicado, 2)
-            current_user.credito_abonado = round(current_user.credito_abonado - credito_aplicado, 2)
+        monto_final = 0.0
+        if tipo_clase == TipoClase.ABONADA:
+            abono = _buscar_abono_activo_para_turno(current_user.id, turno)
+            if not abono:
+                abono, creado_abono, conflictos = _crear_abono_mensual_para_turno(current_user, turno)
+                if conflictos:
+                    db.session.rollback()
+                    flash('No se pudo activar tu abono mensual porque alguna de las clases futuras del mes no tiene cupo disponible.', 'error')
+                    for conflicto in conflictos:
+                        flash(conflicto, 'warning')
+                    return redirect(url_for('turnos.ver_turnos_disponibles'))
 
-        reserva = Reserva(
-            usuario_id=current_user.id,
-            turno_id=turno_id,
-            tipo_clase=tipo_clase,
-            qr_token=secrets.token_urlsafe(24),
-        )
-        db.session.add(reserva)
-        turno.cupos_disponibles -= 1
+                if creado_abono:
+                    db.session.commit()
+                    flash(
+                        f'Se activó tu abono mensual para {turno.actividad.upper()} los '
+                        f'{DIAS_SEMANA[turno.hora_inicio.weekday()]} a las {turno.hora_inicio.strftime("%H:%M")} hasta fin de mes.',
+                        'success'
+                    )
+                    return redirect(url_for('turnos.mis_turnos'))
 
-        # Política de cobro por tipo de clase (abonada / no abonada).
-        db.session.add(Pago(
-            usuario_id=current_user.id,
-            monto=monto_final,
-            metodo_pago='tarjeta_credito',
-            estado='pendiente',
-            tipo_clase=tipo_clase,
-            referencia_transaccion=f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}"
-        ))
+            _, conflicto = _asegurar_reserva_abono(turno, current_user, abono, crear_pago=True)
+            if conflicto:
+                flash(conflicto, 'error')
+                return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+            pago_generado = (
+                Pago.query
+                .filter_by(usuario_id=current_user.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+                .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{turno_id}-{current_user.id}-%"))
+                .order_by(Pago.fecha_pago.desc())
+                .first()
+            )
+            monto_final = pago_generado.monto if pago_generado else 0.0
+        else:
+            reserva = Reserva(
+                usuario_id=current_user.id,
+                turno_id=turno_id,
+                tipo_clase=tipo_clase,
+                qr_token=secrets.token_urlsafe(24),
+            )
+            db.session.add(reserva)
+            turno.cupos_disponibles -= 1
+            credito_aplicado, monto_final = _crear_pago_pendiente_reserva(
+                current_user,
+                turno,
+                tipo_clase,
+                f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}",
+            )
 
         db.session.commit()
         if credito_aplicado > 0:
             flash(f'Turno reservado. Se aplicó un crédito de ${credito_aplicado:.2f}', 'success')
-        flash(f'Turno reservado exitosamente. Se generó una deuda de ${monto_final:.2f}', 'success')
+        if tipo_clase == TipoClase.ABONADA:
+            flash(f'Reserva abonada confirmada dentro de tu abono mensual. Se generó una deuda de ${monto_final:.2f}', 'success')
+        else:
+            flash(f'Turno reservado exitosamente. Se generó una deuda de ${monto_final:.2f}', 'success')
     else:
+        if tipo_clase == TipoClase.ABONADA:
+            flash('No fue posible activar tu abono mensual porque este turno ya no tiene cupos disponibles.', 'error')
+            return redirect(url_for('turnos.ver_turnos_disponibles'))
+
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
             usuario_id=current_user.id
@@ -784,6 +1093,48 @@ def administrar_turnos():
     return render_template('turnos/administrar.html', turnos=turnos, horas_disponibles=HORAS_DISPONIBLES)
 
 
+@turnos_bp.route('/abonos', methods=['GET'])
+@login_required
+def administrar_abonos():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta vista está disponible solo para clientes', 'error')
+        return redirect(url_for('index'))
+
+    abonos = (
+        AbonoCliente.query
+        .filter_by(usuario_id=current_user.id)
+        .order_by(AbonoCliente.estado.asc(), AbonoCliente.fecha_desde.asc())
+        .all()
+    )
+    return render_template(
+        'turnos/abonos.html',
+        abonos=abonos,
+    )
+
+
+@turnos_bp.route('/abonos/cancelar/<int:abono_id>', methods=['POST'])
+@login_required
+def cancelar_abono(abono_id):
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Solo los clientes pueden gestionar sus abonos mensuales', 'error')
+        return redirect(url_for('index'))
+
+    abono = AbonoCliente.query.get_or_404(abono_id)
+    if abono.usuario_id != current_user.id:
+        flash('No tienes permisos para cancelar este abono', 'error')
+        return redirect(url_for('dashboard'))
+
+    if abono.estado == EstadoAbono.CANCELADO:
+        flash('El abono ya estaba dado de baja.', 'info')
+        return redirect(url_for('turnos.administrar_abonos'))
+
+    _cancelar_reservas_futuras_de_abono(abono)
+    abono.estado = EstadoAbono.CANCELADO
+    db.session.commit()
+    flash('Tu abono mensual fue dado de baja y se liberaron sus reservas futuras.', 'success')
+    return redirect(url_for('turnos.administrar_abonos'))
+
+
 @turnos_bp.route('/crear', methods=['GET', 'POST'])
 @login_required
 def crear_turno():
@@ -828,8 +1179,14 @@ def crear_turno():
             cancelado=False,
         )
         db.session.add(turno)
+        db.session.flush()
+        creadas_abono, conflictos_abono = _aplicar_abonos_a_turno(turno)
         db.session.commit()
         flash('Turno creado exitosamente', 'success')
+        if creadas_abono:
+            flash(f'Se generaron {creadas_abono} reservas abonadas fijas en esta nueva franja.', 'info')
+        for conflicto in conflictos_abono:
+            flash(conflicto, 'warning')
         return redirect(url_for('turnos.administrar_turnos'))
 
     return render_template('turnos/form_turno.html', turno=None, horas_disponibles=HORAS_DISPONIBLES)
@@ -868,6 +1225,21 @@ def editar_turno(turno_id):
             flash('La capacidad no puede ser menor a reservas confirmadas', 'error')
             return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)
 
+        reservas_abono = (
+            Reserva.query
+            .filter(Reserva.turno_id == turno.id, Reserva.abono_id.isnot(None))
+            .all()
+        )
+        turno_simulado = type('TurnoSimulado', (), {
+            'actividad': actividad,
+            'hora_inicio': hora_inicio,
+            'hora_fin': hora_fin,
+        })()
+        for reserva_abono in reservas_abono:
+            if reserva_abono.abono and not _abono_cubre_turno(reserva_abono.abono, turno_simulado):
+                flash('No puedes mover este turno a una franja que rompa abonos fijos ya asignados.', 'error')
+                return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)
+
         existe = (
             Turno.query
             .filter_by(actividad=actividad, hora_inicio=hora_inicio, cancelado=False)
@@ -883,8 +1255,13 @@ def editar_turno(turno_id):
         turno.hora_fin = hora_fin
         turno.capacidad_maxima = capacidad_maxima
         turno.cupos_disponibles = capacidad_maxima - reservas_confirmadas
+        creadas_abono, conflictos_abono = _aplicar_abonos_a_turno(turno)
         db.session.commit()
         flash('Turno actualizado exitosamente', 'success')
+        if creadas_abono:
+            flash(f'Se generaron {creadas_abono} reservas abonadas fijas por la actualización del turno.', 'info')
+        for conflicto in conflictos_abono:
+            flash(conflicto, 'warning')
         return redirect(url_for('turnos.administrar_turnos'))
 
     return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)

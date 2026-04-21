@@ -23,6 +23,7 @@
                     {% if current_user.tipo_usuario == 'cliente' %}
                     <li><a href="{{ url_for('turnos.mis_turnos') }}" class="nav-link-pill">Mis Turnos</a></li>
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Turnos Disponibles</a></li>
+                    <li><a href="{{ url_for('turnos.administrar_abonos') }}" class="nav-link-pill">Mis Abonos</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario == 'cliente' %}
                     <li><a href="{{ url_for('pagos.ver_deuda') }}" class="nav-link-pill">Pagos</a></li>

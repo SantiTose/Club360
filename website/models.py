@@ -55,6 +55,7 @@ class Usuario(UserMixin, db.Model):
     # `turnos` se mantiene por compatibilidad con datos antiguos (campo Turno.usuario_id).
     turnos = db.relationship('Turno', backref='usuario', lazy=True)
     reservas = db.relationship('Reserva', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    abonos = db.relationship('AbonoCliente', backref='usuario', lazy=True, cascade='all, delete-orphan')
     pagos = db.relationship('Pago', backref='usuario', lazy=True)
     listas_espera = db.relationship('ListaEspera', backref='usuario', lazy=True)
     suspensiones = db.relationship('Suspension', backref='usuario', lazy=True)
@@ -104,6 +105,7 @@ class Reserva(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
+    abono_id = db.Column(db.Integer, db.ForeignKey('abonos_clientes.id'))
     tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     qr_token = db.Column(db.String(120), unique=True, nullable=False)
     recordatorio_enviado = db.Column(db.Boolean, default=False, nullable=False)
@@ -118,6 +120,31 @@ class Reserva(db.Model):
 
     def __repr__(self):
         return f'<Reserva usuario={self.usuario_id} turno={self.turno_id}>'
+
+
+class EstadoAbono(str, Enum):
+    ACTIVO = "activo"
+    SUSPENDIDO = "suspendido"
+    CANCELADO = "cancelado"
+
+
+class AbonoCliente(db.Model):
+    __tablename__ = 'abonos_clientes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    actividad = db.Column(db.String(20), nullable=False)
+    dia_semana = db.Column(db.Integer, nullable=False)  # lunes=0 ... domingo=6
+    hora_inicio = db.Column(db.Integer, nullable=False)  # 8..21
+    fecha_desde = db.Column(db.Date, nullable=False)
+    fecha_hasta = db.Column(db.Date, nullable=False)
+    estado = db.Column(db.String(20), nullable=False, default=EstadoAbono.ACTIVO)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    reservas = db.relationship('Reserva', backref='abono', lazy=True)
+
+    def __repr__(self):
+        return f'<AbonoCliente usuario={self.usuario_id} actividad={self.actividad} {self.dia_semana}@{self.hora_inicio}>'
 
 
 class Pago(db.Model):
