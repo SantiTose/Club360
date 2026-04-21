@@ -59,7 +59,7 @@ def ver_deuda():
 @pagos_bp.route('/pagar/<int:pago_id>', methods=['GET', 'POST'])
 @login_required
 def pagar(pago_id):
-    """Realizar pago."""
+    """Realizar pago de cliente en web (solo tarjeta de credito)."""
     pago = Pago.query.get_or_404(pago_id)
     
     if pago.usuario_id != current_user.id:
@@ -67,25 +67,15 @@ def pagar(pago_id):
         return redirect(url_for('pagos.ver_deuda'))
     
     if request.method == 'POST':
-        metodo_pago = request.form.get('metodo_pago')
-        
-        if metodo_pago not in ['efectivo', 'tarjeta_credito', 'virtual']:
-            flash('Método de pago inválido', 'error')
-            return redirect(url_for('pagos.pagar', pago_id=pago_id))
-        
-        pago.metodo_pago = metodo_pago
+        pago.metodo_pago = 'tarjeta_credito'
         pago.estado = 'completado'
         pago.fecha_pago = datetime.utcnow()
-        if metodo_pago == 'virtual':
-            pago.referencia_transaccion = f"VIRT-{secrets.token_hex(8).upper()}"
+        pago.referencia_transaccion = f"TC-{secrets.token_hex(8).upper()}"
         
         db.session.commit()
         _reconciliar_estado_cliente(current_user)
 
-        if metodo_pago == 'virtual':
-            flash(f'Pago virtual completado. Referencia: {pago.referencia_transaccion}', 'success')
-        else:
-            flash('Pago completado exitosamente', 'success')
+        flash(f'Pago con tarjeta completado. Referencia: {pago.referencia_transaccion}', 'success')
         return redirect(url_for('pagos.ver_deuda'))
     
     return render_template('pagos/pagar.html', pago=pago)
@@ -118,7 +108,7 @@ def registrar_pago():
             flash('El monto debe ser mayor a cero', 'error')
             return redirect(url_for('pagos.registrar_pago'))
 
-        if metodo_pago not in ['efectivo', 'tarjeta_credito', 'virtual']:
+        if metodo_pago not in ['efectivo', 'tarjeta_credito']:
             flash('Método de pago inválido', 'error')
             return redirect(url_for('pagos.registrar_pago'))
         
@@ -128,7 +118,7 @@ def registrar_pago():
             metodo_pago=metodo_pago,
             estado='completado',
             fecha_pago=datetime.utcnow(),
-            referencia_transaccion=(f"VIRT-{secrets.token_hex(8).upper()}" if metodo_pago == 'virtual' else None)
+            referencia_transaccion=(f"TC-{secrets.token_hex(8).upper()}" if metodo_pago == 'tarjeta_credito' else None)
         )
         
         db.session.add(nuevo_pago)

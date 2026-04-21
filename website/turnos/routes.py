@@ -241,7 +241,7 @@ def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
             db.session.add(Pago(
                 usuario_id=usuario.id,
                 monto=-round(abs(pago_reserva.monto), 2),
-                metodo_pago='virtual',
+                metodo_pago=pago_reserva.metodo_pago,
                 estado='completado',
                 tipo_clase=turno.tipo_clase,
                 referencia_transaccion=f"reintegro-admin-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
@@ -478,7 +478,7 @@ def reservar_turno(turno_id):
         db.session.add(Pago(
             usuario_id=current_user.id,
             monto=monto_final,
-            metodo_pago='efectivo',
+            metodo_pago='tarjeta_credito',
             estado='pendiente',
             tipo_clase=turno.tipo_clase,
             referencia_transaccion=f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}"
@@ -549,7 +549,7 @@ def cancelar_turno(turno_id):
                 db.session.add(Pago(
                     usuario_id=current_user.id,
                     monto=-monto_reintegro,
-                    metodo_pago='virtual',
+                    metodo_pago=pago_reserva.metodo_pago,
                     estado='completado',
                     tipo_clase=turno.tipo_clase,
                     referencia_transaccion=f"reintegro-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}",
@@ -581,7 +581,7 @@ def cancelar_turno(turno_id):
         db.session.add(Pago(
             usuario_id=siguiente.usuario_id,
             monto=monto,
-            metodo_pago='virtual',
+            metodo_pago='tarjeta_credito',
             estado='pendiente',
             tipo_clase=turno.tipo_clase,
             referencia_transaccion=f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}"
