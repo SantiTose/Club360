@@ -38,7 +38,7 @@ def _es_admin(user):
     return user.tipo_usuario == TipoUsuario.ADMINISTRADOR
 
 
-def _calcular_monto_reserva(actividad, tipo_clase):
+def _calcular_monto_reserva(actividad, tipo_clase, usuario=None):
     base_por_actividad = {
         'futbol': 300.0,
         'basquet': 250.0,
@@ -47,8 +47,33 @@ def _calcular_monto_reserva(actividad, tipo_clase):
     }
     base = base_por_actividad.get(actividad, 250.0)
     if tipo_clase == TipoClase.ABONADA:
-        return round(base * 0.6, 2)
+        if usuario and not usuario.beneficio_abonado_activo:
+            return round(base, 2)
+        return round(base * 0.8, 2)
     return round(base, 2)
+
+
+def _horas_anticipacion(turno):
+    return (turno.hora_inicio - datetime.utcnow()).total_seconds() / 3600
+
+
+def _buscar_pago_reserva(usuario_id, turno_id):
+    patrones = [
+        f"reserva-{turno_id}-{usuario_id}-%",
+        f"espera-{turno_id}-{usuario_id}-%",
+    ]
+
+    for patron in patrones:
+        pago_completado = (
+            Pago.query
+            .filter_by(usuario_id=usuario_id, estado='completado')
+            .filter(Pago.referencia_transaccion.like(patron))
+            .order_by(Pago.fecha_pago.desc())
+            .first()
+        )
+        if pago_completado:
+            return pago_completado
+    return None
 
 
 def _validar_regla_horaria(inicio, fin):
@@ -369,6 +394,14 @@ def reservar_turno(turno_id):
         return redirect(url_for('turnos.ver_turnos_disponibles'))
     
     if turno.cupos_disponibles > 0:
+        monto_base = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user)
+        credito_aplicado = 0.0
+        monto_final = monto_base
+        if turno.tipo_clase == TipoClase.ABONADA and current_user.credito_abonado > 0:
+            credito_aplicado = min(current_user.credito_abonado, monto_base)
+            monto_final = round(monto_base - credito_aplicado, 2)
+            current_user.credito_abonado = round(current_user.credito_abonado - credito_aplicado, 2)
+
         reserva = Reserva(
             usuario_id=current_user.id,
             turno_id=turno_id,
@@ -378,10 +411,9 @@ def reservar_turno(turno_id):
         turno.cupos_disponibles -= 1
 
         # Política de cobro por tipo de clase (abonada / no abonada).
-        monto = _calcular_monto_reserva(turno.actividad, turno.tipo_clase)
         db.session.add(Pago(
             usuario_id=current_user.id,
-            monto=monto,
+            monto=monto_final,
             metodo_pago='efectivo',
             estado='pendiente',
             tipo_clase=turno.tipo_clase,
@@ -389,7 +421,9 @@ def reservar_turno(turno_id):
         ))
 
         db.session.commit()
-        flash(f'Turno reservado exitosamente. Se generó una deuda de ${monto:.2f}', 'success')
+        if credito_aplicado > 0:
+            flash(f'Turno reservado. Se aplicó un crédito de ${credito_aplicado:.2f}', 'success')
+        flash(f'Turno reservado exitosamente. Se generó una deuda de ${monto_final:.2f}', 'success')
     else:
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
@@ -429,6 +463,39 @@ def cancelar_turno(turno_id):
     db.session.delete(reserva)
     turno.cupos_disponibles += 1
 
+    horas = _horas_anticipacion(turno)
+    if turno.tipo_clase == TipoClase.ABONADA:
+        current_user.cancelaciones_abonado += 1
+        if horas >= 48:
+            credito = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user)
+            current_user.credito_abonado = round(current_user.credito_abonado + credito, 2)
+            flash(f'Cancelación abonada con +48h: se generó crédito de ${credito:.2f}', 'info')
+        else:
+            flash('Cancelación abonada con menos de 48h: no se genera crédito', 'warning')
+
+        if current_user.cancelaciones_abonado >= 3 and current_user.beneficio_abonado_activo:
+            current_user.beneficio_abonado_activo = False
+            flash('Alcanzaste 3 cancelaciones abonadas: se desactiva el beneficio de abonado', 'warning')
+    else:
+        if horas >= 24:
+            pago_reserva = _buscar_pago_reserva(current_user.id, turno_id)
+            if pago_reserva:
+                monto_senia = round(_calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user) * 0.5, 2)
+                monto_reintegro = round(min(abs(pago_reserva.monto), monto_senia), 2)
+                db.session.add(Pago(
+                    usuario_id=current_user.id,
+                    monto=-monto_reintegro,
+                    metodo_pago='virtual',
+                    estado='completado',
+                    tipo_clase=turno.tipo_clase,
+                    referencia_transaccion=f"reintegro-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}",
+                ))
+                flash(f'Cancelación no abonada con +24h: se reintegró la seña (${monto_reintegro:.2f})', 'info')
+            else:
+                flash('Cancelación no abonada con +24h: no había pago confirmado para reintegrar', 'info')
+        else:
+            flash('Cancelación no abonada con menos de 24h: seña no reembolsable', 'warning')
+
     # Si hay lista de espera, asciende automáticamente al primero.
     siguiente = _obtener_siguiente_lista_espera(turno)
     if siguiente and turno.cupos_disponibles > 0:
@@ -446,7 +513,7 @@ def cancelar_turno(turno_id):
 
         # Genera deuda de la clase al usuario promovido desde lista de espera.
         usuario_promovido = Usuario.query.get(siguiente.usuario_id)
-        monto = _calcular_monto_reserva(turno.actividad, turno.tipo_clase)
+        monto = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, usuario_promovido)
         db.session.add(Pago(
             usuario_id=siguiente.usuario_id,
             monto=monto,

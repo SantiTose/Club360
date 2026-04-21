@@ -39,6 +39,9 @@ class Usuario(UserMixin, db.Model):
     tipo_usuario = db.Column(db.String(20), nullable=False, default=TipoUsuario.CLIENTE)
     # Estado operativo del cliente (activo/suspendido). Para empleado/admin no se utiliza.
     estado = db.Column(db.String(20), nullable=False, default=EstadoUsuario.ACTIVO)
+    credito_abonado = db.Column(db.Float, nullable=False, default=0.0)
+    cancelaciones_abonado = db.Column(db.Integer, nullable=False, default=0)
+    beneficio_abonado_activo = db.Column(db.Boolean, nullable=False, default=True)
     ultimo_recordatorio_mora = db.Column(db.DateTime)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

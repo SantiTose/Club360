@@ -119,6 +119,7 @@ def create_app(config_name='development'):
         _ensure_turno_tipo_clase_column()
         _drop_legacy_usuario_tipo_cliente_column()
         _ensure_usuario_recordatorio_column()
+        _ensure_usuario_cancelaciones_credito_columns()
         _ensure_reserva_qr_columns()
         _ensure_pago_tipo_clase_column()
         _backfill_reserva_qr_tokens()
@@ -166,6 +167,27 @@ def _ensure_usuario_recordatorio_column():
     columnas = {c['name'] for c in inspector.get_columns('usuarios')}
     if 'ultimo_recordatorio_mora' not in columnas:
         db.session.execute(text("ALTER TABLE usuarios ADD COLUMN ultimo_recordatorio_mora DATETIME"))
+        db.session.commit()
+
+
+def _ensure_usuario_cancelaciones_credito_columns():
+    inspector = inspect(db.engine)
+    if 'usuarios' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('usuarios')}
+    updates = []
+    if 'credito_abonado' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN credito_abonado FLOAT NOT NULL DEFAULT 0")
+    if 'cancelaciones_abonado' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cancelaciones_abonado INTEGER NOT NULL DEFAULT 0")
+    if 'beneficio_abonado_activo' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN beneficio_abonado_activo BOOLEAN NOT NULL DEFAULT 1")
+
+    for sql in updates:
+        db.session.execute(text(sql))
+
+    if updates:
         db.session.commit()
 
 
