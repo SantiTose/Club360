@@ -1,16 +1,15 @@
 """
-Script para inicializar la base de datos con datos de ejemplo
+Script para inicializar la base de datos sin turnos precargados.
 Ejecutar: python init_db.py
 """
 
 from website import create_app, db
 from website.models import Usuario, Turno, Pago, Reserva
 from werkzeug.security import generate_password_hash
-from datetime import datetime, timedelta
 
 
 def init_database():
-    """Inicializa la base de datos con datos de ejemplo"""
+    """Inicializa la base de datos sin turnos de ejemplo."""
     app = create_app('development')
     
     with app.app_context():
@@ -77,76 +76,8 @@ def init_database():
         db.session.commit()
         print("✓ Clientes creados")
         
-        # Crear turnos de ejemplo
-        now = datetime.utcnow()
-        
-        for i in range(5):
-            fecha = now + timedelta(days=i+1)
-            
-            # Turnos de Fútbol
-            turno_futbol = Turno(
-                actividad='futbol',
-                tipo_clase='abonada' if i % 2 == 0 else 'no_abonada',
-                hora_inicio=fecha.replace(hour=10, minute=0),
-                hora_fin=fecha.replace(hour=11, minute=0),
-                capacidad_maxima=5,
-                cupos_disponibles=3
-            )
-            
-            # Turnos de Básquet
-            turno_basquet = Turno(
-                actividad='basquet',
-                tipo_clase='no_abonada',
-                hora_inicio=fecha.replace(hour=15, minute=0),
-                hora_fin=fecha.replace(hour=16, minute=0),
-                capacidad_maxima=8,
-                cupos_disponibles=5
-            )
-            
-            # Turnos de Vóley
-            turno_voley = Turno(
-                actividad='voley',
-                tipo_clase='abonada',
-                hora_inicio=fecha.replace(hour=18, minute=0),
-                hora_fin=fecha.replace(hour=19, minute=0),
-                capacidad_maxima=12,
-                cupos_disponibles=8
-            )
-            
-            # Turnos de Pádel
-            turno_padel = Turno(
-                actividad='padel',
-                tipo_clase='no_abonada',
-                hora_inicio=fecha.replace(hour=20, minute=0),
-                hora_fin=fecha.replace(hour=21, minute=0),
-                capacidad_maxima=4,
-                cupos_disponibles=2
-            )
-            
-            db.session.add_all([turno_futbol, turno_basquet, turno_voley, turno_padel])
-        
-        db.session.commit()
-        print("✓ Turnos creados (5 días x 4 actividades)")
-        
-        # Crear pagos de ejemplo
-        pago1 = Pago(
-            usuario_id=cliente1.id,
-            monto=500.00,
-            metodo_pago='efectivo',
-            estado='completado',
-            fecha_pago=now
-        )
-        
-        pago2 = Pago(
-            usuario_id=cliente2.id,
-            monto=250.00,
-            metodo_pago='tarjeta_credito',
-            estado='pendiente'
-        )
-        
-        db.session.add_all([pago1, pago2])
-        db.session.commit()
-        print("✓ Pagos de ejemplo creados")
+        print("✓ Sin turnos de ejemplo (calendario inicia vacío)")
+        print("✓ Sin pagos de ejemplo")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")

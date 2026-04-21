@@ -273,4 +273,3 @@ python3 app.py
 ¿Tienes más preguntas? Revisa:
 - `README.md` - Documentación principal
 - `QUICKSTART.md` - Guía rápida
-- `CONTRIBUTING.md` - Cómo contribuir

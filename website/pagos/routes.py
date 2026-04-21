@@ -2,12 +2,45 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from website.pagos import pagos_bp
 from website import db
-from website.models import Pago, Usuario, TipoUsuario
+from website.models import Pago, Usuario, TipoUsuario, EstadoUsuario
+from website.services import enviar_email_simulado
 from datetime import datetime
+import os
+import secrets
 
 
 def _es_empleado_o_admin(user):
     return user.tipo_usuario in {TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR}
+
+
+def _enviar_alerta_moroso_si_corresponde(usuario):
+    deuda = Pago.query.filter_by(usuario_id=usuario.id, estado='pendiente').count()
+    if deuda == 0:
+        return
+
+    ahora = datetime.utcnow()
+    if usuario.ultimo_recordatorio_mora and (ahora - usuario.ultimo_recordatorio_mora).total_seconds() < 86400:
+        return
+
+    asunto = 'Recordatorio de deuda pendiente - Club 360'
+    cuerpo = (
+        f"Hola {usuario.nombre},\n\n"
+        f"Detectamos {deuda} pago(s) pendiente(s) en tu cuenta.\n"
+        "Por favor regulariza tu situación para evitar restricciones de nuevas reservas."
+    )
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+    usuario.ultimo_recordatorio_mora = ahora
+    db.session.commit()
+
+
+def _reconciliar_estado_cliente(usuario):
+    if usuario.tipo_usuario != TipoUsuario.CLIENTE:
+        return
+    pendientes = Pago.query.filter_by(usuario_id=usuario.id, estado='pendiente').count()
+    if pendientes == 0 and usuario.estado == EstadoUsuario.SUSPENDIDO:
+        usuario.estado = EstadoUsuario.ACTIVO
+        db.session.commit()
 
 
 @pagos_bp.route('/deuda')
@@ -18,6 +51,8 @@ def ver_deuda():
         usuario_id=current_user.id,
         estado='pendiente'
     ).all()
+
+    _enviar_alerta_moroso_si_corresponde(current_user)
     
     monto_total = sum([pago.monto for pago in deuda])
     
@@ -37,17 +72,23 @@ def pagar(pago_id):
     if request.method == 'POST':
         metodo_pago = request.form.get('metodo_pago')
         
-        if metodo_pago not in ['efectivo', 'tarjeta_credito']:
+        if metodo_pago not in ['efectivo', 'tarjeta_credito', 'virtual']:
             flash('Método de pago inválido', 'error')
             return redirect(url_for('pagos.pagar', pago_id=pago_id))
         
         pago.metodo_pago = metodo_pago
         pago.estado = 'completado'
         pago.fecha_pago = datetime.utcnow()
+        if metodo_pago == 'virtual':
+            pago.referencia_transaccion = f"VIRT-{secrets.token_hex(8).upper()}"
         
         db.session.commit()
-        
-        flash('Pago completado exitosamente', 'success')
+        _reconciliar_estado_cliente(current_user)
+
+        if metodo_pago == 'virtual':
+            flash(f'Pago virtual completado. Referencia: {pago.referencia_transaccion}', 'success')
+        else:
+            flash('Pago completado exitosamente', 'success')
         return redirect(url_for('pagos.ver_deuda'))
     
     return render_template('pagos/pagar.html', pago=pago)
@@ -80,7 +121,7 @@ def registrar_pago():
             flash('El monto debe ser mayor a cero', 'error')
             return redirect(url_for('pagos.registrar_pago'))
 
-        if metodo_pago not in ['efectivo', 'tarjeta_credito']:
+        if metodo_pago not in ['efectivo', 'tarjeta_credito', 'virtual']:
             flash('Método de pago inválido', 'error')
             return redirect(url_for('pagos.registrar_pago'))
         
@@ -89,7 +130,8 @@ def registrar_pago():
             monto=monto,
             metodo_pago=metodo_pago,
             estado='completado',
-            fecha_pago=datetime.utcnow()
+            fecha_pago=datetime.utcnow(),
+            referencia_transaccion=(f"VIRT-{secrets.token_hex(8).upper()}" if metodo_pago == 'virtual' else None)
         )
         
         db.session.add(nuevo_pago)

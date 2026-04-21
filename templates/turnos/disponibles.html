@@ -2,6 +2,10 @@
 
 {% block title %}Turnos Disponibles - Club 360{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css">
+{% endblock %}
+
 {% block content %}
 <h2>Turnos Disponibles</h2>
 
@@ -23,26 +27,55 @@
     </form>
 </div>
 
-<div class="turnos-grid">
-    {% if turnos %}
-        {% for turno in turnos %}
-        <div class="turno-card">
-            <h3>{{ turno.actividad|upper }}</h3>
-            <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
-            <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
-            <p><strong>Disponibles:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
-            
-            {% if turno.cupos_disponibles > 0 %}
-                <form method="POST" action="{{ url_for('turnos.reservar_turno', turno_id=turno.id) }}" style="display: inline;">
-                    <button type="submit" class="btn btn-success">Reservar</button>
-                </form>
-            {% else %}
-                <p class="text-warning">Sin cupos disponibles</p>
-            {% endif %}
-        </div>
-        {% endfor %}
-    {% else %}
-        <p>No hay turnos disponibles</p>
-    {% endif %}
+<div class="calendar-layout">
+    <div id="calendar-disponibles" class="calendar-surface"></div>
+    <div class="turno-card" id="detalle-turno" style="max-width: 420px;">
+        <h3>Detalle</h3>
+        <p class="text-muted">Seleccioná un turno del calendario para reservar.</p>
+        <div id="detalle-turno-body"></div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const actividad = document.querySelector('select[name="actividad"]').value;
+    const tipoClase = document.querySelector('select[name="tipo_clase"]').value;
+    const calendarEl = document.getElementById('calendar-disponibles');
+    const detalleEl = document.getElementById('detalle-turno-body');
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        locale: 'es',
+        firstDay: 1,
+        hiddenDays: [0],
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        allDaySlot: false,
+        height: 'auto',
+        nowIndicator: true,
+        events: `{{ url_for('turnos.eventos_turnos') }}?scope=disponibles&actividad=${encodeURIComponent(actividad)}&tipo_clase=${encodeURIComponent(tipoClase)}`,
+        eventClick: function(info) {
+            const p = info.event.extendedProps;
+            const canReserve = !p.sin_cupos;
+            const boton = canReserve
+                ? `<form method="POST" action="${p.reservar_url}"><button type="submit" class="btn btn-success">Reservar</button></form>`
+                : '<p class="text-warning">Sin cupos disponibles</p>';
+
+            detalleEl.innerHTML = `
+                <p><strong>Deporte:</strong> ${info.event.title}</p>
+                <p><strong>Clase:</strong> ${p.tipo_clase}</p>
+                <p><strong>Inicio:</strong> ${info.event.start.toLocaleString('es-AR')}</p>
+                <p><strong>Fin:</strong> ${info.event.end.toLocaleString('es-AR')}</p>
+                <p><strong>Cupos:</strong> ${p.cupos}</p>
+                ${boton}
+            `;
+        }
+    });
+
+    calendar.render();
+});
+</script>
 {% endblock %}

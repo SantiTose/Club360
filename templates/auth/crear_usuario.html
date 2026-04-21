@@ -40,7 +40,9 @@
                     <label for="tipo_usuario" class="form-label">Tipo de usuario</label>
                     <select id="tipo_usuario" name="tipo_usuario" class="form-control {% if field_errors.get('tipo_usuario') %}is-invalid{% endif %}">
                         <option value="cliente" {% if form_data.get('tipo_usuario') == 'cliente' %}selected{% endif %}>Cliente</option>
+                        {% if puede_crear_empleado %}
                         <option value="empleado" {% if form_data.get('tipo_usuario') == 'empleado' %}selected{% endif %}>Empleado</option>
+                        {% endif %}
                         {% if puede_crear_admin %}
                         <option value="administrador" {% if form_data.get('tipo_usuario') == 'administrador' %}selected{% endif %}>Administrador</option>
                         {% endif %}

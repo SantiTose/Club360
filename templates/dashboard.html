@@ -25,9 +25,9 @@
                 <h5>Mi Estado</h5>
             </div>
             <div class="card-body">
-                <p><strong>Miembro desde:</strong> Enero 2026</p>
-                <p><strong>Turnos Reservados:</strong> <span class="badge badge-success">12</span></p>
-                <p><strong>Deuda Pendiente:</strong> <span class="badge badge-warning">$450</span></p>
+                <p><strong>Estado:</strong> <span class="badge badge-primary">{{ current_user.estado|capitalize if current_user.estado else 'N/A' }}</span></p>
+                <p><strong>Turnos Reservados:</strong> <span class="badge badge-success">{{ turnos_reservados }}</span></p>
+                <p><strong>Deuda Pendiente:</strong> <span class="badge badge-warning">${{ '%.2f'|format(deuda_total) }}</span></p>
             </div>
         </div>
     </div>
@@ -97,15 +97,15 @@
         </div>
         <div class="card-body">
             <ul style="list-style: none; padding: 0;">
-                <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
-                    <strong>Turno confirmado</strong> - Fútbol, viernes 22 de abril
-                </li>
-                <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
-                    <strong>Pago procesado</strong> - $150 por membresía
-                </li>
-                <li style="padding: 1rem 0;">
-                    <strong>Turno disponible</strong> - Básquet, sábado 23 de abril
-                </li>
+                {% if actividad_reciente %}
+                    {% for item in actividad_reciente %}
+                    <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
+                        {{ item }}
+                    </li>
+                    {% endfor %}
+                {% else %}
+                    <li style="padding: 1rem 0;">Sin actividad reciente.</li>
+                {% endif %}
             </ul>
         </div>
     </div>

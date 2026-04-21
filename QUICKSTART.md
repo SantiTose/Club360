@@ -9,7 +9,7 @@ source venv/bin/activate
 # Instalar dependencias
 pip install -r requirements.txt
 
-# Inicializar base de datos con datos de ejemplo
+# Inicializar base de datos (sin turnos precargados)
 python init_db.py
 
 # Ejecutar aplicación
@@ -47,6 +47,14 @@ Después de ejecutar `init_db.py`, tendrás:
 ### Para Administradores
 - ✓ Acceso a todas las funcionalidades
 - ✓ Gestión de suspensiones
+- ✓ Crear y editar turnos desde calendario real
+
+## Reglas de Turnos
+
+- Solo de lunes a sábado
+- Franja horaria de 08:00 a 22:00
+- Duración fija de 1 hora (08-09, 09-10, etc.)
+- Los domingos no se pueden crear ni reservar turnos
 
 ## 4. Estructura de Módulos
 

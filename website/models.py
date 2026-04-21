@@ -39,6 +39,7 @@ class Usuario(UserMixin, db.Model):
     tipo_usuario = db.Column(db.String(20), nullable=False, default=TipoUsuario.CLIENTE)
     # Estado operativo del cliente (activo/suspendido). Para empleado/admin no se utiliza.
     estado = db.Column(db.String(20), nullable=False, default=EstadoUsuario.ACTIVO)
+    ultimo_recordatorio_mora = db.Column(db.DateTime)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -95,6 +96,11 @@ class Reserva(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
+    qr_token = db.Column(db.String(120), unique=True, nullable=False)
+    recordatorio_enviado = db.Column(db.Boolean, default=False, nullable=False)
+    fecha_recordatorio = db.Column(db.DateTime)
+    asistencia_validada = db.Column(db.Boolean, default=False, nullable=False)
+    fecha_asistencia = db.Column(db.DateTime)
     fecha_reserva = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (

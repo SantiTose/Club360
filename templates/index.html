@@ -21,6 +21,28 @@
     {% endif %}
 </div>
 
+{% if not current_user.is_authenticated %}
+<section class="public-info-panel" aria-label="Información pública del establecimiento">
+    <h2>Información del Establecimiento</h2>
+    <p class="public-info-intro">Conoce rápidamente dónde estamos y en qué horarios te atendemos.</p>
+
+    <div class="public-info-grid">
+        <article class="public-info-card">
+            <h3>Ubicación</h3>
+            <p>A confirmar</p>
+        </article>
+
+        <article class="public-info-card">
+            <h3>Días y Horarios</h3>
+            <ul>
+                <li>Lunes a Sábado: 08:00 a 22:00</li>
+                <li>Feriados nacionales: cerrado</li>
+            </ul>
+        </article>
+    </div>
+</section>
+{% endif %}
+
 <!-- Complejo Section -->
 <section class="mt-5 mb-5">
     <h2 style="text-align: center; margin-bottom: 2rem;">Nuestro Complejo Deportivo</h2>

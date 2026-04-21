@@ -1,9 +1,11 @@
 import os
 from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, login_required
+from flask_login import LoginManager, login_required, current_user
 from flask_migrate import Migrate
 from sqlalchemy import text, inspect
+import secrets
+from datetime import datetime
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -56,7 +58,49 @@ def create_app(config_name='development'):
     @app.route('/dashboard')
     @login_required
     def dashboard():
-        return render_template('dashboard.html')
+        from website.models import TipoUsuario, Turno, Reserva, Pago
+
+        turnos_reservados = 0
+        deuda_total = 0.0
+        actividad_reciente = []
+
+        if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+            turnos_reservados = Reserva.query.filter_by(usuario_id=current_user.id).count()
+            pagos_pendientes = Pago.query.filter_by(usuario_id=current_user.id, estado='pendiente').all()
+            deuda_total = sum(p.monto for p in pagos_pendientes)
+
+            proximo_turno = (
+                Turno.query
+                .join(Reserva, Reserva.turno_id == Turno.id)
+                .filter(Reserva.usuario_id == current_user.id)
+                .filter(Turno.hora_inicio >= datetime.utcnow())
+                .order_by(Turno.hora_inicio.asc())
+                .first()
+            )
+            if proximo_turno:
+                actividad_reciente.append(
+                    f"Próximo turno: {proximo_turno.actividad.upper()} el {proximo_turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}"
+                )
+
+            ultimo_pago = (
+                Pago.query
+                .filter_by(usuario_id=current_user.id, estado='completado')
+                .order_by(Pago.fecha_pago.desc())
+                .first()
+            )
+            if ultimo_pago:
+                actividad_reciente.append(
+                    f"Último pago: ${ultimo_pago.monto:.2f} ({ultimo_pago.metodo_pago})"
+                )
+        else:
+            actividad_reciente.append('Cuenta interna habilitada para gestión administrativa y operativa.')
+
+        return render_template(
+            'dashboard.html',
+            turnos_reservados=turnos_reservados,
+            deuda_total=deuda_total,
+            actividad_reciente=actividad_reciente,
+        )
 
     # Register blueprints
     from website.auth import auth_bp
@@ -74,6 +118,9 @@ def create_app(config_name='development'):
         db.create_all()
         _ensure_turno_tipo_clase_column()
         _drop_legacy_usuario_tipo_cliente_column()
+        _ensure_usuario_recordatorio_column()
+        _ensure_reserva_qr_columns()
+        _backfill_reserva_qr_tokens()
 
     return app
 
@@ -108,3 +155,51 @@ def _drop_legacy_usuario_tipo_cliente_column():
     except Exception:
         # Si la versión de SQLite no soporta DROP COLUMN, se mantiene compatibilidad sin romper arranque.
         db.session.rollback()
+
+
+def _ensure_usuario_recordatorio_column():
+    inspector = inspect(db.engine)
+    if 'usuarios' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('usuarios')}
+    if 'ultimo_recordatorio_mora' not in columnas:
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN ultimo_recordatorio_mora DATETIME"))
+        db.session.commit()
+
+
+def _ensure_reserva_qr_columns():
+    inspector = inspect(db.engine)
+    if 'reservas' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('reservas')}
+    updates = []
+
+    if 'qr_token' not in columnas:
+        updates.append("ALTER TABLE reservas ADD COLUMN qr_token VARCHAR(120)")
+    if 'recordatorio_enviado' not in columnas:
+        updates.append("ALTER TABLE reservas ADD COLUMN recordatorio_enviado BOOLEAN NOT NULL DEFAULT 0")
+    if 'fecha_recordatorio' not in columnas:
+        updates.append("ALTER TABLE reservas ADD COLUMN fecha_recordatorio DATETIME")
+    if 'asistencia_validada' not in columnas:
+        updates.append("ALTER TABLE reservas ADD COLUMN asistencia_validada BOOLEAN NOT NULL DEFAULT 0")
+    if 'fecha_asistencia' not in columnas:
+        updates.append("ALTER TABLE reservas ADD COLUMN fecha_asistencia DATETIME")
+
+    for sql in updates:
+        db.session.execute(text(sql))
+
+    if updates:
+        db.session.commit()
+
+
+def _backfill_reserva_qr_tokens():
+    from website.models import Reserva
+
+    reservas_sin_qr = Reserva.query.filter((Reserva.qr_token.is_(None)) | (Reserva.qr_token == '')).all()
+    for reserva in reservas_sin_qr:
+        reserva.qr_token = secrets.token_urlsafe(24)
+
+    if reservas_sin_qr:
+        db.session.commit()

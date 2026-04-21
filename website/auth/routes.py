@@ -11,6 +11,10 @@ def _es_empleado_o_admin(user):
     return user.tipo_usuario in {TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR}
 
 
+def _es_admin(user):
+    return user.tipo_usuario == TipoUsuario.ADMINISTRADOR
+
+
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     """Registrar nuevo usuario."""
@@ -186,9 +190,9 @@ def crear_usuario():
         if len(password) < 6:
             field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
 
-        tipos_permitidos = {TipoUsuario.CLIENTE, TipoUsuario.EMPLEADO}
-        if current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR:
-            tipos_permitidos.add(TipoUsuario.ADMINISTRADOR)
+        tipos_permitidos = {TipoUsuario.CLIENTE}
+        if _es_admin(current_user):
+            tipos_permitidos.update({TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR})
         if tipo_usuario not in tipos_permitidos:
             field_errors['tipo_usuario'] = 'No puedes crear este tipo de usuario'
 
@@ -209,6 +213,7 @@ def crear_usuario():
                     'tipo_usuario': tipo_usuario,
                 },
                 puede_crear_admin=current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR,
+                puede_crear_empleado=_es_admin(current_user),
             )
 
         nuevo_usuario = Usuario(
@@ -231,4 +236,5 @@ def crear_usuario():
         field_errors={},
         form_data={},
         puede_crear_admin=current_user.tipo_usuario == TipoUsuario.ADMINISTRADOR,
+        puede_crear_empleado=_es_admin(current_user),
     )

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if turno else 'Crear' }} Turno - Club 360{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css">
+{% endblock %}
+
+{% block content %}
+<h2>{{ 'Editar' if turno else 'Crear' }} Turno</h2>
+<p class="text-muted">Regla horaria: lunes a sábado, franja 08:00 a 22:00, duración fija de 1 hora.</p>
+
+<div id="calendar-selector" class="calendar-surface" style="margin-bottom: 1rem;"></div>
+
+<form method="POST" class="form" style="max-width: 700px;">
+    <div class="form-group-row">
+        <div class="form-group">
+            <label>Actividad</label>
+            <select name="actividad" class="form-control" required>
+                <option value="futbol" {% if turno and turno.actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
+                <option value="basquet" {% if turno and turno.actividad == 'basquet' %}selected{% endif %}>Básquet</option>
+                <option value="voley" {% if turno and turno.actividad == 'voley' %}selected{% endif %}>Vóley</option>
+                <option value="padel" {% if turno and turno.actividad == 'padel' %}selected{% endif %}>Pádel</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Tipo de clase</label>
+            <select name="tipo_clase" class="form-control" required>
+                <option value="abonada" {% if turno and turno.tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
+                <option value="no_abonada" {% if turno and turno.tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group-row">
+        <div class="form-group">
+            <label>Día</label>
+            <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') if turno else '' }}" required>
+        </div>
+        <div class="form-group">
+            <label>Horario</label>
+            <select name="hora_inicio_slot" class="form-control" required>
+                <option value="">Seleccionar horario</option>
+                {% for hora in horas_disponibles %}
+                {% set valor = '%02d'|format(hora) %}
+                {% set seleccionado = (turno and turno.hora_inicio.hour == hora) %}
+                <option value="{{ hora }}" {% if seleccionado %}selected{% endif %}>{{ valor }}:00 - {{ '%02d'|format(hora + 1) }}:00</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Capacidad máxima</label>
+        <input type="number" name="capacidad_maxima" min="1" class="form-control" value="{{ turno.capacidad_maxima if turno else '' }}" required>
+    </div>
+
+    <div class="button-group" style="justify-content: flex-start;">
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <a href="{{ url_for('turnos.administrar_turnos') }}" class="btn btn-secondary">Volver</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fechaInput = document.querySelector('input[name="fecha"]');
+    const horaSelect = document.querySelector('select[name="hora_inicio_slot"]');
+    const calendarEl = document.getElementById('calendar-selector');
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        locale: 'es',
+        firstDay: 1,
+        hiddenDays: [0],
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        allDaySlot: false,
+        selectable: true,
+        selectOverlap: false,
+        height: 'auto',
+        select: function(info) {
+            const start = info.start;
+            if (start.getMinutes() !== 0 || start.getHours() < 8 || start.getHours() > 21) {
+                return;
+            }
+
+            const y = start.getFullYear();
+            const m = String(start.getMonth() + 1).padStart(2, '0');
+            const d = String(start.getDate()).padStart(2, '0');
+            fechaInput.value = `${y}-${m}-${d}`;
+            horaSelect.value = String(start.getHours());
+        }
+    });
+
+    calendar.render();
+});
+</script>
+{% endblock %}

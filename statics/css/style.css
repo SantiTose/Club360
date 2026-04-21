@@ -286,6 +286,65 @@ a:hover {
     animation: slideInUp 1s ease;
 }
 
+.public-info-panel {
+    background: #262626;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin: 2rem 0 3rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.public-info-panel h2 {
+    color: var(--white);
+    margin-bottom: 0.5rem;
+}
+
+.public-info-intro {
+    color: var(--gray-300);
+    margin-bottom: 1.5rem;
+}
+
+.public-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.public-info-card {
+    background: #1f1f1f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+}
+
+.public-info-card h3 {
+    color: var(--primary-light);
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.public-info-card ul {
+    margin: 0;
+    padding-left: 1rem;
+}
+
+.public-info-card li {
+    color: #d6d6d6;
+    margin-bottom: 0.35rem;
+}
+
+.public-info-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: var(--primary-light);
+    font-weight: 600;
+}
+
+.public-info-link:hover {
+    color: var(--white);
+}
+
 /* ================================
    BUTTONS
    ================================ */
@@ -689,6 +748,87 @@ section:nth-child(even) {
     box-shadow: var(--shadow-sm);
 }
 
+.calendar-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.calendar-surface {
+    background: #262626;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+}
+
+.fc .fc-toolbar-title,
+.fc .fc-col-header-cell-cushion,
+.fc .fc-timegrid-axis-cushion,
+.fc .fc-timegrid-slot-label-cushion {
+    color: #f5f5f5;
+}
+
+.fc .fc-col-header-cell {
+    background: #1f1f1f;
+}
+
+.fc .fc-timegrid-slot {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion,
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+    font-weight: 700;
+    color: #f1f1f1;
+}
+
+.fc .fc-timegrid-now-indicator-line {
+    border-color: #ff9800;
+}
+
+.fc .fc-timegrid-now-indicator-arrow {
+    border-top-color: #ff9800;
+    border-bottom-color: #ff9800;
+}
+
+.fc .fc-highlight {
+    background: rgba(46, 125, 50, 0.25);
+}
+
+.fc-theme-standard td,
+.fc-theme-standard th,
+.fc-theme-standard .fc-scrollgrid {
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.fc .fc-button-primary {
+    background: #2e7d32;
+    border-color: #2e7d32;
+}
+
+.fc .fc-button-primary:disabled {
+    background: #1b5e20;
+    border-color: #1b5e20;
+}
+
+.calendar-day-block {
+    grid-column: 1 / -1;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: rgba(38, 38, 38, 0.55);
+}
+
+.calendar-day-title {
+    margin: 0 0 1rem;
+    color: var(--primary-light);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 0.5rem;
+}
+
 .deuda-summary,
 .suspension-info,
 .payment-card {
@@ -896,6 +1036,14 @@ tbody tr:hover {
     }
 
     .form-group-row {
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .public-info-grid {
         grid-template-columns: 1fr;
     }
 }

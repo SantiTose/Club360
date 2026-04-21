@@ -2,26 +2,61 @@
 
 {% block title %}Mis Turnos - Club 360{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css">
+{% endblock %}
+
 {% block content %}
 <h2>Mis Turnos Reservados</h2>
 
-<div class="turnos-grid">
-    {% if turnos %}
-        {% for turno in turnos %}
-        <div class="turno-card">
-            <h3>{{ turno.actividad|upper }}</h3>
-            <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
-            <p><strong>Hora:</strong> {{ turno.hora_inicio.strftime('%H:%M') }} - {{ turno.hora_fin.strftime('%H:%M') }}</p>
-            <p><strong>Fecha:</strong> {{ turno.hora_inicio.strftime('%d/%m/%Y') }}</p>
-            
-            <form method="POST" action="{{ url_for('turnos.cancelar_turno', turno_id=turno.id) }}" style="display: inline;">
-                <button type="submit" class="btn btn-danger" onclick="return confirm('¿Deseas cancelar este turno?')">Cancelar</button>
-            </form>
-        </div>
-        {% endfor %}
-    {% else %}
-        <p>No tienes turnos reservados</p>
-        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
-    {% endif %}
+<div class="calendar-layout">
+    <div id="calendar-mis-turnos" class="calendar-surface"></div>
+    <div class="turno-card" id="detalle-reserva" style="max-width: 420px;">
+        <h3>Detalle de mi reserva</h3>
+        <p class="text-muted">Seleccioná un evento del calendario.</p>
+        <div id="detalle-reserva-body"></div>
+    </div>
 </div>
+
+{% if not reservas %}
+<p>No tienes turnos reservados.</p>
+<a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar-mis-turnos');
+    const detalleEl = document.getElementById('detalle-reserva-body');
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        locale: 'es',
+        firstDay: 1,
+        hiddenDays: [0],
+        slotMinTime: '08:00:00',
+        slotMaxTime: '22:00:00',
+        allDaySlot: false,
+        height: 'auto',
+        events: '{{ url_for("turnos.eventos_turnos") }}?scope=mios',
+        eventClick: function(info) {
+            const p = info.event.extendedProps;
+            detalleEl.innerHTML = `
+                <p><strong>Turno:</strong> ${info.event.title}</p>
+                <p><strong>Inicio:</strong> ${info.event.start.toLocaleString('es-AR')}</p>
+                <p><strong>Fin:</strong> ${info.event.end.toLocaleString('es-AR')}</p>
+                <p><strong>QR:</strong> ${p.qr_token}</p>
+                <p><strong>Asistencia:</strong> ${p.asistencia}</p>
+                <form method="POST" action="${p.cancelar_url}">
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('¿Deseas cancelar este turno?')">Cancelar reserva</button>
+                </form>
+            `;
+        }
+    });
+
+    calendar.render();
+});
+</script>
 {% endblock %}
