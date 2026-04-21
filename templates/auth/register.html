@@ -67,6 +67,31 @@
                 {% endif %}
             </div>
 
+            <div class="form-group">
+                <label for="fecha_nacimiento" class="form-label">Fecha de nacimiento</label>
+                <input
+                    type="date"
+                    id="fecha_nacimiento"
+                    name="fecha_nacimiento"
+                    class="form-control {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}"
+                    value="{{ form_data.get('fecha_nacimiento', '') }}"
+                    required
+                >
+                {% if field_errors.get('fecha_nacimiento') %}
+                    <small class="form-text error">{{ field_errors['fecha_nacimiento'] }}</small>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; align-items: flex-start; gap: 0.75rem; margin: 1rem 0; padding: 1rem; background: var(--gray-50); border-radius: var(--radius);">
+                <input type="checkbox" id="autorizacion_menor" name="autorizacion_menor" {% if form_data.get('autorizacion_menor') %}checked{% endif %} style="width: 18px; height: 18px; margin-top: 0.25rem; cursor: pointer;">
+                <label for="autorizacion_menor" style="font-size: 0.9rem; cursor: pointer;">
+                    Si soy menor de 18 años, declaro contar con autorización física de madre/padre/tutor.
+                </label>
+            </div>
+            {% if field_errors.get('autorizacion_menor') %}
+                <small class="form-text error">{{ field_errors['autorizacion_menor'] }}</small>
+            {% endif %}
+
             <!-- Email -->
             <div class="form-group">
                 <label for="email" class="form-label">Email</label>

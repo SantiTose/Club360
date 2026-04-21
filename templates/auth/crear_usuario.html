@@ -29,6 +29,14 @@
                     {% if field_errors.get('dni') %}<small class="form-text error">{{ field_errors['dni'] }}</small>{% endif %}
                 </div>
                 <div class="form-group">
+                    <label for="fecha_nacimiento" class="form-label">Fecha de nacimiento</label>
+                    <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}" value="{{ form_data.get('fecha_nacimiento', '') }}" required>
+                    {% if field_errors.get('fecha_nacimiento') %}<small class="form-text error">{{ field_errors['fecha_nacimiento'] }}</small>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-group-row">
+                <div class="form-group">
                     <label for="email" class="form-label">Email</label>
                     <input type="email" id="email" name="email" class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" value="{{ form_data.get('email', '') }}" required>
                     {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
@@ -54,6 +62,14 @@
             <div class="form-group">
                 <label class="form-label">Credenciales iniciales</label>
                 <p class="form-text">El sistema generará automáticamente una contraseña temporal y la enviará por email para que el usuario la cambie en su primer ingreso.</p>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
+                    <input type="checkbox" id="autorizacion_menor" name="autorizacion_menor" {% if form_data.get('autorizacion_menor') %}checked{% endif %} style="width: 18px; height: 18px; margin-top: 0.25rem;">
+                    <span class="form-text">Para clientes menores de 18 años, marcar si se recibió autorización física.</span>
+                </label>
+                {% if field_errors.get('autorizacion_menor') %}<small class="form-text error">{{ field_errors['autorizacion_menor'] }}</small>{% endif %}
             </div>
 
             <div class="button-group" style="justify-content: flex-start;">

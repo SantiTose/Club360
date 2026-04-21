@@ -5,7 +5,7 @@ from website import db
 from website.models import Usuario, TipoUsuario, EstadoUsuario
 from website.services import enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
 import secrets
 import re
@@ -27,6 +27,18 @@ def _generar_token_reset():
     return secrets.token_urlsafe(32)
 
 
+def _parsear_fecha_nacimiento(fecha_raw):
+    try:
+        return datetime.strptime(fecha_raw, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _edad(fecha_nacimiento):
+    hoy = date.today()
+    return hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
+
+
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     """Registrar nuevo usuario."""
@@ -34,6 +46,8 @@ def register():
         nombre = request.form.get('nombre', '').strip()
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
+        fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
+        autorizacion_menor = request.form.get('autorizacion_menor') == 'on'
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         password_confirm = request.form.get('password_confirm', '')
@@ -50,6 +64,13 @@ def register():
         
         if not dni or not re.match(r'^\d{8}$', dni):
             field_errors['dni'] = 'El DNI debe tener 8 dígitos'
+
+        fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
+        if not fecha_nacimiento:
+            field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
+        else:
+            if _edad(fecha_nacimiento) < 18 and not autorizacion_menor:
+                field_errors['autorizacion_menor'] = 'Si eres menor de 18, debes registrar autorización'
         
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
@@ -75,6 +96,8 @@ def register():
                                      'nombre': nombre,
                                      'apellido': apellido,
                                      'dni': dni,
+                                     'fecha_nacimiento': fecha_nacimiento_raw,
+                                     'autorizacion_menor': autorizacion_menor,
                                      'email': email
                                  })
         
@@ -83,6 +106,8 @@ def register():
                 nombre=nombre,
                 apellido=apellido,
                 dni=dni,
+                fecha_nacimiento=fecha_nacimiento,
+                autorizacion_menor=autorizacion_menor,
                 email=email,
                 password=generate_password_hash(password),
                 tipo_usuario=TipoUsuario.CLIENTE,
@@ -103,6 +128,8 @@ def register():
                                      'nombre': nombre,
                                      'apellido': apellido,
                                      'dni': dni,
+                                     'fecha_nacimiento': fecha_nacimiento_raw,
+                                     'autorizacion_menor': autorizacion_menor,
                                      'email': email
                                  })
     
@@ -203,6 +230,8 @@ def crear_usuario():
         nombre = request.form.get('nombre', '').strip()
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
+        fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
+        autorizacion_menor = request.form.get('autorizacion_menor') == 'on'
         email = request.form.get('email', '').strip().lower()
         tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
 
@@ -213,6 +242,9 @@ def crear_usuario():
             field_errors['apellido'] = 'El apellido debe tener al menos 2 caracteres'
         if not dni or not re.match(r'^\d{8}$', dni):
             field_errors['dni'] = 'El DNI debe tener 8 dígitos'
+        fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
+        if not fecha_nacimiento:
+            field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
 
@@ -221,6 +253,8 @@ def crear_usuario():
             tipos_permitidos.update({TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR})
         if tipo_usuario not in tipos_permitidos:
             field_errors['tipo_usuario'] = 'No puedes crear este tipo de usuario'
+        if tipo_usuario == TipoUsuario.CLIENTE and fecha_nacimiento and _edad(fecha_nacimiento) < 18 and not autorizacion_menor:
+            field_errors['autorizacion_menor'] = 'Para clientes menores de 18 debes registrar autorización'
 
         if Usuario.query.filter_by(email=email).first():
             field_errors['email'] = 'El email ya está registrado'
@@ -235,6 +269,8 @@ def crear_usuario():
                     'nombre': nombre,
                     'apellido': apellido,
                     'dni': dni,
+                    'fecha_nacimiento': fecha_nacimiento_raw,
+                    'autorizacion_menor': autorizacion_menor,
                     'email': email,
                     'tipo_usuario': tipo_usuario,
                 },
@@ -247,6 +283,8 @@ def crear_usuario():
             nombre=nombre,
             apellido=apellido,
             dni=dni,
+            fecha_nacimiento=fecha_nacimiento,
+            autorizacion_menor=autorizacion_menor,
             email=email,
             password=generate_password_hash(password_temporal),
             tipo_usuario=tipo_usuario,
