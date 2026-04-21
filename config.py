@@ -9,6 +9,9 @@ class Config:
     """Configuración base"""
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     REMEMBER_COOKIE_DURATION = timedelta(days=7)
+    # Fechas opcionales en formato YYYY-MM-DD para contemplar feriados trasladados/no laborables.
+    _feriados_env = os.environ.get('FERIADOS_NACIONALES', '')
+    FERIADOS_NACIONALES = [d.strip() for d in _feriados_env.split(',') if d.strip()]
 
 
 class DevelopmentConfig(Config):

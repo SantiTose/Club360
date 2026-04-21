@@ -2,7 +2,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
-from flask import render_template, redirect, url_for, request, flash, jsonify
+from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -28,6 +28,17 @@ HORAS_DISPONIBLES = list(range(HORA_APERTURA, HORA_CIERRE))
 TIPO_LISTA_GENERAL = 'general'
 TIPO_LISTA_ABONADOS = 'abonados'
 TIPO_LISTA_NO_ABONADOS = 'no_abonados'
+FERIADOS_FIJOS_MM_DD = {
+    (1, 1),    # Año Nuevo
+    (3, 24),   # Día Nacional de la Memoria por la Verdad y la Justicia
+    (4, 2),    # Día del Veterano y de los Caídos en la Guerra de Malvinas
+    (5, 1),    # Día del Trabajador
+    (5, 25),   # Día de la Revolución de Mayo
+    (6, 20),   # Paso a la Inmortalidad del General Manuel Belgrano
+    (7, 9),    # Día de la Independencia
+    (12, 8),   # Inmaculada Concepción de María
+    (12, 25),  # Navidad
+}
 
 
 def _es_empleado_o_admin(user):
@@ -51,6 +62,15 @@ def _calcular_monto_reserva(actividad, tipo_clase, usuario=None):
             return round(base, 2)
         return round(base * 0.8, 2)
     return round(base, 2)
+
+
+def _es_feriado_nacional(fecha_hora):
+    fecha = fecha_hora.date() if hasattr(fecha_hora, 'date') else fecha_hora
+    if (fecha.month, fecha.day) in FERIADOS_FIJOS_MM_DD:
+        return True
+
+    feriados_config = current_app.config.get('FERIADOS_NACIONALES', [])
+    return fecha.isoformat() in set(feriados_config)
 
 
 def _horas_anticipacion(turno):
@@ -79,6 +99,8 @@ def _buscar_pago_reserva(usuario_id, turno_id):
 def _validar_regla_horaria(inicio, fin):
     if inicio.weekday() == 6:
         return False, 'No se permiten turnos los domingos'
+    if _es_feriado_nacional(inicio):
+        return False, 'No se permiten turnos en feriados nacionales'
 
     if inicio.minute != 0 or inicio.second != 0 or inicio.microsecond != 0:
         return False, 'Los turnos deben comenzar en hora exacta'
@@ -295,7 +317,10 @@ def ver_turnos_disponibles():
     if tipo_clase in [TipoClase.ABONADA, TipoClase.NO_ABONADA]:
         query = query.filter_by(tipo_clase=tipo_clase)
     
-    turnos = query.order_by(Turno.hora_inicio.asc()).all()
+    turnos = [
+        t for t in query.order_by(Turno.hora_inicio.asc()).all()
+        if not _es_feriado_nacional(t.hora_inicio)
+    ]
     
     return render_template(
         'turnos/disponibles.html',
@@ -370,7 +395,10 @@ def eventos_turnos():
     if tipo_clase in [TipoClase.ABONADA, TipoClase.NO_ABONADA]:
         query = query.filter_by(tipo_clase=tipo_clase)
 
-    turnos = query.order_by(Turno.hora_inicio.asc()).all()
+    turnos = [
+        t for t in query.order_by(Turno.hora_inicio.asc()).all()
+        if not _es_feriado_nacional(t.hora_inicio)
+    ]
     eventos = [
         {
             'id': str(turno.id),
@@ -408,6 +436,10 @@ def reservar_turno(turno_id):
 
     if turno.cancelado:
         flash('Este turno ya no está disponible', 'error')
+        return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+    if _es_feriado_nacional(turno.hora_inicio):
+        flash('No se pueden reservar turnos en feriados nacionales', 'error')
         return redirect(url_for('turnos.ver_turnos_disponibles'))
 
     valido, error = _validar_regla_horaria(turno.hora_inicio, turno.hora_fin)
