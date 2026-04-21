@@ -12,6 +12,15 @@ class Config:
     # Fechas opcionales en formato YYYY-MM-DD para contemplar feriados trasladados/no laborables.
     _feriados_env = os.environ.get('FERIADOS_NACIONALES', '')
     FERIADOS_NACIONALES = [d.strip() for d in _feriados_env.split(',') if d.strip()]
+    # Información pública del establecimiento (editable por entorno).
+    CLUB_DIRECCION_PUBLICA = os.environ.get('CLUB_DIRECCION_PUBLICA', 'A confirmar')
+    CLUB_CONTACTO_PUBLICO = os.environ.get('CLUB_CONTACTO_PUBLICO', 'A confirmar')
+    CLUB_HORARIOS_PUBLICOS = [
+        'Lunes a Sábado: 08:00 a 22:00',
+        'Domingos: cerrado',
+        'Feriados nacionales: cerrado',
+    ]
+    CLUB_ACTIVIDADES_PUBLICAS = ['Fútbol', 'Básquet', 'Vóley', 'Pádel']
 
 
 class DevelopmentConfig(Config):

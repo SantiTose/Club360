@@ -53,7 +53,13 @@ def create_app(config_name='development'):
     # Main routes
     @app.route('/')
     def index():
-        return render_template('index.html')
+        return render_template(
+            'index.html',
+            club_direccion=app.config.get('CLUB_DIRECCION_PUBLICA', ''),
+            club_contacto=app.config.get('CLUB_CONTACTO_PUBLICO', ''),
+            club_horarios=app.config.get('CLUB_HORARIOS_PUBLICOS', []),
+            club_actividades=app.config.get('CLUB_ACTIVIDADES_PUBLICAS', []),
+        )
 
     @app.route('/dashboard')
     @login_required

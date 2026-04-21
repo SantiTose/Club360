@@ -29,14 +29,25 @@
     <div class="public-info-grid">
         <article class="public-info-card">
             <h3>Ubicación</h3>
-            <p>A confirmar</p>
+            <p>{{ club_direccion }}</p>
+            <p style="margin-top: 0.5rem;"><strong>Contacto:</strong> {{ club_contacto }}</p>
         </article>
 
         <article class="public-info-card">
             <h3>Días y Horarios</h3>
             <ul>
-                <li>Lunes a Sábado: 08:00 a 22:00</li>
-                <li>Feriados nacionales: cerrado</li>
+                {% for horario in club_horarios %}
+                <li>{{ horario }}</li>
+                {% endfor %}
+            </ul>
+        </article>
+
+        <article class="public-info-card">
+            <h3>Actividades</h3>
+            <ul>
+                {% for actividad in club_actividades %}
+                <li>{{ actividad }}</li>
+                {% endfor %}
             </ul>
         </article>
     </div>
