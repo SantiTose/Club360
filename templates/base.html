@@ -29,6 +29,7 @@
                     {% endif %}
                     {% if current_user.tipo_usuario == 'administrador' %}
                     <li><a href="{{ url_for('turnos.administrar_turnos') }}">Gestionar Turnos</a></li>
+                    <li><a href="{{ url_for('auth.gestionar_empleados') }}">Gestionar Empleados</a></li>
                     {% endif %}
                     <li class="user-menu">
                         <span>{{ current_user.nombre }} {{ current_user.apellido }}</span>

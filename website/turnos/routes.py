@@ -261,15 +261,31 @@ def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
     ListaEspera.query.filter_by(turno_id=turno.id).delete(synchronize_session=False)
 
 
+def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
+    admins = Usuario.query.filter_by(tipo_usuario=TipoUsuario.ADMINISTRADOR).all()
+    if not admins:
+        return
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    for admin in admins:
+        asunto = 'Alerta de lista de espera - Club 360'
+        cuerpo = (
+            f"Hola {admin.nombre},\n\n"
+            f"La lista de espera '{tipo_lista}' del turno {turno.actividad} "
+            f"({turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}) alcanzó {cantidad} personas."
+        )
+        enviar_email_simulado(base_dir, admin.email, asunto, cuerpo)
+
+
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
-    """Envia recordatorio por email con QR el dia previo a cada clase."""
-    manana = (datetime.utcnow() + timedelta(days=1)).date().isoformat()
+    """Envia recordatorio por email con QR el mismo dia de la clase."""
+    hoy = datetime.utcnow().date().isoformat()
 
     query = (
         Reserva.query
         .join(Turno, Reserva.turno_id == Turno.id)
         .join(Usuario, Reserva.usuario_id == Usuario.id)
-        .filter(func.date(Turno.hora_inicio) == manana)
+        .filter(func.date(Turno.hora_inicio) == hoy)
         .filter(Reserva.recordatorio_enviado == False)
     )
     if usuario_id:
@@ -305,6 +321,12 @@ def ver_turnos_disponibles():
     """Ver turnos disponibles para reservar."""
     if current_user.tipo_usuario == TipoUsuario.CLIENTE:
         _procesar_suspension_automatica(current_user)
+        enviados = _enviar_recordatorios_qr(
+            os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
+            usuario_id=current_user.id,
+        )
+        if enviados:
+            flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
     actividad = request.args.get('actividad')
     tipo_clase = request.args.get('tipo_clase')
@@ -502,7 +524,8 @@ def reservar_turno(turno_id):
 
         for tipo_lista in tipos_registrados:
             personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id, tipo_lista=tipo_lista).count()
-            if personas_en_espera >= 10:
+            if personas_en_espera == 10:
+                _notificar_admin_lista_espera_llena(turno, tipo_lista, personas_en_espera)
                 flash(f'La lista de espera "{tipo_lista}" de este turno llegó a 10 personas', 'warning')
 
         flash('Turno lleno. Te agregamos a la lista de espera', 'info')
@@ -631,7 +654,7 @@ def mis_turnos():
         usuario_id=current_user.id,
     )
     if enviados:
-        flash('Se enviaron recordatorios de clases con QR para el día siguiente', 'info')
+        flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
     return render_template('turnos/mis_turnos.html', reservas=reservas)
 
@@ -712,7 +735,7 @@ def validar_asistencia_manual():
 @turnos_bp.route('/procesar-recordatorios', methods=['POST'])
 @login_required
 def procesar_recordatorios():
-    """Dispara envío automático de recordatorios del día siguiente con QR."""
+    """Dispara envío de recordatorios del mismo día con QR."""
     if not _es_empleado_o_admin(current_user):
         flash('No tienes permisos para enviar recordatorios', 'error')
         return redirect(url_for('index'))

@@ -317,6 +317,40 @@ def crear_usuario():
     )
 
 
+@auth_bp.route('/gestionar-empleados', methods=['GET'])
+@login_required
+def gestionar_empleados():
+    if not _es_admin(current_user):
+        flash('No tienes permisos para gestionar empleados', 'error')
+        return redirect(url_for('index'))
+
+    empleados = (
+        Usuario.query
+        .filter(Usuario.tipo_usuario.in_([TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR]))
+        .order_by(Usuario.tipo_usuario.desc(), Usuario.apellido.asc(), Usuario.nombre.asc())
+        .all()
+    )
+    return render_template('auth/gestionar_empleados.html', empleados=empleados)
+
+
+@auth_bp.route('/ascender-empleado/<int:usuario_id>', methods=['POST'])
+@login_required
+def ascender_empleado(usuario_id):
+    if not _es_admin(current_user):
+        flash('No tienes permisos para ascender empleados', 'error')
+        return redirect(url_for('index'))
+
+    usuario = Usuario.query.get_or_404(usuario_id)
+    if usuario.tipo_usuario != TipoUsuario.EMPLEADO:
+        flash('Solo se pueden ascender cuentas de empleado', 'error')
+        return redirect(url_for('auth.gestionar_empleados'))
+
+    usuario.tipo_usuario = TipoUsuario.ADMINISTRADOR
+    db.session.commit()
+    flash(f'{usuario.nombre} {usuario.apellido} fue ascendido a administrador', 'success')
+    return redirect(url_for('auth.gestionar_empleados'))
+
+
 @auth_bp.route('/cambiar-password-inicial', methods=['GET', 'POST'])
 @login_required
 def cambiar_password_inicial():

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Gestionar Empleados - Club 360{% endblock %}
+
+{% block content %}
+<h2>Gestión de Empleados</h2>
+<p class="text-muted">Los administradores pueden ascender empleados a administradores.</p>
+
+<div class="turno-card" style="max-width: 960px;">
+    {% if empleados %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usuario in empleados %}
+            <tr>
+                <td>{{ usuario.apellido }}, {{ usuario.nombre }}</td>
+                <td>{{ usuario.email }}</td>
+                <td>{{ usuario.tipo_usuario|capitalize }}</td>
+                <td>
+                    {% if usuario.tipo_usuario == 'empleado' %}
+                    <form method="POST" action="{{ url_for('auth.ascender_empleado', usuario_id=usuario.id) }}">
+                        <button type="submit" class="btn btn-primary btn-sm">Ascender a Admin</button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted">Sin acciones</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No hay empleados registrados.</p>
+    {% endif %}
+</div>
+{% endblock %}
