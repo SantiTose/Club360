@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from website.pagos import pagos_bp
 from website import db
-from website.models import Pago, Usuario, TipoUsuario, EstadoUsuario
+from website.models import Pago, Usuario, TipoUsuario
 from website.services import enviar_email_simulado
 from datetime import datetime
 import os
@@ -35,12 +35,9 @@ def _enviar_alerta_moroso_si_corresponde(usuario):
 
 
 def _reconciliar_estado_cliente(usuario):
-    if usuario.tipo_usuario != TipoUsuario.CLIENTE:
-        return
-    pendientes = Pago.query.filter_by(usuario_id=usuario.id, estado='pendiente').count()
-    if pendientes == 0 and usuario.estado == EstadoUsuario.SUSPENDIDO:
-        usuario.estado = EstadoUsuario.ACTIVO
-        db.session.commit()
+    # El alta de suspensión debe ser un proceso manual por administrador.
+    # Se mantiene la función por compatibilidad del flujo actual.
+    return
 
 
 @pagos_bp.route('/deuda')

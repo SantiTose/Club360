@@ -13,8 +13,12 @@
     <p><strong>Cupos:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
     <p><strong>Estado:</strong> {% if turno.cancelado %}Cancelado{% else %}Activo{% endif %}</p>
 
-    <h4 style="margin-top: 1.5rem;">Lista de espera</h4>
-    {% if turno.listas_espera %}
+    <h4 style="margin-top: 1.5rem;">Listas de espera</h4>
+
+    {% set nombres = {'general': 'General', 'abonados': 'Abonados', 'no_abonados': 'No abonados'} %}
+    {% for tipo in ['general', 'abonados', 'no_abonados'] %}
+    <h5 style="margin-top: 1rem;">{{ nombres[tipo] }}</h5>
+    {% if listas[tipo] %}
     <table class="table">
         <thead>
             <tr>
@@ -24,7 +28,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in turno.listas_espera|sort(attribute='posicion') %}
+            {% for item in listas[tipo] %}
             <tr>
                 <td>{{ item.posicion }}</td>
                 <td>{{ item.usuario.apellido }}, {{ item.usuario.nombre }}</td>
@@ -34,7 +38,8 @@
         </tbody>
     </table>
     {% else %}
-    <p>No hay usuarios en lista de espera.</p>
+    <p>No hay usuarios en esta lista.</p>
     {% endif %}
+    {% endfor %}
 </div>
 {% endblock %}

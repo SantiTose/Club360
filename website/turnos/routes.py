@@ -25,6 +25,9 @@ from website.services import enviar_email_simulado
 HORA_APERTURA = 8
 HORA_CIERRE = 22
 HORAS_DISPONIBLES = list(range(HORA_APERTURA, HORA_CIERRE))
+TIPO_LISTA_GENERAL = 'general'
+TIPO_LISTA_ABONADOS = 'abonados'
+TIPO_LISTA_NO_ABONADOS = 'no_abonados'
 
 
 def _es_empleado_o_admin(user):
@@ -87,41 +90,96 @@ def _construir_inicio_fin(fecha_raw, hora_raw):
 
 
 def _procesar_suspension_automatica(cliente):
-    """Suspende automaticamente clientes morosos para bloquear nuevas reservas."""
+    """Suspende automaticamente segun reglas de abonados/no abonados."""
     if cliente.tipo_usuario != TipoUsuario.CLIENTE:
         return
 
-    deudas_pendientes = Pago.query.filter_by(usuario_id=cliente.id, estado='pendiente').all()
-    if not deudas_pendientes:
+    deudas_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+        .count()
+    )
+    deudas_no_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .count()
+    )
+
+    if deudas_abonadas == 0 and deudas_no_abonadas == 0:
         return
 
-    deuda_antigua = any(
-        pago.fecha_pago and (datetime.utcnow() - pago.fecha_pago).days >= 30
-        for pago in deudas_pendientes
-    )
-    superar_limite = len(deudas_pendientes) >= 3
+    # Regla de entrevistas:
+    # - Abonados: se suspenden a partir del dia 11 con deuda pendiente.
+    # - No abonados: se suspenden con 3 deudas pendientes.
+    debe_suspender_abonado = datetime.utcnow().day >= 11 and deudas_abonadas > 0
+    debe_suspender_no_abonado = deudas_no_abonadas >= 3
 
-    if (deuda_antigua or superar_limite) and cliente.estado != EstadoUsuario.SUSPENDIDO:
+    if (debe_suspender_abonado or debe_suspender_no_abonado) and cliente.estado != EstadoUsuario.SUSPENDIDO:
+        motivo = 'Suspensión automática por mora'
+        if debe_suspender_abonado and debe_suspender_no_abonado:
+            motivo = 'Suspensión automática por deuda abonada y acumulación de deudas no abonadas'
+        elif debe_suspender_abonado:
+            motivo = 'Suspensión automática por deuda abonada (día 11 o posterior)'
+        elif debe_suspender_no_abonado:
+            motivo = 'Suspensión automática por 3 deudas no abonadas'
+
         cliente.estado = EstadoUsuario.SUSPENDIDO
         db.session.add(Suspension(
             usuario_id=cliente.id,
-            motivo='Suspensión automática por mora',
+            motivo=motivo,
             estado='activa'
         ))
         db.session.commit()
 
 
-def _obtener_siguiente_lista_espera(turno_id):
-    """Prioriza por menor mora y luego por antigüedad en la lista de espera."""
-    candidatos = ListaEspera.query.filter_by(turno_id=turno_id).all()
-    if not candidatos:
-        return None
+def _obtener_siguiente_lista_espera(turno):
+    """Aplica prioridad de listas según el tipo de clase del turno liberado."""
+    if turno.tipo_clase == TipoClase.ABONADA:
+        orden_prioridad = [TIPO_LISTA_ABONADOS, TIPO_LISTA_NO_ABONADOS]
+    else:
+        orden_prioridad = [TIPO_LISTA_GENERAL]
 
-    def clave(item):
-        mora = Pago.query.filter_by(usuario_id=item.usuario_id, estado='pendiente').count()
-        return (mora, item.fecha_registro)
+    for tipo_lista in orden_prioridad:
+        candidato = (
+            ListaEspera.query
+            .filter_by(turno_id=turno.id, tipo_lista=tipo_lista)
+            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+            .first()
+        )
+        if candidato:
+            return candidato
 
-    return sorted(candidatos, key=clave)[0]
+    return None
+
+
+def _recalcular_posiciones_lista(turno_id, tipo_lista):
+    pendientes = (
+        ListaEspera.query
+        .filter_by(turno_id=turno_id, tipo_lista=tipo_lista)
+        .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+        .all()
+    )
+    for index, item in enumerate(pendientes, start=1):
+        item.posicion = index
+
+
+def _agregar_a_lista_espera(turno, usuario_id):
+    tipos_objetivo = [TIPO_LISTA_GENERAL]
+    if turno.tipo_clase == TipoClase.ABONADA:
+        tipos_objetivo.append(TIPO_LISTA_ABONADOS)
+    else:
+        tipos_objetivo.append(TIPO_LISTA_NO_ABONADOS)
+
+    for tipo_lista in tipos_objetivo:
+        posicion = ListaEspera.query.filter_by(turno_id=turno.id, tipo_lista=tipo_lista).count() + 1
+        db.session.add(ListaEspera(
+            usuario_id=usuario_id,
+            turno_id=turno.id,
+            tipo_lista=tipo_lista,
+            posicion=posicion,
+        ))
+
+    return tipos_objetivo
 
 
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
@@ -326,6 +384,7 @@ def reservar_turno(turno_id):
             monto=monto,
             metodo_pago='efectivo',
             estado='pendiente',
+            tipo_clase=turno.tipo_clase,
             referencia_transaccion=f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}"
         ))
 
@@ -340,18 +399,13 @@ def reservar_turno(turno_id):
             flash('Ya estás en la lista de espera para este turno', 'info')
             return redirect(url_for('turnos.ver_turnos_disponibles'))
 
-        lista_espera = ListaEspera(
-            usuario_id=current_user.id,
-            turno_id=turno_id,
-            tipo_lista='general',
-            posicion=ListaEspera.query.filter_by(turno_id=turno_id).count() + 1
-        )
-        db.session.add(lista_espera)
+        tipos_registrados = _agregar_a_lista_espera(turno, current_user.id)
         db.session.commit()
 
-        personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id).count()
-        if personas_en_espera >= 10:
-            flash('La lista de espera de este turno llegó a 10 personas', 'warning')
+        for tipo_lista in tipos_registrados:
+            personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id, tipo_lista=tipo_lista).count()
+            if personas_en_espera >= 10:
+                flash(f'La lista de espera "{tipo_lista}" de este turno llegó a 10 personas', 'warning')
 
         flash('Turno lleno. Te agregamos a la lista de espera', 'info')
     
@@ -376,7 +430,7 @@ def cancelar_turno(turno_id):
     turno.cupos_disponibles += 1
 
     # Si hay lista de espera, asciende automáticamente al primero.
-    siguiente = _obtener_siguiente_lista_espera(turno_id)
+    siguiente = _obtener_siguiente_lista_espera(turno)
     if siguiente and turno.cupos_disponibles > 0:
         db.session.add(Reserva(
             usuario_id=siguiente.usuario_id,
@@ -384,7 +438,11 @@ def cancelar_turno(turno_id):
             qr_token=secrets.token_urlsafe(24),
         ))
         turno.cupos_disponibles -= 1
-        db.session.delete(siguiente)
+        (
+            ListaEspera.query
+            .filter_by(turno_id=turno_id, usuario_id=siguiente.usuario_id)
+            .delete(synchronize_session=False)
+        )
 
         # Genera deuda de la clase al usuario promovido desde lista de espera.
         usuario_promovido = Usuario.query.get(siguiente.usuario_id)
@@ -394,6 +452,7 @@ def cancelar_turno(turno_id):
             monto=monto,
             metodo_pago='virtual',
             estado='pendiente',
+            tipo_clase=turno.tipo_clase,
             referencia_transaccion=f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}"
         ))
 
@@ -411,10 +470,9 @@ def cancelar_turno(turno_id):
                 cuerpo,
             )
 
-        # Recalcular posiciones restantes.
-        pendientes = ListaEspera.query.filter_by(turno_id=turno_id).order_by(ListaEspera.posicion.asc()).all()
-        for index, item in enumerate(pendientes, start=1):
-            item.posicion = index
+        # Recalcular posiciones restantes por cada tipo de lista.
+        for tipo_lista in [TIPO_LISTA_GENERAL, TIPO_LISTA_ABONADOS, TIPO_LISTA_NO_ABONADOS]:
+            _recalcular_posiciones_lista(turno_id, tipo_lista)
 
     db.session.commit()
     
@@ -456,7 +514,27 @@ def buscar_turno(turno_id):
         return redirect(url_for('index'))
 
     turno = Turno.query.get_or_404(turno_id)
-    return render_template('turnos/detalle.html', turno=turno)
+    listas = {
+        TIPO_LISTA_GENERAL: (
+            ListaEspera.query
+            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_GENERAL)
+            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+            .all()
+        ),
+        TIPO_LISTA_ABONADOS: (
+            ListaEspera.query
+            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_ABONADOS)
+            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+            .all()
+        ),
+        TIPO_LISTA_NO_ABONADOS: (
+            ListaEspera.query
+            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_NO_ABONADOS)
+            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+            .all()
+        ),
+    }
+    return render_template('turnos/detalle.html', turno=turno, listas=listas)
 
 
 @turnos_bp.route('/validar-asistencia/<string:qr_token>', methods=['GET', 'POST'])

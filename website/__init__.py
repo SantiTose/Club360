@@ -120,6 +120,7 @@ def create_app(config_name='development'):
         _drop_legacy_usuario_tipo_cliente_column()
         _ensure_usuario_recordatorio_column()
         _ensure_reserva_qr_columns()
+        _ensure_pago_tipo_clase_column()
         _backfill_reserva_qr_tokens()
 
     return app
@@ -191,6 +192,17 @@ def _ensure_reserva_qr_columns():
         db.session.execute(text(sql))
 
     if updates:
+        db.session.commit()
+
+
+def _ensure_pago_tipo_clase_column():
+    inspector = inspect(db.engine)
+    if 'pagos' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('pagos')}
+    if 'tipo_clase' not in columnas:
+        db.session.execute(text("ALTER TABLE pagos ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
         db.session.commit()
 
 

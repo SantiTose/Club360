@@ -119,6 +119,7 @@ class Pago(db.Model):
     monto = db.Column(db.Float, nullable=False)
     metodo_pago = db.Column(db.String(50), nullable=False)  # efectivo, tarjeta_credito
     estado = db.Column(db.String(20), nullable=False, default='pendiente')  # pendiente, completado
+    tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     fecha_pago = db.Column(db.DateTime, default=datetime.utcnow)
     referencia_transaccion = db.Column(db.String(100))
 
