@@ -12,28 +12,40 @@
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                <a href="{{ url_for('index') }}" style="display: flex; align-items: center; gap: 0.75rem;">
-                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo" style="height: 40px; width: auto;">
+                <a href="{{ url_for('index') }}">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo">
                     <span>Club 360</span>
                 </a>
             </div>
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
-                    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                    <li><a href="{{ url_for('turnos.mis_turnos') }}">Mis Turnos</a></li>
-                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}">Turnos Disponibles</a></li>
-                    <li><a href="{{ url_for('pagos.ver_deuda') }}">Pagos</a></li>
-                    <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}">Suspensiones</a></li>
+                    <li><a href="{{ url_for('dashboard') }}" class="nav-link-pill">Dashboard</a></li>
+                    <li><a href="{{ url_for('turnos.mis_turnos') }}" class="nav-link-pill">Mis Turnos</a></li>
+                    <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Turnos Disponibles</a></li>
+                    <li><a href="{{ url_for('pagos.ver_deuda') }}" class="nav-link-pill">Pagos</a></li>
+                    <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="nav-link-pill">Suspensiones</a></li>
                     {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
-                    <li><a href="{{ url_for('auth.crear_usuario') }}">Crear Usuario</a></li>
+                    <li><a href="{{ url_for('auth.crear_usuario') }}" class="nav-link-pill nav-link-pill-alt">Crear Usuario</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario == 'administrador' %}
-                    <li><a href="{{ url_for('turnos.administrar_turnos') }}">Gestionar Turnos</a></li>
-                    <li><a href="{{ url_for('auth.gestionar_empleados') }}">Gestionar Empleados</a></li>
+                    <li><a href="{{ url_for('turnos.administrar_turnos') }}" class="nav-link-pill nav-link-pill-alt">Gestionar Turnos</a></li>
+                    <li><a href="{{ url_for('auth.gestionar_empleados') }}" class="nav-link-pill nav-link-pill-alt">Gestionar Empleados</a></li>
                     {% endif %}
                     <li class="user-menu">
-                        <span>{{ current_user.nombre }} {{ current_user.apellido }}</span>
-                        <a href="{{ url_for('auth.logout') }}" class="logout">Salir</a>
+                        <div class="user-chip">
+                            <span class="user-chip-avatar">
+                                {{ current_user.nombre[0] }}{{ current_user.apellido[0] if current_user.apellido else '' }}
+                            </span>
+                            <span class="user-chip-name">{{ current_user.nombre }} {{ current_user.apellido }}</span>
+                        </div>
+                        <a
+                            href="{{ url_for('auth.logout') }}"
+                            class="logout"
+                            data-confirm="true"
+                            data-confirm-title="Cerrar sesión"
+                            data-confirm-message="Vas a cerrar tu sesión actual en Club 360."
+                            data-confirm-action="Salir"
+                        >Salir</a>
                     </li>
                 {% else %}
                     <li><a href="{{ url_for('auth.login') }}">Iniciar Sesión</a></li>
@@ -64,6 +76,19 @@
             <p>&copy; 2026 Club 360 - Sistema de Gestión de Turnos Deportivos | Todos los derechos reservados</p>
         </div>
     </footer>
+
+    <div class="confirm-modal" id="confirm-modal" aria-hidden="true">
+        <div class="confirm-modal-backdrop" data-confirm-close="true"></div>
+        <div class="confirm-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+            <div class="confirm-modal-badge">Confirmación</div>
+            <h3 id="confirm-modal-title">¿Confirmar acción?</h3>
+            <p id="confirm-modal-message">Esta acción requiere confirmación.</p>
+            <div class="confirm-modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirm-modal-cancel">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-modal-accept">Confirmar</button>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     {% block extra_js %}{% endblock %}

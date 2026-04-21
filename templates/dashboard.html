@@ -3,112 +3,166 @@
 {% block title %}Club 360 - Dashboard{% endblock %}
 
 {% block content %}
-<h1 class="mb-5">Dashboard</h1>
-
 {% if current_user.is_authenticated %}
-    <!-- User Info Section -->
-    <div class="features-grid mb-5">
-        <div class="card">
-            <div class="card-header">
-                <h5>Mi Información</h5>
+    <section class="dashboard-shell">
+        <div class="dashboard-hero">
+            <div class="dashboard-hero-copy">
+                <span class="dashboard-eyebrow">Panel personal</span>
+                <h1>Hola, {{ current_user.nombre }}</h1>
+                <p>
+                    Gestioná tus turnos, controlá tu estado y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.
+                </p>
+                <div class="dashboard-hero-tags">
+                    <span class="dashboard-pill dashboard-pill-soft">{{ current_user.tipo_usuario|capitalize }}</span>
+                    <span class="dashboard-pill dashboard-pill-soft">
+                        {{ current_user.estado|capitalize if current_user.estado else 'Sin estado' }}
+                    </span>
+                </div>
             </div>
-            <div class="card-body">
-                <p><strong>Nombre:</strong> {{ current_user.nombre }} {{ current_user.apellido }}</p>
-                <p><strong>Email:</strong> {{ current_user.email }}</p>
-                <p><strong>DNI:</strong> {{ current_user.dni }}</p>
-                <p><strong>Rol:</strong> <span class="badge badge-primary">{{ current_user.tipo_usuario|capitalize }}</span></p>
+
+            <div class="dashboard-profile-card">
+                <div class="dashboard-profile-top">
+                    <div class="dashboard-avatar">
+                        {{ current_user.nombre[0] }}{{ current_user.apellido[0] if current_user.apellido else '' }}
+                    </div>
+                    <div>
+                        <p class="dashboard-profile-label">Mi perfil</p>
+                        <h2>{{ current_user.nombre }} {{ current_user.apellido }}</h2>
+                    </div>
+                </div>
+                <dl class="dashboard-profile-list">
+                    <div>
+                        <dt>Email</dt>
+                        <dd>{{ current_user.email }}</dd>
+                    </div>
+                    <div>
+                        <dt>DNI</dt>
+                        <dd>{{ current_user.dni }}</dd>
+                    </div>
+                    <div>
+                        <dt>Rol</dt>
+                        <dd>{{ current_user.tipo_usuario|capitalize }}</dd>
+                    </div>
+                </dl>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h5>Mi Estado</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Estado:</strong> <span class="badge badge-primary">{{ current_user.estado|capitalize if current_user.estado else 'N/A' }}</span></p>
-                <p><strong>Turnos Reservados:</strong> <span class="badge badge-success">{{ turnos_reservados }}</span></p>
-                <p><strong>Deuda Pendiente:</strong> <span class="badge badge-warning">${{ '%.2f'|format(deuda_total) }}</span></p>
-            </div>
+        <div class="dashboard-stats-grid">
+            <article class="dashboard-stat-card">
+                <div class="dashboard-stat-label">Estado de la cuenta</div>
+                <div class="dashboard-stat-value">
+                    {{ current_user.estado|capitalize if current_user.estado else 'N/A' }}
+                </div>
+                <p>Tu membresía y acceso actual dentro de Club 360.</p>
+            </article>
+
+            <article class="dashboard-stat-card">
+                <div class="dashboard-stat-label">Turnos reservados</div>
+                <div class="dashboard-stat-value">{{ turnos_reservados }}</div>
+                <p>Reservas activas listas para asistir o gestionar.</p>
+            </article>
+
+            <article class="dashboard-stat-card dashboard-stat-card-accent">
+                <div class="dashboard-stat-label">Deuda pendiente</div>
+                <div class="dashboard-stat-value">${{ '%.2f'|format(deuda_total) }}</div>
+                <p>Controlá pagos y mantené tu cuenta al día.</p>
+            </article>
         </div>
-    </div>
 
-    <!-- Quick Actions -->
-    <h2 class="mb-4">Acciones Rápidas</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
-        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="card" style="text-decoration: none; transition: var(--transition);">
-            <div class="card-header" style="background: linear-gradient(135deg, #2e7d32, #66bb6a); display: flex; align-items: center; justify-content: center;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-            </div>
-            <div class="card-body text-center">
-                <h4 style="margin: 0; color: var(--primary);">Ver Turnos</h4>
-                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Disponibles ahora</p>
-            </div>
-        </a>
+        <div class="dashboard-main-grid">
+            <section class="dashboard-panel">
+                <div class="dashboard-section-heading">
+                    <div>
+                        <span class="dashboard-eyebrow">Accesos directos</span>
+                        <h2>Movete rápido</h2>
+                    </div>
+                    <p>Las tareas que más usás, organizadas con mejor prioridad visual.</p>
+                </div>
 
-        <a href="{{ url_for('turnos.mis_turnos') }}" class="card" style="text-decoration: none; transition: var(--transition);">
-            <div class="card-header" style="background: linear-gradient(135deg, #004d73, #0066a1); display: flex; align-items: center; justify-content: center;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            </div>
-            <div class="card-body text-center">
-                <h4 style="margin: 0; color: var(--secondary);">Mis Turnos</h4>
-                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Confirmados</p>
-            </div>
-        </a>
+                <div class="dashboard-actions-grid">
+                    <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="dashboard-action-card dashboard-action-green">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Turnos disponibles</h3>
+                            <p>Reservá nuevos espacios sin salir del panel.</p>
+                        </div>
+                    </a>
 
-        <a href="{{ url_for('pagos.ver_deuda') }}" class="card" style="text-decoration: none; transition: var(--transition);">
-            <div class="card-header" style="background: linear-gradient(135deg, #ff9800, #ffb74d); display: flex; align-items: center; justify-content: center;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                    <line x1="1" y1="10" x2="23" y2="10"></line>
-                </svg>
-            </div>
-            <div class="card-body text-center">
-                <h4 style="margin: 0; color: var(--accent);">Pagos</h4>
-                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Gestiona tu deuda</p>
-            </div>
-        </a>
+                    <a href="{{ url_for('turnos.mis_turnos') }}" class="dashboard-action-card dashboard-action-blue">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Mis turnos</h3>
+                            <p>Revisá, confirmá o seguí tus reservas activas.</p>
+                        </div>
+                    </a>
 
-        <a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="card" style="text-decoration: none; transition: var(--transition);">
-            <div class="card-header" style="background: linear-gradient(135deg, #c62828, #e53935); display: flex; align-items: center; justify-content: center;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                </svg>
-            </div>
-            <div class="card-body text-center">
-                <h4 style="margin: 0; color: var(--danger);">Suspensiones</h4>
-                <p style="margin: 0.5rem 0 0 0; color: var(--gray-500);">Solicitar alta</p>
-            </div>
-        </a>
-    </div>
+                    <a href="{{ url_for('pagos.ver_deuda') }}" class="dashboard-action-card dashboard-action-amber">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                <line x1="1" y1="10" x2="23" y2="10"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Pagos</h3>
+                            <p>Consultá deuda y resolvé pagos pendientes.</p>
+                        </div>
+                    </a>
 
-    <!-- Recent Activity -->
-    <div class="card">
-        <div class="card-header">
-            <h5>Actividad Reciente</h5>
+                    <a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="dashboard-action-card dashboard-action-red">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Suspensiones</h3>
+                            <p>Solicitá alta o gestioná cambios de tu estado.</p>
+                        </div>
+                    </a>
+                </div>
+            </section>
+
+            <aside class="dashboard-panel dashboard-activity-panel">
+                <div class="dashboard-section-heading">
+                    <div>
+                        <span class="dashboard-eyebrow">Seguimiento</span>
+                        <h2>Actividad reciente</h2>
+                    </div>
+                    <p>Lo último que pasó en tu cuenta.</p>
+                </div>
+
+                <ul class="dashboard-activity-list">
+                    {% if actividad_reciente %}
+                        {% for item in actividad_reciente %}
+                        <li class="dashboard-activity-item">
+                            <span class="dashboard-activity-bullet"></span>
+                            <span>{{ item }}</span>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="dashboard-activity-item dashboard-activity-empty">
+                            <span class="dashboard-activity-bullet"></span>
+                            <span>Sin actividad reciente.</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </aside>
         </div>
-        <div class="card-body">
-            <ul style="list-style: none; padding: 0;">
-                {% if actividad_reciente %}
-                    {% for item in actividad_reciente %}
-                    <li style="padding: 1rem 0; border-bottom: 1px solid var(--gray-200);">
-                        {{ item }}
-                    </li>
-                    {% endfor %}
-                {% else %}
-                    <li style="padding: 1rem 0;">Sin actividad reciente.</li>
-                {% endif %}
-            </ul>
-        </div>
-    </div>
+    </section>
 
 {% else %}
     <div class="alert alert-info" style="text-align: center; padding: 2rem;">

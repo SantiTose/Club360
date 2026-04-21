@@ -127,11 +127,13 @@
     </div>
 </section>
 
+{% if not current_user.is_authenticated %}
 <!-- CTA Section -->
 <section style="background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: white; padding: 4rem 2rem; border-radius: var(--radius); text-align: center; margin: 4rem 0;">
     <h2 style="color: white; margin-bottom: 1rem;">¿Listo para comenzar?</h2>
     <p style="color: rgba(255, 255, 255, 0.9); margin-bottom: 2rem; font-size: 1.1rem;">Únete a cientos de usuarios que ya disfrutan de Club 360</p>
     <a href="{{ url_for('auth.register') }}" class="btn btn-secondary" style="padding: 1rem 2.5rem; font-size: 1.1rem;">Crear Cuenta Ahora →</a>
 </section>
+{% endif %}
 
 {% endblock %}

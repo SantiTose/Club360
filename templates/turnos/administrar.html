@@ -7,23 +7,35 @@
 {% endblock %}
 
 {% block content %}
-<h2>Gestión de Turnos/Clases</h2>
-<div class="button-group" style="justify-content: flex-start; margin-bottom: 1rem;">
-    <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Turno</a>
-    <a href="{{ url_for('turnos.validar_asistencia_manual') }}" class="btn btn-secondary">Validar Asistencia QR</a>
-    <form method="POST" action="{{ url_for('turnos.procesar_recordatorios') }}" style="display:inline;">
-        <button type="submit" class="btn btn-secondary">Enviar Recordatorios QR</button>
-    </form>
-</div>
-
-<div class="calendar-layout">
-    <div id="calendar-admin" class="calendar-surface"></div>
-    <div class="turno-card" id="detalle-admin" style="max-width: 420px;">
-        <h3>Detalle del turno</h3>
-        <p class="text-muted">Seleccioná un turno del calendario para editar o cancelar.</p>
-        <div id="detalle-admin-body"></div>
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Administración</span>
+            <h2>Gestión de Turnos y Clases</h2>
+            <p class="text-muted">Organizá la agenda semanal, editá eventos y gestioná cancelaciones desde una única vista.</p>
+        </div>
     </div>
-</div>
+
+    <div class="calendar-toolbar-card">
+        <div class="button-group" style="justify-content: flex-start; margin: 0;">
+            <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Turno</a>
+            <a href="{{ url_for('turnos.validar_asistencia_manual') }}" class="btn btn-secondary">Validar Asistencia QR</a>
+            <form method="POST" action="{{ url_for('turnos.procesar_recordatorios') }}" style="display:inline;" data-confirm="true" data-confirm-title="Enviar recordatorios" data-confirm-message="Se enviarán recordatorios QR a los usuarios con turnos próximos." data-confirm-action="Enviar">
+                <button type="submit" class="btn btn-secondary">Enviar Recordatorios QR</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="calendar-layout">
+        <div id="calendar-admin" class="calendar-surface"></div>
+        <aside class="turno-card turno-detail-card" id="detalle-admin">
+            <span class="turno-detail-kicker">Acciones</span>
+            <h3>Detalle del turno</h3>
+            <p class="text-muted">Seleccioná un turno del calendario para editarlo o cancelarlo.</p>
+            <div id="detalle-admin-body"></div>
+        </aside>
+    </div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
@@ -47,22 +59,30 @@ document.addEventListener('DOMContentLoaded', function() {
         events: '{{ url_for("turnos.eventos_turnos") }}?scope=admin',
         eventClick: function(info) {
             const p = info.event.extendedProps;
+            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
             const cancelForm = p.cancelado
                 ? '<p class="text-warning">Este turno ya está cancelado.</p>'
-                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;">
+                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar el turno de ${info.event.title}. Esta acción impactará en los usuarios reservados." data-confirm-action="Cancelar turno">
                         <div class="form-group" style="margin-bottom: .75rem;">
                             <label for="motivo_cancelacion"><strong>Motivo de cancelación</strong></label>
                             <textarea id="motivo_cancelacion" name="motivo" class="form-control" rows="3" required placeholder="Ej: Feriado trasladado / mantenimiento de cancha"></textarea>
                         </div>
-                        <button type="submit" class="btn btn-danger">Cancelar turno</button>
+                        <button type="submit" class="btn btn-danger btn-block">Cancelar turno</button>
                    </form>`;
 
             detalleEl.innerHTML = `
-                <p><strong>Turno:</strong> ${info.event.title}</p>
-                <p><strong>Clase:</strong> ${p.tipo_clase}</p>
-                <p><strong>Inicio:</strong> ${info.event.start.toLocaleString('es-AR')}</p>
-                <p><strong>Fin:</strong> ${info.event.end.toLocaleString('es-AR')}</p>
-                <a href="${p.editar_url}" class="btn btn-secondary">Editar</a>
+                <div class="turno-detail-header">
+                    <span class="turno-detail-sport">${info.event.title}</span>
+                    <span class="badge badge-primary">${p.tipo_clase}</span>
+                </div>
+                <div class="turno-detail-meta">
+                    <div><strong>Inicio</strong><span>${inicio}</span></div>
+                    <div><strong>Finaliza</strong><span>${fin}</span></div>
+                </div>
+                <div class="turno-detail-actions">
+                    <a href="${p.editar_url}" class="btn btn-secondary btn-block">Editar</a>
+                </div>
                 ${cancelForm}
             `;
         }

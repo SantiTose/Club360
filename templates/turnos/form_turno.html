@@ -7,59 +7,68 @@
 {% endblock %}
 
 {% block content %}
-<h2>{{ 'Editar' if turno else 'Crear' }} Turno</h2>
-<p class="text-muted">Regla horaria: lunes a sábado, franja 08:00 a 22:00, duración fija de 1 hora.</p>
-
-<div id="calendar-selector" class="calendar-surface" style="margin-bottom: 1rem;"></div>
-
-<form method="POST" class="form" style="max-width: 700px;">
-    <div class="form-group-row">
-        <div class="form-group">
-            <label>Actividad</label>
-            <select name="actividad" class="form-control" required>
-                <option value="futbol" {% if turno and turno.actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
-                <option value="basquet" {% if turno and turno.actividad == 'basquet' %}selected{% endif %}>Básquet</option>
-                <option value="voley" {% if turno and turno.actividad == 'voley' %}selected{% endif %}>Vóley</option>
-                <option value="padel" {% if turno and turno.actividad == 'padel' %}selected{% endif %}>Pádel</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Tipo de clase</label>
-            <select name="tipo_clase" class="form-control" required>
-                <option value="abonada" {% if turno and turno.tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
-                <option value="no_abonada" {% if turno and turno.tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
-            </select>
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Configuración</span>
+            <h2>{{ 'Editar' if turno else 'Crear' }} Turno</h2>
+            <p class="text-muted">Regla horaria: lunes a sábado, franja 08:00 a 22:00, duración fija de 1 hora.</p>
         </div>
     </div>
 
-    <div class="form-group-row">
-        <div class="form-group">
-            <label>Día</label>
-            <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') if turno else '' }}" required>
-        </div>
-        <div class="form-group">
-            <label>Horario</label>
-            <select name="hora_inicio_slot" class="form-control" required>
-                <option value="">Seleccionar horario</option>
-                {% for hora in horas_disponibles %}
-                {% set valor = '%02d'|format(hora) %}
-                {% set seleccionado = (turno and turno.hora_inicio.hour == hora) %}
-                <option value="{{ hora }}" {% if seleccionado %}selected{% endif %}>{{ valor }}:00 - {{ '%02d'|format(hora + 1) }}:00</option>
-                {% endfor %}
-            </select>
-        </div>
-    </div>
+    <div id="calendar-selector" class="calendar-surface calendar-selector-surface"></div>
 
-    <div class="form-group">
-        <label>Capacidad máxima</label>
-        <input type="number" name="capacidad_maxima" min="1" class="form-control" value="{{ turno.capacidad_maxima if turno else '' }}" required>
-    </div>
+    <div class="calendar-form-card">
+        <form method="POST" class="form" data-confirm="true" data-confirm-title="{{ 'Guardar cambios' if turno else 'Crear turno' }}" data-confirm-message="{{ 'Se actualizará la información del turno seleccionado.' if turno else 'Se creará un nuevo turno con la configuración cargada.' }}" data-confirm-action="Guardar">
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label>Actividad</label>
+                    <select name="actividad" class="form-control" required>
+                        <option value="futbol" {% if turno and turno.actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
+                        <option value="basquet" {% if turno and turno.actividad == 'basquet' %}selected{% endif %}>Básquet</option>
+                        <option value="voley" {% if turno and turno.actividad == 'voley' %}selected{% endif %}>Vóley</option>
+                        <option value="padel" {% if turno and turno.actividad == 'padel' %}selected{% endif %}>Pádel</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tipo de clase</label>
+                    <select name="tipo_clase" class="form-control" required>
+                        <option value="abonada" {% if turno and turno.tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
+                        <option value="no_abonada" {% if turno and turno.tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
+                    </select>
+                </div>
+            </div>
 
-    <div class="button-group" style="justify-content: flex-start;">
-        <button type="submit" class="btn btn-primary">Guardar</button>
-        <a href="{{ url_for('turnos.administrar_turnos') }}" class="btn btn-secondary">Volver</a>
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label>Día</label>
+                    <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') if turno else '' }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Horario</label>
+                    <select name="hora_inicio_slot" class="form-control" required>
+                        <option value="">Seleccionar horario</option>
+                        {% for hora in horas_disponibles %}
+                        {% set valor = '%02d'|format(hora) %}
+                        {% set seleccionado = (turno and turno.hora_inicio.hour == hora) %}
+                        <option value="{{ hora }}" {% if seleccionado %}selected{% endif %}>{{ valor }}:00 - {{ '%02d'|format(hora + 1) }}:00</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Capacidad máxima</label>
+                <input type="number" name="capacidad_maxima" min="1" class="form-control" value="{{ turno.capacidad_maxima if turno else '' }}" required>
+            </div>
+
+            <div class="button-group" style="justify-content: flex-start;">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('turnos.administrar_turnos') }}" class="btn btn-secondary">Volver</a>
+            </div>
+        </form>
     </div>
-</form>
+</section>
 {% endblock %}
 
 {% block extra_js %}
@@ -110,7 +119,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fechaInput.addEventListener('change', function() {
         if (esDomingo(fechaInput.value)) {
-            alert('Los domingos no están habilitados para turnos.');
+            window.Club360Dialogs?.showNotice({
+                title: 'Día no disponible',
+                message: 'Los domingos no están habilitados para turnos.'
+            });
             fechaInput.value = '';
         }
     });
@@ -118,7 +130,10 @@ document.addEventListener('DOMContentLoaded', function() {
     formEl.addEventListener('submit', function(e) {
         if (esDomingo(fechaInput.value)) {
             e.preventDefault();
-            alert('No se pueden crear turnos en domingo.');
+            window.Club360Dialogs?.showNotice({
+                title: 'Acción no permitida',
+                message: 'No se pueden crear turnos en domingo.'
+            });
         }
     });
 

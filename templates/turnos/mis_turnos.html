@@ -7,21 +7,32 @@
 {% endblock %}
 
 {% block content %}
-<h2>Mis Turnos Reservados</h2>
-
-<div class="calendar-layout">
-    <div id="calendar-mis-turnos" class="calendar-surface"></div>
-    <div class="turno-card" id="detalle-reserva" style="max-width: 420px;">
-        <h3>Detalle de mi reserva</h3>
-        <p class="text-muted">Seleccioná un evento del calendario.</p>
-        <div id="detalle-reserva-body"></div>
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Agenda</span>
+            <h2>Mis Turnos Reservados</h2>
+            <p class="text-muted">Consultá tus reservas activas, revisá el QR y cancelá sólo cuando haga falta.</p>
+        </div>
     </div>
-</div>
 
-{% if not reservas %}
-<p>No tienes turnos reservados.</p>
-<a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
-{% endif %}
+    <div class="calendar-layout">
+        <div id="calendar-mis-turnos" class="calendar-surface"></div>
+        <aside class="turno-card turno-detail-card" id="detalle-reserva">
+            <span class="turno-detail-kicker">Mi reserva</span>
+            <h3>Detalle del turno</h3>
+            <p class="text-muted">Seleccioná un evento del calendario.</p>
+            <div id="detalle-reserva-body"></div>
+        </aside>
+    </div>
+
+    {% if not reservas %}
+    <div class="calendar-empty-state">
+        <p>No tienes turnos reservados.</p>
+        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
+    </div>
+    {% endif %}
+</section>
 {% endblock %}
 
 {% block extra_js %}
@@ -45,14 +56,20 @@ document.addEventListener('DOMContentLoaded', function() {
         events: '{{ url_for("turnos.eventos_turnos") }}?scope=mios',
         eventClick: function(info) {
             const p = info.event.extendedProps;
+            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
             detalleEl.innerHTML = `
-                <p><strong>Turno:</strong> ${info.event.title}</p>
-                <p><strong>Inicio:</strong> ${info.event.start.toLocaleString('es-AR')}</p>
-                <p><strong>Fin:</strong> ${info.event.end.toLocaleString('es-AR')}</p>
-                <p><strong>QR:</strong> ${p.qr_token}</p>
-                <p><strong>Asistencia:</strong> ${p.asistencia}</p>
-                <form method="POST" action="${p.cancelar_url}">
-                    <button type="submit" class="btn btn-danger" onclick="return confirm('¿Deseas cancelar este turno?')">Cancelar reserva</button>
+                <div class="turno-detail-header">
+                    <span class="turno-detail-sport">${info.event.title}</span>
+                    <span class="badge badge-success">${p.asistencia}</span>
+                </div>
+                <div class="turno-detail-meta">
+                    <div><strong>Inicio</strong><span>${inicio}</span></div>
+                    <div><strong>Finaliza</strong><span>${fin}</span></div>
+                    <div><strong>QR</strong><span>${p.qr_token}</span></div>
+                </div>
+                <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para ${info.event.title}." data-confirm-action="Cancelar reserva">
+                    <button type="submit" class="btn btn-danger btn-block">Cancelar reserva</button>
                 </form>
             `;
         }

@@ -7,34 +7,43 @@
 {% endblock %}
 
 {% block content %}
-<h2>Turnos Disponibles</h2>
-
-<div class="filters">
-    <form method="GET" class="form-inline">
-        <select name="actividad" class="form-control">
-            <option value="">Todas las actividades</option>
-            <option value="futbol" {% if filtro_actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
-            <option value="basquet" {% if filtro_actividad == 'basquet' %}selected{% endif %}>Básquet</option>
-            <option value="voley" {% if filtro_actividad == 'voley' %}selected{% endif %}>Vóley</option>
-            <option value="padel" {% if filtro_actividad == 'padel' %}selected{% endif %}>Pádel</option>
-        </select>
-        <select name="tipo_clase" class="form-control">
-            <option value="">Todos los tipos</option>
-            <option value="abonada" {% if filtro_tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
-            <option value="no_abonada" {% if filtro_tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
-        </select>
-        <button type="submit" class="btn btn-secondary">Filtrar</button>
-    </form>
-</div>
-
-<div class="calendar-layout">
-    <div id="calendar-disponibles" class="calendar-surface"></div>
-    <div class="turno-card" id="detalle-turno" style="max-width: 420px;">
-        <h3>Detalle</h3>
-        <p class="text-muted">Seleccioná un turno del calendario para reservar.</p>
-        <div id="detalle-turno-body"></div>
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Agenda</span>
+            <h2>Turnos Disponibles</h2>
+            <p class="text-muted">Explorá la semana, filtrá actividades y reservá desde una vista más clara.</p>
+        </div>
     </div>
-</div>
+
+    <div class="calendar-toolbar-card">
+        <form method="GET" class="form-inline calendar-filters">
+            <select name="actividad" class="form-control">
+                <option value="">Todas las actividades</option>
+                <option value="futbol" {% if filtro_actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
+                <option value="basquet" {% if filtro_actividad == 'basquet' %}selected{% endif %}>Básquet</option>
+                <option value="voley" {% if filtro_actividad == 'voley' %}selected{% endif %}>Vóley</option>
+                <option value="padel" {% if filtro_actividad == 'padel' %}selected{% endif %}>Pádel</option>
+            </select>
+            <select name="tipo_clase" class="form-control">
+                <option value="">Todos los tipos</option>
+                <option value="abonada" {% if filtro_tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
+                <option value="no_abonada" {% if filtro_tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
+            </select>
+            <button type="submit" class="btn btn-secondary">Filtrar</button>
+        </form>
+    </div>
+
+    <div class="calendar-layout">
+        <div id="calendar-disponibles" class="calendar-surface"></div>
+        <aside class="turno-card turno-detail-card" id="detalle-turno">
+            <span class="turno-detail-kicker">Resumen</span>
+            <h3>Detalle del turno</h3>
+            <p class="text-muted">Seleccioná un turno del calendario para ver cupos y reservar.</p>
+            <div id="detalle-turno-body"></div>
+        </aside>
+    </div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
@@ -62,17 +71,27 @@ document.addEventListener('DOMContentLoaded', function() {
         eventClick: function(info) {
             const p = info.event.extendedProps;
             const canReserve = !p.sin_cupos;
+            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
             const boton = canReserve
-                ? `<form method="POST" action="${p.reservar_url}"><button type="submit" class="btn btn-success">Reservar</button></form>`
+                ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${info.event.title}." data-confirm-action="Reservar">
+                        <button type="submit" class="btn btn-success btn-block">Reservar turno</button>
+                   </form>`
                 : '<p class="text-warning">Sin cupos disponibles</p>';
 
             detalleEl.innerHTML = `
-                <p><strong>Deporte:</strong> ${info.event.title}</p>
-                <p><strong>Clase:</strong> ${p.tipo_clase}</p>
-                <p><strong>Inicio:</strong> ${info.event.start.toLocaleString('es-AR')}</p>
-                <p><strong>Fin:</strong> ${info.event.end.toLocaleString('es-AR')}</p>
-                <p><strong>Cupos:</strong> ${p.cupos}</p>
+                <div class="turno-detail-header">
+                    <span class="turno-detail-sport">${info.event.title}</span>
+                    <span class="badge badge-primary">${p.tipo_clase}</span>
+                </div>
+                <div class="turno-detail-meta">
+                    <div><strong>Inicio</strong><span>${inicio}</span></div>
+                    <div><strong>Finaliza</strong><span>${fin}</span></div>
+                    <div><strong>Cupos</strong><span>${p.cupos}</span></div>
+                </div>
+                <div class="turno-detail-actions">
                 ${boton}
+                </div>
             `;
         }
     });
