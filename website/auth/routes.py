@@ -5,6 +5,7 @@ from website import db
 from website.models import Usuario, TipoUsuario, EstadoUsuario
 from website.services import enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, timedelta
 import os
 import secrets
 import re
@@ -20,6 +21,10 @@ def _es_admin(user):
 
 def _generar_password_temporal():
     return secrets.token_urlsafe(8)
+
+
+def _generar_token_reset():
+    return secrets.token_urlsafe(32)
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -163,10 +168,24 @@ def reset_password():
         usuario = Usuario.query.filter_by(email=email).first()
         
         if usuario:
-            flash('✅ Se ha enviado un enlace de recuperación a tu email', 'success')
-        else:
-            flash('❌ Email no encontrado', 'error')
-        
+            token = _generar_token_reset()
+            usuario.reset_password_token = token
+            usuario.reset_password_expira = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+
+            enlace = url_for('auth.reset_password_token', token=token, _external=True)
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            asunto = 'Recuperación de contraseña - Club 360'
+            cuerpo = (
+                f"Hola {usuario.nombre},\n\n"
+                "Recibimos una solicitud para restablecer tu contraseña.\n"
+                f"Usa este enlace (válido por 1 hora): {enlace}\n\n"
+                "Si no solicitaste este cambio, puedes ignorar este mensaje."
+            )
+            enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+
+        # Respuesta neutra para no revelar si el email existe o no.
+        flash('Si el email está registrado, te enviamos un enlace de recuperación.', 'success')
         return redirect(url_for('auth.login'))
     
     return render_template('auth/reset_password.html')
@@ -286,3 +305,40 @@ def cambiar_password_inicial():
         return redirect(url_for('dashboard'))
 
     return render_template('auth/cambiar_password_inicial.html', field_errors={})
+
+
+@auth_bp.route('/reset-password/<string:token>', methods=['GET', 'POST'])
+def reset_password_token(token):
+    usuario = (
+        Usuario.query
+        .filter_by(reset_password_token=token)
+        .filter(Usuario.reset_password_expira.isnot(None))
+        .first()
+    )
+
+    if not usuario or not usuario.reset_password_expira or usuario.reset_password_expira < datetime.utcnow():
+        flash('El enlace de recuperación es inválido o expiró', 'error')
+        return redirect(url_for('auth.reset_password'))
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        password_confirm = request.form.get('password_confirm', '')
+        field_errors = {}
+
+        if len(password) < 6:
+            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
+        if password != password_confirm:
+            field_errors['password_confirm'] = 'Las contraseñas no coinciden'
+
+        if field_errors:
+            return render_template('auth/reset_password_token.html', field_errors=field_errors)
+
+        usuario.password = generate_password_hash(password)
+        usuario.reset_password_token = None
+        usuario.reset_password_expira = None
+        usuario.requiere_cambio_password = False
+        db.session.commit()
+        flash('Contraseña restablecida correctamente. Ya puedes iniciar sesión.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/reset_password_token.html', field_errors={})

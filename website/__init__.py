@@ -121,6 +121,7 @@ def create_app(config_name='development'):
         _ensure_usuario_recordatorio_column()
         _ensure_usuario_cancelaciones_credito_columns()
         _ensure_usuario_requiere_cambio_password_column()
+        _ensure_usuario_reset_password_columns()
         _ensure_reserva_qr_columns()
         _ensure_pago_tipo_clase_column()
         _backfill_reserva_qr_tokens()
@@ -200,6 +201,25 @@ def _ensure_usuario_requiere_cambio_password_column():
     columnas = {c['name'] for c in inspector.get_columns('usuarios')}
     if 'requiere_cambio_password' not in columnas:
         db.session.execute(text("ALTER TABLE usuarios ADD COLUMN requiere_cambio_password BOOLEAN NOT NULL DEFAULT 0"))
+        db.session.commit()
+
+
+def _ensure_usuario_reset_password_columns():
+    inspector = inspect(db.engine)
+    if 'usuarios' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('usuarios')}
+    updates = []
+    if 'reset_password_token' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN reset_password_token VARCHAR(120)")
+    if 'reset_password_expira' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN reset_password_expira DATETIME")
+
+    for sql in updates:
+        db.session.execute(text(sql))
+
+    if updates:
         db.session.commit()
 
 

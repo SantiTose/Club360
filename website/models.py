@@ -43,6 +43,8 @@ class Usuario(UserMixin, db.Model):
     cancelaciones_abonado = db.Column(db.Integer, nullable=False, default=0)
     beneficio_abonado_activo = db.Column(db.Boolean, nullable=False, default=True)
     requiere_cambio_password = db.Column(db.Boolean, nullable=False, default=False)
+    reset_password_token = db.Column(db.String(120), unique=True)
+    reset_password_expira = db.Column(db.DateTime)
     ultimo_recordatorio_mora = db.Column(db.DateTime)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
