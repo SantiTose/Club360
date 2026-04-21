@@ -49,7 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const p = info.event.extendedProps;
             const cancelForm = p.cancelado
                 ? '<p class="text-warning">Este turno ya está cancelado.</p>'
-                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;"><button type="submit" class="btn btn-danger">Cancelar turno</button></form>`;
+                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;">
+                        <div class="form-group" style="margin-bottom: .75rem;">
+                            <label for="motivo_cancelacion"><strong>Motivo de cancelación</strong></label>
+                            <textarea id="motivo_cancelacion" name="motivo" class="form-control" rows="3" required placeholder="Ej: Feriado trasladado / mantenimiento de cancha"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger">Cancelar turno</button>
+                   </form>`;
 
             detalleEl.innerHTML = `
                 <p><strong>Turno:</strong> ${info.event.title}</p>

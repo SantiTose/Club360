@@ -207,6 +207,38 @@ def _agregar_a_lista_espera(turno, usuario_id):
     return tipos_objetivo
 
 
+def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
+    """Cancela administrativamente un turno, devuelve pagos y notifica por email."""
+    reservas = Reserva.query.filter_by(turno_id=turno.id).all()
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    for reserva in reservas:
+        usuario = reserva.usuario
+        pago_reserva = _buscar_pago_reserva(reserva.usuario_id, turno.id)
+        if pago_reserva:
+            db.session.add(Pago(
+                usuario_id=usuario.id,
+                monto=-round(abs(pago_reserva.monto), 2),
+                metodo_pago='virtual',
+                estado='completado',
+                tipo_clase=turno.tipo_clase,
+                referencia_transaccion=f"reintegro-admin-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
+            ))
+
+        asunto = 'Cancelación de turno - Club 360'
+        cuerpo = (
+            f"Hola {usuario.nombre},\n\n"
+            f"Tu turno de {turno.actividad} del {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')} "
+            "fue cancelado por administración.\n"
+            f"Motivo: {motivo}\n\n"
+            "Si corresponde, se registró la devolución de tu pago."
+        )
+        enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+
+    # Limpia listas de espera porque el turno deja de existir operativamente.
+    ListaEspera.query.filter_by(turno_id=turno.id).delete(synchronize_session=False)
+
+
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
     """Envia recordatorio por email con QR el dia previo a cada clase."""
     manana = (datetime.utcnow() + timedelta(days=1)).date().isoformat()
@@ -798,7 +830,17 @@ def cancelar_turno_admin(turno_id):
         return redirect(url_for('index'))
 
     turno = Turno.query.get_or_404(turno_id)
+    if turno.cancelado:
+        flash('El turno ya estaba cancelado', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    motivo = request.form.get('motivo', '').strip()
+    if not motivo:
+        flash('Debes indicar el motivo de la cancelación', 'error')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    _procesar_cancelacion_admin_con_reintegros(turno, motivo)
     turno.cancelado = True
     db.session.commit()
-    flash('Turno cancelado por administrador', 'success')
+    flash('Turno cancelado por administrador, con notificaciones y devoluciones procesadas', 'success')
     return redirect(url_for('turnos.administrar_turnos'))
