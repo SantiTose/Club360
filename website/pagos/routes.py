@@ -9,6 +9,10 @@ import os
 import secrets
 
 
+def _es_cliente(user):
+    return user.tipo_usuario == TipoUsuario.CLIENTE
+
+
 def _es_empleado_o_admin(user):
     return user.tipo_usuario in {TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR}
 
@@ -44,6 +48,10 @@ def _reconciliar_estado_cliente(usuario):
 @login_required
 def ver_deuda():
     """Ver deuda del usuario."""
+    if not _es_cliente(current_user):
+        flash('Esta sección de deuda aplica solo para clientes', 'error')
+        return redirect(url_for('index'))
+
     deuda = Pago.query.filter_by(
         usuario_id=current_user.id,
         estado='pendiente'
@@ -60,6 +68,10 @@ def ver_deuda():
 @login_required
 def pagar(pago_id):
     """Realizar pago de cliente en web (solo tarjeta de credito)."""
+    if not _es_cliente(current_user):
+        flash('Esta funcionalidad de pago online aplica solo para clientes', 'error')
+        return redirect(url_for('index'))
+
     pago = Pago.query.get_or_404(pago_id)
     
     if pago.usuario_id != current_user.id:

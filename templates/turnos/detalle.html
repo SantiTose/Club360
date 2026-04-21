@@ -7,7 +7,6 @@
 
 <div class="turno-card" style="max-width: 700px;">
     <h3>{{ turno.actividad|upper }}</h3>
-    <p><strong>Clase:</strong> {{ 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada' }}</p>
     <p><strong>Inicio:</strong> {{ turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}</p>
     <p><strong>Fin:</strong> {{ turno.hora_fin.strftime('%d/%m/%Y %H:%M') }}</p>
     <p><strong>Cupos:</strong> {{ turno.cupos_disponibles }} / {{ turno.capacidad_maxima }}</p>
@@ -15,31 +14,29 @@
 
     <h4 style="margin-top: 1.5rem;">Listas de espera</h4>
 
-    {% set nombres = {'general': 'General', 'abonados': 'Abonados', 'no_abonados': 'No abonados'} %}
-    {% for tipo in ['general', 'abonados', 'no_abonados'] %}
-    <h5 style="margin-top: 1rem;">{{ nombres[tipo] }}</h5>
-    {% if listas[tipo] %}
+    {% if listas['general'] %}
     <table class="table">
         <thead>
             <tr>
                 <th>Posición</th>
                 <th>Usuario</th>
                 <th>Email</th>
+                <th>Modalidad</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in listas[tipo] %}
+            {% for item in listas['general'] %}
             <tr>
                 <td>{{ item.posicion }}</td>
                 <td>{{ item.usuario.apellido }}, {{ item.usuario.nombre }}</td>
                 <td>{{ item.usuario.email }}</td>
+                <td>{{ 'Abonada' if item.tipo_clase == 'abonada' else 'No abonada' }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p>No hay usuarios en esta lista.</p>
+    <p>No hay usuarios en lista de espera.</p>
     {% endif %}
-    {% endfor %}
 </div>
 {% endblock %}

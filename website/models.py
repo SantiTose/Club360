@@ -68,7 +68,6 @@ class Turno(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     actividad = db.Column(db.String(20), nullable=False)
-    tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     hora_inicio = db.Column(db.DateTime, nullable=False)
     hora_fin = db.Column(db.DateTime, nullable=False)
     capacidad_maxima = db.Column(db.Integer, nullable=False)
@@ -89,6 +88,7 @@ class ListaEspera(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
     tipo_lista = db.Column(db.String(20), nullable=False)  # general
+    tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     posicion = db.Column(db.Integer, nullable=False)
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -104,6 +104,7 @@ class Reserva(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     turno_id = db.Column(db.Integer, db.ForeignKey('turnos.id'), nullable=False)
+    tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     qr_token = db.Column(db.String(120), unique=True, nullable=False)
     recordatorio_enviado = db.Column(db.Boolean, default=False, nullable=False)
     fecha_recordatorio = db.Column(db.DateTime)

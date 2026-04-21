@@ -26,8 +26,6 @@ HORA_APERTURA = 8
 HORA_CIERRE = 22
 HORAS_DISPONIBLES = list(range(HORA_APERTURA, HORA_CIERRE))
 TIPO_LISTA_GENERAL = 'general'
-TIPO_LISTA_ABONADOS = 'abonados'
-TIPO_LISTA_NO_ABONADOS = 'no_abonados'
 FERIADOS_FIJOS_MM_DD = {
     (1, 1),    # Año Nuevo
     (3, 24),   # Día Nacional de la Memoria por la Verdad y la Justicia
@@ -141,16 +139,9 @@ def _procesar_suspension_automatica(cliente):
     if cliente.tipo_usuario != TipoUsuario.CLIENTE:
         return
 
-    deudas_abonadas = (
-        Pago.query
-        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
-        .count()
-    )
-    deudas_no_abonadas = (
-        Pago.query
-        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
-        .count()
-    )
+    restricciones = _obtener_restricciones_suspension(cliente)
+    deudas_abonadas = restricciones['deudas_abonadas']
+    deudas_no_abonadas = restricciones['deudas_no_abonadas_vencidas']
 
     if deudas_abonadas == 0 and deudas_no_abonadas == 0:
         return
@@ -179,30 +170,77 @@ def _procesar_suspension_automatica(cliente):
         db.session.commit()
 
 
+def _validar_tipo_clase(valor):
+    return valor in {TipoClase.ABONADA, TipoClase.NO_ABONADA}
+
+
+def _label_tipo_clase(valor):
+    return 'Abonada' if valor == TipoClase.ABONADA else 'No abonada'
+
+
+def _obtener_turno_desde_pago(pago):
+    referencia = (pago.referencia_transaccion or '').strip()
+    if not referencia:
+        return None
+
+    partes = referencia.split('-')
+    if len(partes) < 3 or partes[0] not in {'reserva', 'espera'}:
+        return None
+
+    try:
+        turno_id = int(partes[1])
+    except ValueError:
+        return None
+
+    return Turno.query.get(turno_id)
+
+
+def _pagos_no_abonados_vencidos(usuario_id):
+    pagos = (
+        Pago.query
+        .filter_by(usuario_id=usuario_id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .filter(Pago.monto > 0)
+        .all()
+    )
+    vencidos = []
+    ahora = datetime.utcnow()
+    for pago in pagos:
+        turno = _obtener_turno_desde_pago(pago)
+        if turno and turno.hora_inicio < ahora:
+            vencidos.append(pago)
+    return vencidos
+
+
+def _obtener_restricciones_suspension(cliente):
+    deudas_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+        .filter(Pago.monto > 0)
+        .count()
+    )
+    deudas_no_abonadas_vencidas = len(_pagos_no_abonados_vencidos(cliente.id))
+
+    return {
+        'suspendido_abonado': datetime.utcnow().day >= 11 and deudas_abonadas > 0,
+        'suspendido_no_abonado': deudas_no_abonadas_vencidas >= 3,
+        'deudas_abonadas': deudas_abonadas,
+        'deudas_no_abonadas_vencidas': deudas_no_abonadas_vencidas,
+    }
+
+
 def _obtener_siguiente_lista_espera(turno):
-    """Aplica prioridad de listas según el tipo de clase del turno liberado."""
-    if turno.tipo_clase == TipoClase.ABONADA:
-        orden_prioridad = [TIPO_LISTA_ABONADOS, TIPO_LISTA_NO_ABONADOS]
-    else:
-        orden_prioridad = [TIPO_LISTA_GENERAL]
-
-    for tipo_lista in orden_prioridad:
-        candidato = (
-            ListaEspera.query
-            .filter_by(turno_id=turno.id, tipo_lista=tipo_lista)
-            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
-            .first()
-        )
-        if candidato:
-            return candidato
-
-    return None
+    return (
+        ListaEspera.query
+        .filter_by(turno_id=turno.id)
+        .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+        .first()
+    )
 
 
-def _recalcular_posiciones_lista(turno_id, tipo_lista):
+def _recalcular_posiciones_lista(turno_id):
     pendientes = (
         ListaEspera.query
-        .filter_by(turno_id=turno_id, tipo_lista=tipo_lista)
+        .filter_by(turno_id=turno_id)
         .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
         .all()
     )
@@ -210,23 +248,15 @@ def _recalcular_posiciones_lista(turno_id, tipo_lista):
         item.posicion = index
 
 
-def _agregar_a_lista_espera(turno, usuario_id):
-    tipos_objetivo = [TIPO_LISTA_GENERAL]
-    if turno.tipo_clase == TipoClase.ABONADA:
-        tipos_objetivo.append(TIPO_LISTA_ABONADOS)
-    else:
-        tipos_objetivo.append(TIPO_LISTA_NO_ABONADOS)
-
-    for tipo_lista in tipos_objetivo:
-        posicion = ListaEspera.query.filter_by(turno_id=turno.id, tipo_lista=tipo_lista).count() + 1
-        db.session.add(ListaEspera(
-            usuario_id=usuario_id,
-            turno_id=turno.id,
-            tipo_lista=tipo_lista,
-            posicion=posicion,
-        ))
-
-    return tipos_objetivo
+def _agregar_a_lista_espera(turno, usuario_id, tipo_clase):
+    posicion = ListaEspera.query.filter_by(turno_id=turno.id).count() + 1
+    db.session.add(ListaEspera(
+        usuario_id=usuario_id,
+        turno_id=turno.id,
+        tipo_lista=TIPO_LISTA_GENERAL,
+        tipo_clase=tipo_clase,
+        posicion=posicion,
+    ))
 
 
 def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
@@ -243,7 +273,7 @@ def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
                 monto=-round(abs(pago_reserva.monto), 2),
                 metodo_pago=pago_reserva.metodo_pago,
                 estado='completado',
-                tipo_clase=turno.tipo_clase,
+                tipo_clase=reserva.tipo_clase,
                 referencia_transaccion=f"reintegro-admin-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
             ))
 
@@ -319,6 +349,10 @@ def _enviar_recordatorios_qr(base_dir, usuario_id=None):
 @login_required
 def ver_turnos_disponibles():
     """Ver turnos disponibles para reservar."""
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta vista está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
     if current_user.tipo_usuario == TipoUsuario.CLIENTE:
         _procesar_suspension_automatica(current_user)
         enviados = _enviar_recordatorios_qr(
@@ -329,15 +363,11 @@ def ver_turnos_disponibles():
             flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
     actividad = request.args.get('actividad')
-    tipo_clase = request.args.get('tipo_clase')
     
     query = Turno.query.filter_by(cancelado=False)
     
     if actividad:
         query = query.filter_by(actividad=actividad)
-
-    if tipo_clase in [TipoClase.ABONADA, TipoClase.NO_ABONADA]:
-        query = query.filter_by(tipo_clase=tipo_clase)
     
     turnos = [
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
@@ -348,7 +378,6 @@ def ver_turnos_disponibles():
         'turnos/disponibles.html',
         turnos=turnos,
         filtro_actividad=actividad or '',
-        filtro_tipo_clase=tipo_clase or '',
     )
 
 
@@ -367,8 +396,8 @@ def eventos_turnos():
         )
         eventos = [
             {
-                'id': str(reserva.turno.id),
-                'title': f"{reserva.turno.actividad.upper()} ({'Abonada' if reserva.turno.tipo_clase == 'abonada' else 'No abonada'})",
+                'id': str(reserva.id),
+                'title': f"{reserva.turno.actividad.upper()} ({_label_tipo_clase(reserva.tipo_clase)})",
                 'start': reserva.turno.hora_inicio.isoformat(),
                 'end': reserva.turno.hora_fin.isoformat(),
                 'backgroundColor': '#2e7d32',
@@ -377,6 +406,7 @@ def eventos_turnos():
                     'cupos': f"{reserva.turno.cupos_disponibles}/{reserva.turno.capacidad_maxima}",
                     'qr_token': reserva.qr_token,
                     'asistencia': 'Validada' if reserva.asistencia_validada else 'Pendiente',
+                    'tipo_clase': _label_tipo_clase(reserva.tipo_clase),
                     'cancelar_url': url_for('turnos.cancelar_turno', turno_id=reserva.turno.id),
                 }
             }
@@ -399,7 +429,6 @@ def eventos_turnos():
                 'borderColor': '#263238' if turno.cancelado else '#0d47a1',
                 'extendedProps': {
                     'cancelado': turno.cancelado,
-                    'tipo_clase': 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada',
                     'editar_url': url_for('turnos.editar_turno', turno_id=turno.id),
                     'cancelar_url': url_for('turnos.cancelar_turno_admin', turno_id=turno.id),
                 }
@@ -409,13 +438,10 @@ def eventos_turnos():
         return jsonify(eventos)
 
     actividad = request.args.get('actividad')
-    tipo_clase = request.args.get('tipo_clase')
 
     query = Turno.query.filter_by(cancelado=False)
     if actividad:
         query = query.filter_by(actividad=actividad)
-    if tipo_clase in [TipoClase.ABONADA, TipoClase.NO_ABONADA]:
-        query = query.filter_by(tipo_clase=tipo_clase)
 
     turnos = [
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
@@ -430,7 +456,6 @@ def eventos_turnos():
             'backgroundColor': '#2e7d32' if turno.cupos_disponibles > 0 else '#ef6c00',
             'borderColor': '#1b5e20' if turno.cupos_disponibles > 0 else '#e65100',
             'extendedProps': {
-                'tipo_clase': 'Abonada' if turno.tipo_clase == 'abonada' else 'No abonada',
                 'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                 'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                 'sin_cupos': turno.cupos_disponibles <= 0,
@@ -446,14 +471,23 @@ def eventos_turnos():
 def reservar_turno(turno_id):
     """Reservar un turno."""
     turno = Turno.query.get_or_404(turno_id)
+    tipo_clase = request.form.get('tipo_clase', TipoClase.NO_ABONADA).strip()
 
     if current_user.tipo_usuario != TipoUsuario.CLIENTE:
         flash('Solo los clientes pueden reservar turnos', 'error')
         return redirect(url_for('turnos.ver_turnos_disponibles'))
 
+    if not _validar_tipo_clase(tipo_clase):
+        flash('Debes elegir si la reserva es abonada o no abonada', 'error')
+        return redirect(url_for('turnos.ver_turnos_disponibles'))
+
     _procesar_suspension_automatica(current_user)
-    if current_user.estado == EstadoUsuario.SUSPENDIDO:
-        flash('Tu cuenta está suspendida por mora. Regulariza pagos para reservar.', 'error')
+    restricciones = _obtener_restricciones_suspension(current_user)
+    if tipo_clase == TipoClase.ABONADA and restricciones['suspendido_abonado']:
+        flash('Tu cuenta está suspendida para reservas abonadas. Debes regularizar tu abono vencido.', 'error')
+        return redirect(url_for('pagos.ver_deuda'))
+    if tipo_clase == TipoClase.NO_ABONADA and restricciones['suspendido_no_abonado']:
+        flash('Tu cuenta está suspendida para clases no abonadas por acumular 3 clases vencidas impagas.', 'error')
         return redirect(url_for('pagos.ver_deuda'))
 
     if turno.cancelado:
@@ -480,10 +514,10 @@ def reservar_turno(turno_id):
         return redirect(url_for('turnos.ver_turnos_disponibles'))
     
     if turno.cupos_disponibles > 0:
-        monto_base = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user)
+        monto_base = _calcular_monto_reserva(turno.actividad, tipo_clase, current_user)
         credito_aplicado = 0.0
         monto_final = monto_base
-        if turno.tipo_clase == TipoClase.ABONADA and current_user.credito_abonado > 0:
+        if tipo_clase == TipoClase.ABONADA and current_user.credito_abonado > 0:
             credito_aplicado = min(current_user.credito_abonado, monto_base)
             monto_final = round(monto_base - credito_aplicado, 2)
             current_user.credito_abonado = round(current_user.credito_abonado - credito_aplicado, 2)
@@ -491,6 +525,7 @@ def reservar_turno(turno_id):
         reserva = Reserva(
             usuario_id=current_user.id,
             turno_id=turno_id,
+            tipo_clase=tipo_clase,
             qr_token=secrets.token_urlsafe(24),
         )
         db.session.add(reserva)
@@ -502,7 +537,7 @@ def reservar_turno(turno_id):
             monto=monto_final,
             metodo_pago='tarjeta_credito',
             estado='pendiente',
-            tipo_clase=turno.tipo_clase,
+            tipo_clase=tipo_clase,
             referencia_transaccion=f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}"
         ))
 
@@ -519,14 +554,13 @@ def reservar_turno(turno_id):
             flash('Ya estás en la lista de espera para este turno', 'info')
             return redirect(url_for('turnos.ver_turnos_disponibles'))
 
-        tipos_registrados = _agregar_a_lista_espera(turno, current_user.id)
+        _agregar_a_lista_espera(turno, current_user.id, tipo_clase)
         db.session.commit()
 
-        for tipo_lista in tipos_registrados:
-            personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id, tipo_lista=tipo_lista).count()
-            if personas_en_espera == 10:
-                _notificar_admin_lista_espera_llena(turno, tipo_lista, personas_en_espera)
-                flash(f'La lista de espera "{tipo_lista}" de este turno llegó a 10 personas', 'warning')
+        personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id).count()
+        if personas_en_espera == 10:
+            _notificar_admin_lista_espera_llena(turno, TIPO_LISTA_GENERAL, personas_en_espera)
+            flash('La lista de espera de este turno llegó a 10 personas', 'warning')
 
         flash('Turno lleno. Te agregamos a la lista de espera', 'info')
     
@@ -551,10 +585,10 @@ def cancelar_turno(turno_id):
     turno.cupos_disponibles += 1
 
     horas = _horas_anticipacion(turno)
-    if turno.tipo_clase == TipoClase.ABONADA:
+    if reserva.tipo_clase == TipoClase.ABONADA:
         current_user.cancelaciones_abonado += 1
         if horas >= 48:
-            credito = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user)
+            credito = _calcular_monto_reserva(turno.actividad, reserva.tipo_clase, current_user)
             current_user.credito_abonado = round(current_user.credito_abonado + credito, 2)
             flash(f'Cancelación abonada con +48h: se generó crédito de ${credito:.2f}', 'info')
         else:
@@ -567,14 +601,14 @@ def cancelar_turno(turno_id):
         if horas >= 24:
             pago_reserva = _buscar_pago_reserva(current_user.id, turno_id)
             if pago_reserva:
-                monto_senia = round(_calcular_monto_reserva(turno.actividad, turno.tipo_clase, current_user) * 0.5, 2)
+                monto_senia = round(_calcular_monto_reserva(turno.actividad, reserva.tipo_clase, current_user) * 0.5, 2)
                 monto_reintegro = round(min(abs(pago_reserva.monto), monto_senia), 2)
                 db.session.add(Pago(
                     usuario_id=current_user.id,
                     monto=-monto_reintegro,
                     metodo_pago=pago_reserva.metodo_pago,
                     estado='completado',
-                    tipo_clase=turno.tipo_clase,
+                    tipo_clase=reserva.tipo_clase,
                     referencia_transaccion=f"reintegro-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}",
                 ))
                 flash(f'Cancelación no abonada con +24h: se reintegró la seña (${monto_reintegro:.2f})', 'info')
@@ -589,6 +623,7 @@ def cancelar_turno(turno_id):
         db.session.add(Reserva(
             usuario_id=siguiente.usuario_id,
             turno_id=turno_id,
+            tipo_clase=siguiente.tipo_clase,
             qr_token=secrets.token_urlsafe(24),
         ))
         turno.cupos_disponibles -= 1
@@ -600,13 +635,13 @@ def cancelar_turno(turno_id):
 
         # Genera deuda de la clase al usuario promovido desde lista de espera.
         usuario_promovido = Usuario.query.get(siguiente.usuario_id)
-        monto = _calcular_monto_reserva(turno.actividad, turno.tipo_clase, usuario_promovido)
+        monto = _calcular_monto_reserva(turno.actividad, siguiente.tipo_clase, usuario_promovido)
         db.session.add(Pago(
             usuario_id=siguiente.usuario_id,
             monto=monto,
             metodo_pago='tarjeta_credito',
             estado='pendiente',
-            tipo_clase=turno.tipo_clase,
+            tipo_clase=siguiente.tipo_clase,
             referencia_transaccion=f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}"
         ))
 
@@ -625,8 +660,7 @@ def cancelar_turno(turno_id):
             )
 
         # Recalcular posiciones restantes por cada tipo de lista.
-        for tipo_lista in [TIPO_LISTA_GENERAL, TIPO_LISTA_ABONADOS, TIPO_LISTA_NO_ABONADOS]:
-            _recalcular_posiciones_lista(turno_id, tipo_lista)
+        _recalcular_posiciones_lista(turno_id)
 
     db.session.commit()
     
@@ -638,8 +672,11 @@ def cancelar_turno(turno_id):
 @login_required
 def mis_turnos():
     """Ver mis turnos reservados."""
-    if current_user.tipo_usuario == TipoUsuario.CLIENTE:
-        _procesar_suspension_automatica(current_user)
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta vista está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    _procesar_suspension_automatica(current_user)
 
     reservas = (
         Reserva.query
@@ -672,18 +709,6 @@ def buscar_turno(turno_id):
         TIPO_LISTA_GENERAL: (
             ListaEspera.query
             .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_GENERAL)
-            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
-            .all()
-        ),
-        TIPO_LISTA_ABONADOS: (
-            ListaEspera.query
-            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_ABONADOS)
-            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
-            .all()
-        ),
-        TIPO_LISTA_NO_ABONADOS: (
-            ListaEspera.query
-            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_NO_ABONADOS)
             .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
             .all()
         ),
@@ -768,7 +793,6 @@ def crear_turno():
 
     if request.method == 'POST':
         actividad = request.form.get('actividad', '').strip()
-        tipo_clase = request.form.get('tipo_clase', '').strip()
         capacidad_maxima = request.form.get('capacidad_maxima', type=int)
         fecha_raw = request.form.get('fecha', '').strip()
         hora_slot_raw = request.form.get('hora_inicio_slot', '').strip()
@@ -786,10 +810,6 @@ def crear_turno():
             flash('Actividad inválida', 'error')
             return render_template('turnos/form_turno.html', turno=None, horas_disponibles=HORAS_DISPONIBLES)
 
-        if tipo_clase not in {TipoClase.ABONADA, TipoClase.NO_ABONADA}:
-            flash('Tipo de clase inválido', 'error')
-            return render_template('turnos/form_turno.html', turno=None, horas_disponibles=HORAS_DISPONIBLES)
-
         existe = Turno.query.filter_by(
             actividad=actividad,
             hora_inicio=hora_inicio,
@@ -801,7 +821,6 @@ def crear_turno():
 
         turno = Turno(
             actividad=actividad,
-            tipo_clase=tipo_clase,
             hora_inicio=hora_inicio,
             hora_fin=hora_fin,
             capacidad_maxima=capacidad_maxima,
@@ -827,7 +846,6 @@ def editar_turno(turno_id):
 
     if request.method == 'POST':
         actividad = request.form.get('actividad', '').strip()
-        tipo_clase = request.form.get('tipo_clase', '').strip()
         capacidad_maxima = request.form.get('capacidad_maxima', type=int)
         fecha_raw = request.form.get('fecha', '').strip()
         hora_slot_raw = request.form.get('hora_inicio_slot', '').strip()
@@ -843,10 +861,6 @@ def editar_turno(turno_id):
 
         if actividad not in {'futbol', 'basquet', 'voley', 'padel'}:
             flash('Actividad inválida', 'error')
-            return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)
-
-        if tipo_clase not in {TipoClase.ABONADA, TipoClase.NO_ABONADA}:
-            flash('Tipo de clase inválido', 'error')
             return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)
 
         reservas_confirmadas = Reserva.query.filter_by(turno_id=turno.id).count()
@@ -865,7 +879,6 @@ def editar_turno(turno_id):
             return render_template('turnos/form_turno.html', turno=turno, horas_disponibles=HORAS_DISPONIBLES)
 
         turno.actividad = actividad
-        turno.tipo_clase = tipo_clase
         turno.hora_inicio = hora_inicio
         turno.hora_fin = hora_fin
         turno.capacidad_maxima = capacidad_maxima

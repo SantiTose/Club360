@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    <div class="calendar-toolbar-card">
+    <div class="calendar-toolbar-card calendar-toolbar-card-compact">
         <div class="button-group" style="justify-content: flex-start; margin: 0;">
             <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Turno</a>
             <a href="{{ url_for('turnos.validar_asistencia_manual') }}" class="btn btn-secondary">Validar Asistencia QR</a>
@@ -28,11 +28,20 @@
 
     <div class="calendar-layout">
         <div id="calendar-admin" class="calendar-surface"></div>
-        <aside class="turno-card turno-detail-card" id="detalle-admin">
-            <span class="turno-detail-kicker">Acciones</span>
-            <h3>Detalle del turno</h3>
-            <p class="text-muted">Seleccioná un turno del calendario para editarlo o cancelarlo.</p>
-            <div id="detalle-admin-body"></div>
+        <aside class="calendar-side-column calendar-context-panel">
+            <section class="calendar-context-section">
+                <span class="turno-detail-kicker">Agenda del día</span>
+                <h3 id="agenda-admin-title">Seleccioná un día</h3>
+                <p class="text-muted">Elegí una fecha del mes para ver el detalle horario de esa jornada.</p>
+                <div id="agenda-admin-body" class="calendar-day-body"></div>
+            </section>
+
+            <section class="calendar-context-section calendar-context-detail" id="detalle-admin">
+                <span class="turno-detail-kicker">Acciones</span>
+                <h3>Detalle del turno</h3>
+                <p class="text-muted">Seleccioná una franja horaria para editar o cancelar.</p>
+                <div id="detalle-admin-body"></div>
+            </section>
         </aside>
     </div>
 </section>
@@ -42,28 +51,36 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const calendarEl = document.getElementById('calendar-admin');
-    const detalleEl = document.getElementById('detalle-admin-body');
-
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
-        locale: 'es',
-        firstDay: 1,
-        hiddenDays: [0],
-        dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit' },
-        slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-        slotMinTime: '08:00:00',
-        slotMaxTime: '22:00:00',
-        allDaySlot: false,
-        height: 'auto',
-        events: '{{ url_for("turnos.eventos_turnos") }}?scope=admin',
-        eventClick: function(info) {
-            const p = info.event.extendedProps;
-            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
-            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
+    window.Club360CalendarUI.createMonthAgenda({
+        calendarId: 'calendar-admin',
+        agendaTitleId: 'agenda-admin-title',
+        agendaBodyId: 'agenda-admin-body',
+        detailBodyId: 'detalle-admin-body',
+        eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=admin',
+        emptyCalendarTitle: 'No hay turnos cargados',
+        emptyCalendarMessage: 'Todavía no existen turnos en el sistema. Creá uno nuevo para empezar a organizar la agenda.',
+        initialAgendaHtml: '<div class="calendar-day-placeholder">Seleccioná un día del mes para revisar la agenda horaria.</div>',
+        emptyAgendaHtml: '<div class="calendar-day-placeholder">No hay turnos cargados para esta fecha.</div>',
+        initialDetailHtml: '<div class="calendar-day-placeholder compact">Elegí una franja para editar o cancelar el turno.</div>',
+        emptyDetailHtml: '<div class="calendar-day-placeholder compact">No hay un turno seleccionado.</div>',
+        renderAgendaCard(event, context) {
+            const p = event.extendedProps;
+            const estado = p.cancelado ? 'Cancelado' : 'Activo';
+            return `
+                <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
+                    <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
+                    <strong>${context.helpers.escapeHtml(event.title)}</strong>
+                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(estado)}</span>
+                </button>
+            `;
+        },
+        renderDetail(event, helpers) {
+            const p = event.extendedProps;
+            const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
             const cancelForm = p.cancelado
                 ? '<p class="text-warning">Este turno ya está cancelado.</p>'
-                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar el turno de ${info.event.title}. Esta acción impactará en los usuarios reservados." data-confirm-action="Cancelar turno">
+                : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar el turno de ${helpers.escapeHtml(event.title)}. Esta acción impactará en los usuarios reservados." data-confirm-action="Cancelar turno">
                         <div class="form-group" style="margin-bottom: .75rem;">
                             <label for="motivo_cancelacion"><strong>Motivo de cancelación</strong></label>
                             <textarea id="motivo_cancelacion" name="motivo" class="form-control" rows="3" required placeholder="Ej: Feriado trasladado / mantenimiento de cancha"></textarea>
@@ -71,14 +88,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <button type="submit" class="btn btn-danger btn-block">Cancelar turno</button>
                    </form>`;
 
-            detalleEl.innerHTML = `
+            return `
                 <div class="turno-detail-header">
-                    <span class="turno-detail-sport">${info.event.title}</span>
-                    <span class="badge badge-primary">${p.tipo_clase}</span>
+                    <span class="turno-detail-sport">${helpers.escapeHtml(event.title)}</span>
+                    <span class="badge badge-primary">${p.cancelado ? 'Cancelado' : 'Activo'}</span>
                 </div>
                 <div class="turno-detail-meta">
-                    <div><strong>Inicio</strong><span>${inicio}</span></div>
-                    <div><strong>Finaliza</strong><span>${fin}</span></div>
+                    <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>
+                    <div><strong>Finaliza</strong><span>${helpers.escapeHtml(fin)}</span></div>
                 </div>
                 <div class="turno-detail-actions">
                     <a href="${p.editar_url}" class="btn btn-secondary btn-block">Editar</a>
@@ -87,8 +104,6 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
     });
-
-    calendar.render();
 });
 </script>
 {% endblock %}

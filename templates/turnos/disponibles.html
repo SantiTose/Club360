@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    <div class="calendar-toolbar-card">
+    <div class="calendar-toolbar-card calendar-toolbar-card-compact">
         <form method="GET" class="form-inline calendar-filters">
             <select name="actividad" class="form-control">
                 <option value="">Todas las actividades</option>
@@ -25,22 +25,26 @@
                 <option value="voley" {% if filtro_actividad == 'voley' %}selected{% endif %}>Vóley</option>
                 <option value="padel" {% if filtro_actividad == 'padel' %}selected{% endif %}>Pádel</option>
             </select>
-            <select name="tipo_clase" class="form-control">
-                <option value="">Todos los tipos</option>
-                <option value="abonada" {% if filtro_tipo_clase == 'abonada' %}selected{% endif %}>Abonada</option>
-                <option value="no_abonada" {% if filtro_tipo_clase == 'no_abonada' %}selected{% endif %}>No abonada</option>
-            </select>
             <button type="submit" class="btn btn-secondary">Filtrar</button>
         </form>
     </div>
 
     <div class="calendar-layout">
         <div id="calendar-disponibles" class="calendar-surface"></div>
-        <aside class="turno-card turno-detail-card" id="detalle-turno">
-            <span class="turno-detail-kicker">Resumen</span>
-            <h3>Detalle del turno</h3>
-            <p class="text-muted">Seleccioná un turno del calendario para ver cupos y reservar.</p>
-            <div id="detalle-turno-body"></div>
+        <aside class="calendar-side-column calendar-context-panel">
+            <section class="calendar-context-section">
+                <span class="turno-detail-kicker">Agenda del día</span>
+                <h3 id="agenda-turno-title">Seleccioná un día</h3>
+                <p class="text-muted">Elegí una fecha del mes para ver primero las franjas horarias disponibles.</p>
+                <div id="agenda-turno-body" class="calendar-day-body"></div>
+            </section>
+
+            <section class="calendar-context-section calendar-context-detail" id="detalle-turno">
+                <span class="turno-detail-kicker">Resumen</span>
+                <h3>Detalle del turno</h3>
+                <p class="text-muted">Seleccioná una franja horaria para ver cupos y reservar.</p>
+                <div id="detalle-turno-body"></div>
+            </section>
         </aside>
     </div>
 </section>
@@ -51,52 +55,60 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const actividad = document.querySelector('select[name="actividad"]').value;
-    const tipoClase = document.querySelector('select[name="tipo_clase"]').value;
-    const calendarEl = document.getElementById('calendar-disponibles');
-    const detalleEl = document.getElementById('detalle-turno-body');
-
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
-        locale: 'es',
-        firstDay: 1,
-        hiddenDays: [0],
-        dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit' },
-        slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-        slotMinTime: '08:00:00',
-        slotMaxTime: '22:00:00',
-        allDaySlot: false,
-        height: 'auto',
-        nowIndicator: true,
-        events: `{{ url_for('turnos.eventos_turnos') }}?scope=disponibles&actividad=${encodeURIComponent(actividad)}&tipo_clase=${encodeURIComponent(tipoClase)}`,
-        eventClick: function(info) {
-            const p = info.event.extendedProps;
+    window.Club360CalendarUI.createMonthAgenda({
+        calendarId: 'calendar-disponibles',
+        agendaTitleId: 'agenda-turno-title',
+        agendaBodyId: 'agenda-turno-body',
+        detailBodyId: 'detalle-turno-body',
+        eventsUrl: `{{ url_for('turnos.eventos_turnos') }}?scope=disponibles&actividad=${encodeURIComponent(actividad)}`,
+        emptyCalendarTitle: 'No hay turnos disponibles',
+        emptyCalendarMessage: 'Todavía no hay turnos cargados con los filtros seleccionados. Probá cambiar los filtros o volvé más tarde.',
+        initialAgendaHtml: '<div class="calendar-day-placeholder">Elegí un día del calendario para desplegar las franjas horarias disponibles.</div>',
+        emptyAgendaHtml: '<div class="calendar-day-placeholder">No hay turnos para esta fecha con los filtros actuales.</div>',
+        initialDetailHtml: '<div class="calendar-day-placeholder compact">Seleccioná una franja horaria para ver detalles y reservar.</div>',
+        emptyDetailHtml: '<div class="calendar-day-placeholder compact">Todavía no hay un turno seleccionado.</div>',
+        renderAgendaCard(event, context) {
+            const p = event.extendedProps;
+            return `
+                <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
+                    <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
+                    <strong>${context.helpers.escapeHtml(event.title)}</strong>
+                    <span class="calendar-slot-meta">Cupos ${context.helpers.escapeHtml(p.cupos)}</span>
+                </button>
+            `;
+        },
+        renderDetail(event, helpers) {
+            const p = event.extendedProps;
             const canReserve = !p.sin_cupos;
-            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
-            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
+            const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
             const boton = canReserve
-                ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${info.event.title}." data-confirm-action="Reservar">
+                ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${helpers.escapeHtml(event.title)}." data-confirm-action="Reservar">
+                        <div class="form-group" style="margin-bottom: .8rem;">
+                            <label for="tipo_clase_reserva"><strong>Modalidad de reserva</strong></label>
+                            <select id="tipo_clase_reserva" name="tipo_clase" class="form-control" required>
+                                <option value="abonada">Abonada</option>
+                                <option value="no_abonada" selected>No abonada</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-success btn-block">Reservar turno</button>
                    </form>`
                 : '<p class="text-warning">Sin cupos disponibles</p>';
 
-            detalleEl.innerHTML = `
+            return `
                 <div class="turno-detail-header">
-                    <span class="turno-detail-sport">${info.event.title}</span>
-                    <span class="badge badge-primary">${p.tipo_clase}</span>
+                    <span class="turno-detail-sport">${helpers.escapeHtml(event.title)}</span>
+                    <span class="badge badge-primary">Turno disponible</span>
                 </div>
                 <div class="turno-detail-meta">
-                    <div><strong>Inicio</strong><span>${inicio}</span></div>
-                    <div><strong>Finaliza</strong><span>${fin}</span></div>
-                    <div><strong>Cupos</strong><span>${p.cupos}</span></div>
+                    <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>
+                    <div><strong>Finaliza</strong><span>${helpers.escapeHtml(fin)}</span></div>
+                    <div><strong>Cupos</strong><span>${helpers.escapeHtml(p.cupos)}</span></div>
                 </div>
-                <div class="turno-detail-actions">
-                ${boton}
-                </div>
+                <div class="turno-detail-actions">${boton}</div>
             `;
         }
     });
-
-    calendar.render();
 });
 </script>
 {% endblock %}

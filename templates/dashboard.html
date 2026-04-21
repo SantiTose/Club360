@@ -7,16 +7,13 @@
     <section class="dashboard-shell">
         <div class="dashboard-hero">
             <div class="dashboard-hero-copy">
-                <span class="dashboard-eyebrow">Panel personal</span>
-                <h1>Hola, {{ current_user.nombre }}</h1>
-                <p>
-                    Gestioná tus turnos, controlá tu estado y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.
-                </p>
+                <span class="dashboard-eyebrow">{{ dashboard_context.eyebrow }}</span>
+                <h1>{{ dashboard_context.hero_title }}</h1>
+                <p>{{ dashboard_context.hero_text }}</p>
                 <div class="dashboard-hero-tags">
-                    <span class="dashboard-pill dashboard-pill-soft">{{ current_user.tipo_usuario|capitalize }}</span>
-                    <span class="dashboard-pill dashboard-pill-soft">
-                        {{ current_user.estado|capitalize if current_user.estado else 'Sin estado' }}
-                    </span>
+                    {% for tag in dashboard_context.hero_tags %}
+                    <span class="dashboard-pill dashboard-pill-soft">{{ tag }}</span>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -48,38 +45,99 @@
         </div>
 
         <div class="dashboard-stats-grid">
-            <article class="dashboard-stat-card">
-                <div class="dashboard-stat-label">Estado de la cuenta</div>
-                <div class="dashboard-stat-value">
-                    {{ current_user.estado|capitalize if current_user.estado else 'N/A' }}
-                </div>
-                <p>Tu membresía y acceso actual dentro de Club 360.</p>
+            {% for stat in dashboard_context.stats %}
+            <article class="dashboard-stat-card{% if stat.accent %} dashboard-stat-card-accent{% endif %}">
+                <div class="dashboard-stat-label">{{ stat.label }}</div>
+                <div class="dashboard-stat-value">{{ stat.value }}</div>
+                <p>{{ stat.description }}</p>
             </article>
-
-            <article class="dashboard-stat-card">
-                <div class="dashboard-stat-label">Turnos reservados</div>
-                <div class="dashboard-stat-value">{{ turnos_reservados }}</div>
-                <p>Reservas activas listas para asistir o gestionar.</p>
-            </article>
-
-            <article class="dashboard-stat-card dashboard-stat-card-accent">
-                <div class="dashboard-stat-label">Deuda pendiente</div>
-                <div class="dashboard-stat-value">${{ '%.2f'|format(deuda_total) }}</div>
-                <p>Controlá pagos y mantené tu cuenta al día.</p>
-            </article>
+            {% endfor %}
         </div>
 
-        <div class="dashboard-main-grid">
-            <section class="dashboard-panel">
+        <div class="dashboard-main-grid{% if current_user.tipo_usuario != 'cliente' %} dashboard-main-grid-single{% endif %}">
+            {% if current_user.tipo_usuario == 'cliente' %}
+            <section class="dashboard-panel{% if dashboard_context.mode == 'interno' %} dashboard-panel-operations{% endif %}">
                 <div class="dashboard-section-heading">
                     <div>
-                        <span class="dashboard-eyebrow">Accesos directos</span>
-                        <h2>Movete rápido</h2>
+                        <span class="dashboard-eyebrow">
+                            {% if dashboard_context.mode == 'interno' %}Operaciones{% else %}Accesos directos{% endif %}
+                        </span>
+                        <h2>{% if dashboard_context.mode == 'interno' %}Panel de trabajo{% else %}Movete rápido{% endif %}</h2>
                     </div>
-                    <p>Las tareas que más usás, organizadas con mejor prioridad visual.</p>
+                    <p>{{ dashboard_context.actions_intro }}</p>
                 </div>
 
-                <div class="dashboard-actions-grid">
+                <div class="dashboard-actions-grid{% if dashboard_context.mode == 'interno' %} dashboard-actions-grid-internal{% endif %}">
+                    {% if current_user.tipo_usuario == 'administrador' %}
+                    <a href="{{ url_for('turnos.administrar_turnos') }}" class="dashboard-action-card dashboard-action-blue">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7h16"></path>
+                                <path d="M4 12h16"></path>
+                                <path d="M4 17h16"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Gestionar turnos</h3>
+                            <p>Creá, editá o cancelá la agenda general del club.</p>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('auth.gestionar_empleados') }}" class="dashboard-action-card dashboard-action-green">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="8.5" cy="7" r="4"></circle>
+                                <path d="M20 8v6"></path>
+                                <path d="M23 11h-6"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Gestionar empleados</h3>
+                            <p>Administrá cuentas internas y permisos operativos.</p>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('auth.crear_usuario') }}" class="dashboard-action-card dashboard-action-amber">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14"></path>
+                                <path d="M5 12h14"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Crear usuario</h3>
+                            <p>Alta rápida de clientes y cuentas del personal.</p>
+                        </div>
+                    </a>
+                    {% elif current_user.tipo_usuario == 'empleado' %}
+                    <a href="{{ url_for('turnos.administrar_turnos') }}" class="dashboard-action-card dashboard-action-blue">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7h16"></path>
+                                <path d="M4 12h16"></path>
+                                <path d="M4 17h16"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Gestionar turnos</h3>
+                            <p>Consultá la agenda, validá reservas y operá la atención diaria.</p>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('auth.crear_usuario') }}" class="dashboard-action-card dashboard-action-green">
+                        <div class="dashboard-action-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14"></path>
+                                <path d="M5 12h14"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Crear usuario</h3>
+                            <p>Registrá clientes nuevos o altas operativas desde recepción.</p>
+                        </div>
+                    </a>
+                    {% else %}
                     <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="dashboard-action-card dashboard-action-green">
                         <div class="dashboard-action-icon">
                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -133,16 +191,18 @@
                             <p>Solicitá alta o gestioná cambios de tu estado.</p>
                         </div>
                     </a>
+                    {% endif %}
                 </div>
             </section>
+            {% endif %}
 
             <aside class="dashboard-panel dashboard-activity-panel">
                 <div class="dashboard-section-heading">
                     <div>
                         <span class="dashboard-eyebrow">Seguimiento</span>
-                        <h2>Actividad reciente</h2>
+                        <h2>{{ dashboard_context.activity_heading }}</h2>
                     </div>
-                    <p>Lo último que pasó en tu cuenta.</p>
+                    <p>{{ dashboard_context.activity_intro }}</p>
                 </div>
 
                 <ul class="dashboard-activity-list">

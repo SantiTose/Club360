@@ -18,11 +18,20 @@
 
     <div class="calendar-layout">
         <div id="calendar-mis-turnos" class="calendar-surface"></div>
-        <aside class="turno-card turno-detail-card" id="detalle-reserva">
-            <span class="turno-detail-kicker">Mi reserva</span>
-            <h3>Detalle del turno</h3>
-            <p class="text-muted">Seleccioná un evento del calendario.</p>
-            <div id="detalle-reserva-body"></div>
+        <aside class="calendar-side-column calendar-context-panel">
+            <section class="calendar-context-section">
+                <span class="turno-detail-kicker">Agenda del día</span>
+                <h3 id="agenda-reserva-title">Seleccioná un día</h3>
+                <p class="text-muted">Primero elegí una fecha del mes. Después vas a ver tus franjas horarias reservadas.</p>
+                <div id="agenda-reserva-body" class="calendar-day-body"></div>
+            </section>
+
+            <section class="calendar-context-section calendar-context-detail" id="detalle-reserva">
+                <span class="turno-detail-kicker">Mi reserva</span>
+                <h3>Detalle del turno</h3>
+                <p class="text-muted">Seleccioná una franja horaria para ver QR, asistencia y acciones.</p>
+                <div id="detalle-reserva-body"></div>
+            </section>
         </aside>
     </div>
 
@@ -39,43 +48,50 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const calendarEl = document.getElementById('calendar-mis-turnos');
-    const detalleEl = document.getElementById('detalle-reserva-body');
-
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
-        locale: 'es',
-        firstDay: 1,
-        hiddenDays: [0],
-        dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit' },
-        slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-        slotMinTime: '08:00:00',
-        slotMaxTime: '22:00:00',
-        allDaySlot: false,
-        height: 'auto',
-        events: '{{ url_for("turnos.eventos_turnos") }}?scope=mios',
-        eventClick: function(info) {
-            const p = info.event.extendedProps;
-            const inicio = info.event.start.toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
-            const fin = info.event.end.toLocaleString('es-AR', { timeStyle: 'short' });
-            detalleEl.innerHTML = `
+    window.Club360CalendarUI.createMonthAgenda({
+        calendarId: 'calendar-mis-turnos',
+        agendaTitleId: 'agenda-reserva-title',
+        agendaBodyId: 'agenda-reserva-body',
+        detailBodyId: 'detalle-reserva-body',
+        eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=mios',
+        emptyCalendarTitle: 'No tenés turnos reservados',
+        emptyCalendarMessage: 'Cuando reserves una clase o cancha, tus próximas reservas van a aparecer acá.',
+        initialAgendaHtml: '<div class="calendar-day-placeholder">Elegí un día del calendario mensual para ver tus reservas por horario.</div>',
+        emptyAgendaHtml: '<div class="calendar-day-placeholder">No tenés reservas para este día.</div>',
+        initialDetailHtml: '<div class="calendar-day-placeholder compact">Seleccioná una franja horaria para ver el detalle completo.</div>',
+        emptyDetailHtml: '<div class="calendar-day-placeholder compact">Este día no tiene reservas seleccionables.</div>',
+        renderAgendaCard(event, context) {
+            const p = event.extendedProps;
+            return `
+                <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
+                    <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
+                    <strong>${context.helpers.escapeHtml(event.title)}</strong>
+                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(p.asistencia)}</span>
+                </button>
+            `;
+        },
+        renderDetail(event, helpers) {
+            const p = event.extendedProps;
+            const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+            const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
+            return `
                 <div class="turno-detail-header">
-                    <span class="turno-detail-sport">${info.event.title}</span>
-                    <span class="badge badge-success">${p.asistencia}</span>
+                    <span class="turno-detail-sport">${helpers.escapeHtml(event.title)}</span>
+                    <span class="badge badge-success">${helpers.escapeHtml(p.tipo_clase)}</span>
                 </div>
                 <div class="turno-detail-meta">
-                    <div><strong>Inicio</strong><span>${inicio}</span></div>
-                    <div><strong>Finaliza</strong><span>${fin}</span></div>
-                    <div><strong>QR</strong><span>${p.qr_token}</span></div>
+                    <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>
+                    <div><strong>Finaliza</strong><span>${helpers.escapeHtml(fin)}</span></div>
+                    <div><strong>Estado</strong><span>${helpers.escapeHtml(p.asistencia)}</span></div>
+                    <div><strong>QR</strong><span>${helpers.escapeHtml(p.qr_token)}</span></div>
+                    <div><strong>Cupos</strong><span>${helpers.escapeHtml(p.cupos)}</span></div>
                 </div>
-                <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para ${info.event.title}." data-confirm-action="Cancelar reserva">
+                <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para ${helpers.escapeHtml(event.title)}." data-confirm-action="Cancelar reserva">
                     <button type="submit" class="btn btn-danger btn-block">Cancelar reserva</button>
                 </form>
             `;
         }
     });
-
-    calendar.render();
 });
 </script>
 {% endblock %}

@@ -64,11 +64,25 @@ def create_app(config_name='development'):
     @app.route('/dashboard')
     @login_required
     def dashboard():
-        from website.models import TipoUsuario, Turno, Reserva, Pago
+        from website.models import TipoUsuario, Turno, Reserva, Pago, Usuario
 
         turnos_reservados = 0
         deuda_total = 0.0
         actividad_reciente = []
+        dashboard_context = {
+            'mode': 'cliente',
+            'eyebrow': 'Panel personal',
+            'hero_title': f'Hola, {current_user.nombre}',
+            'hero_text': 'Gestioná tus turnos, controlá tu estado y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.',
+            'hero_tags': [
+                current_user.tipo_usuario.capitalize(),
+                current_user.estado.capitalize() if current_user.estado else 'Sin estado',
+            ],
+            'stats': [],
+            'actions_intro': 'Las tareas que más usás, organizadas con mejor prioridad visual.',
+            'activity_heading': 'Actividad reciente',
+            'activity_intro': 'Lo último que pasó en tu cuenta.',
+        }
 
         if current_user.tipo_usuario == TipoUsuario.CLIENTE:
             turnos_reservados = Reserva.query.filter_by(usuario_id=current_user.id).count()
@@ -98,7 +112,95 @@ def create_app(config_name='development'):
                 actividad_reciente.append(
                     f"Último pago: ${ultimo_pago.monto:.2f} ({ultimo_pago.metodo_pago})"
                 )
+
+            dashboard_context['stats'] = [
+                {
+                    'label': 'Estado de la cuenta',
+                    'value': current_user.estado.capitalize() if current_user.estado else 'N/A',
+                    'description': 'Tu membresía y acceso actual dentro de Club 360.',
+                    'accent': False,
+                },
+                {
+                    'label': 'Turnos reservados',
+                    'value': turnos_reservados,
+                    'description': 'Reservas activas listas para asistir o gestionar.',
+                    'accent': False,
+                },
+                {
+                    'label': 'Deuda pendiente',
+                    'value': f"${deuda_total:.2f}",
+                    'description': 'Controlá pagos y mantené tu cuenta al día.',
+                    'accent': True,
+                },
+            ]
         else:
+            dashboard_context.update({
+                'mode': 'interno',
+                'eyebrow': 'Panel operativo',
+                'hero_title': 'Centro de gestión',
+                'hero_text': 'Centralizá altas, agenda y administración interna desde un tablero orientado a operación, sin métricas de cliente que no aplican a tu cuenta.',
+                'hero_tags': [
+                    current_user.tipo_usuario.capitalize(),
+                    'Acceso interno',
+                ],
+                'actions_intro': 'Atajos de trabajo para las tareas administrativas del día.',
+                'activity_heading': 'Seguimiento operativo',
+                'activity_intro': 'Resumen breve de lo más reciente en la administración del club.',
+            })
+
+            clientes_registrados = Usuario.query.filter_by(tipo_usuario=TipoUsuario.CLIENTE).count()
+            empleados_registrados = Usuario.query.filter_by(tipo_usuario=TipoUsuario.EMPLEADO).count()
+            reservas_activas = (
+                Reserva.query
+                .join(Turno, Reserva.turno_id == Turno.id)
+                .filter(Turno.cancelado.is_(False))
+                .filter(Turno.hora_inicio >= datetime.utcnow())
+                .count()
+            )
+
+            dashboard_context['stats'] = [
+                {
+                    'label': 'Clientes registrados',
+                    'value': clientes_registrados,
+                    'description': 'Base total de clientes para operar desde el panel.',
+                    'accent': False,
+                },
+                {
+                    'label': 'Reservas activas',
+                    'value': reservas_activas,
+                    'description': 'Cupos ya tomados sobre turnos todavía vigentes.',
+                    'accent': True,
+                },
+                {
+                    'label': 'Equipo interno',
+                    'value': empleados_registrados,
+                    'description': 'Empleados operativos cargados en el sistema.',
+                    'accent': False,
+                },
+            ]
+
+            ultimo_turno = (
+                Turno.query
+                .filter(Turno.cancelado.is_(False))
+                .order_by(Turno.fecha_creacion.desc())
+                .first()
+            )
+            if ultimo_turno:
+                actividad_reciente.append(
+                    f"Último turno cargado: {ultimo_turno.actividad.upper()} el {ultimo_turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}"
+                )
+
+            ultimo_cliente = (
+                Usuario.query
+                .filter_by(tipo_usuario=TipoUsuario.CLIENTE)
+                .order_by(Usuario.fecha_creacion.desc())
+                .first()
+            )
+            if ultimo_cliente:
+                actividad_reciente.append(
+                    f"Último cliente registrado: {ultimo_cliente.nombre} {ultimo_cliente.apellido}"
+                )
+
             actividad_reciente.append('Cuenta interna habilitada para gestión administrativa y operativa.')
 
         return render_template(
@@ -106,6 +208,7 @@ def create_app(config_name='development'):
             turnos_reservados=turnos_reservados,
             deuda_total=deuda_total,
             actividad_reciente=actividad_reciente,
+            dashboard_context=dashboard_context,
         )
 
     # Register blueprints
@@ -130,6 +233,8 @@ def create_app(config_name='development'):
         _ensure_usuario_reset_password_columns()
         _ensure_usuario_edad_columns()
         _ensure_reserva_qr_columns()
+        _ensure_reserva_tipo_clase_column()
+        _ensure_lista_espera_tipo_clase_column()
         _ensure_pago_tipo_clase_column()
         _backfill_reserva_qr_tokens()
 
@@ -283,6 +388,41 @@ def _ensure_pago_tipo_clase_column():
     columnas = {c['name'] for c in inspector.get_columns('pagos')}
     if 'tipo_clase' not in columnas:
         db.session.execute(text("ALTER TABLE pagos ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
+        db.session.commit()
+
+
+def _ensure_reserva_tipo_clase_column():
+    inspector = inspect(db.engine)
+    if 'reservas' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('reservas')}
+    if 'tipo_clase' not in columnas:
+        db.session.execute(text("ALTER TABLE reservas ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
+        db.session.commit()
+
+    columnas_turno = {c['name'] for c in inspector.get_columns('turnos')} if 'turnos' in inspector.get_table_names() else set()
+    if 'tipo_clase' in columnas_turno:
+        db.session.execute(text("""
+            UPDATE reservas
+            SET tipo_clase = (
+                SELECT COALESCE(turnos.tipo_clase, 'no_abonada')
+                FROM turnos
+                WHERE turnos.id = reservas.turno_id
+            )
+            WHERE tipo_clase IS NULL OR tipo_clase = '' OR tipo_clase = 'no_abonada'
+        """))
+        db.session.commit()
+
+
+def _ensure_lista_espera_tipo_clase_column():
+    inspector = inspect(db.engine)
+    if 'lista_espera' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('lista_espera')}
+    if 'tipo_clase' not in columnas:
+        db.session.execute(text("ALTER TABLE lista_espera ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
         db.session.commit()
 
 

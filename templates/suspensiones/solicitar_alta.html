@@ -3,16 +3,28 @@
 {% block title %}Solicitar Alta - Club 360{% endblock %}
 
 {% block content %}
-<h2>Solicitar Alta de Suspensión</h2>
+<h2>Regularizar Suspensión</h2>
 
 {% if suspension %}
     <div class="suspension-info">
-        <h3>Información de tu Suspensión</h3>
+        <h3>Estado de tu cuenta</h3>
         <p><strong>Motivo:</strong> {{ suspension.motivo }}</p>
         <p><strong>Fecha de Inicio:</strong> {{ suspension.fecha_inicio.strftime('%d/%m/%Y') }}</p>
-        
-        <form method="POST" class="form">
-            <button type="submit" class="btn btn-primary">Solicitar Alta</button>
+        <p><strong>Total a abonar:</strong> ${{ "%.2f"|format(monto_total) }}</p>
+        {% if recargo %}
+        <p><strong>Recargo de alta incluido:</strong> ${{ "%.2f"|format(recargo.monto) }}</p>
+        {% endif %}
+        <p>Al confirmar el pago con tarjeta de crédito, tu cuenta volverá a estar activa automáticamente. No interviene un administrador.</p>
+
+        <form
+            method="POST"
+            class="form"
+            data-confirm="true"
+            data-confirm-title="Pagar y reactivar cuenta"
+            data-confirm-message="Se cobrará el total pendiente con tarjeta de crédito y tu cuenta volverá a estar activa automáticamente."
+            data-confirm-action="Pagar ahora"
+        >
+            <button type="submit" class="btn btn-primary">Pagar y Reactivar</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
         </form>
     </div>
