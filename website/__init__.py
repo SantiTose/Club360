@@ -237,7 +237,8 @@ def create_app(config_name='development'):
     # Create tables
     with app.app_context():
         db.create_all()
-        _ensure_turno_tipo_clase_column()
+        _drop_legacy_turno_tipo_clase_column()
+        _repair_legacy_turno_foreign_keys()
         _drop_legacy_usuario_tipo_cliente_column()
         _ensure_usuario_recordatorio_column()
         _ensure_usuario_cancelaciones_credito_columns()
@@ -254,18 +255,192 @@ def create_app(config_name='development'):
     return app
 
 
-def _ensure_turno_tipo_clase_column():
-    """Agrega `tipo_clase` a `turnos` en instalaciones existentes sin migraciones."""
+def _drop_legacy_turno_tipo_clase_column():
+    """Elimina `tipo_clase` de `turnos` en instalaciones donde quedó como columna legacy."""
     inspector = inspect(db.engine)
     if 'turnos' not in inspector.get_table_names():
         return
 
     columnas = {c['name'] for c in inspector.get_columns('turnos')}
-    if 'tipo_clase' in columnas:
+    if 'tipo_clase' not in columnas:
         return
 
-    db.session.execute(text("ALTER TABLE turnos ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
-    db.session.commit()
+    try:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        db.session.execute(text("ALTER TABLE turnos RENAME TO turnos_legacy"))
+        db.session.execute(text("""
+            CREATE TABLE turnos (
+                id INTEGER NOT NULL PRIMARY KEY,
+                actividad VARCHAR(20) NOT NULL,
+                hora_inicio DATETIME NOT NULL,
+                hora_fin DATETIME NOT NULL,
+                capacidad_maxima INTEGER NOT NULL,
+                cupos_disponibles INTEGER NOT NULL,
+                usuario_id INTEGER,
+                cancelado BOOLEAN,
+                fecha_creacion DATETIME,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
+            )
+        """))
+        db.session.execute(text("""
+            INSERT INTO turnos (
+                id,
+                actividad,
+                hora_inicio,
+                hora_fin,
+                capacidad_maxima,
+                cupos_disponibles,
+                usuario_id,
+                cancelado,
+                fecha_creacion
+            )
+            SELECT
+                id,
+                actividad,
+                hora_inicio,
+                hora_fin,
+                capacidad_maxima,
+                cupos_disponibles,
+                usuario_id,
+                cancelado,
+                fecha_creacion
+            FROM turnos_legacy
+        """))
+        db.session.execute(text("DROP TABLE turnos_legacy"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=ON"))
+
+
+def _repair_legacy_turno_foreign_keys():
+    """Repara FKs SQLite que hayan quedado apuntando a `turnos_legacy`."""
+    if db.engine.dialect.name != 'sqlite':
+        return
+
+    inspector = inspect(db.engine)
+    tablas = set(inspector.get_table_names())
+    if 'turnos' not in tablas:
+        return
+
+    _rebuild_reservas_if_needed()
+    _rebuild_lista_espera_if_needed()
+
+
+def _rebuild_reservas_if_needed():
+    foreign_keys = db.session.execute(text("PRAGMA foreign_key_list('reservas')")).mappings().all()
+    if not any(fk['table'] == 'turnos_legacy' for fk in foreign_keys):
+        return
+
+    try:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        db.session.execute(text("ALTER TABLE reservas RENAME TO reservas_legacy"))
+        db.session.execute(text("""
+            CREATE TABLE reservas (
+                id INTEGER NOT NULL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                turno_id INTEGER NOT NULL,
+                fecha_reserva DATETIME NOT NULL,
+                qr_token VARCHAR(120),
+                recordatorio_enviado BOOLEAN NOT NULL DEFAULT 0,
+                fecha_recordatorio DATETIME,
+                asistencia_validada BOOLEAN NOT NULL DEFAULT 0,
+                fecha_asistencia DATETIME,
+                tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada',
+                abono_id INTEGER,
+                CONSTRAINT uq_reserva_usuario_turno UNIQUE (usuario_id, turno_id),
+                FOREIGN KEY(usuario_id) REFERENCES usuarios (id),
+                FOREIGN KEY(turno_id) REFERENCES turnos (id),
+                FOREIGN KEY(abono_id) REFERENCES abonos_clientes (id)
+            )
+        """))
+        db.session.execute(text("""
+            INSERT INTO reservas (
+                id,
+                usuario_id,
+                turno_id,
+                fecha_reserva,
+                qr_token,
+                recordatorio_enviado,
+                fecha_recordatorio,
+                asistencia_validada,
+                fecha_asistencia,
+                tipo_clase,
+                abono_id
+            )
+            SELECT
+                id,
+                usuario_id,
+                turno_id,
+                fecha_reserva,
+                qr_token,
+                recordatorio_enviado,
+                fecha_recordatorio,
+                asistencia_validada,
+                fecha_asistencia,
+                tipo_clase,
+                abono_id
+            FROM reservas_legacy
+        """))
+        db.session.execute(text("DROP TABLE reservas_legacy"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=ON"))
+
+
+def _rebuild_lista_espera_if_needed():
+    foreign_keys = db.session.execute(text("PRAGMA foreign_key_list('lista_espera')")).mappings().all()
+    if not any(fk['table'] == 'turnos_legacy' for fk in foreign_keys):
+        return
+
+    try:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        db.session.execute(text("ALTER TABLE lista_espera RENAME TO lista_espera_legacy"))
+        db.session.execute(text("""
+            CREATE TABLE lista_espera (
+                id INTEGER NOT NULL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                turno_id INTEGER NOT NULL,
+                tipo_lista VARCHAR(20) NOT NULL,
+                tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada',
+                posicion INTEGER NOT NULL,
+                fecha_registro DATETIME,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios (id),
+                FOREIGN KEY(turno_id) REFERENCES turnos (id)
+            )
+        """))
+        db.session.execute(text("""
+            INSERT INTO lista_espera (
+                id,
+                usuario_id,
+                turno_id,
+                tipo_lista,
+                tipo_clase,
+                posicion,
+                fecha_registro
+            )
+            SELECT
+                id,
+                usuario_id,
+                turno_id,
+                tipo_lista,
+                tipo_clase,
+                posicion,
+                fecha_registro
+            FROM lista_espera_legacy
+        """))
+        db.session.execute(text("DROP TABLE lista_espera_legacy"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=ON"))
 
 
 def _drop_legacy_usuario_tipo_cliente_column():

@@ -649,11 +649,19 @@ def ver_turnos_disponibles():
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
         if not _es_feriado_nacional(t.hora_inicio)
     ]
+
+    reservas_usuario = set()
+    if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+        reservas_usuario = {
+            reserva.turno_id
+            for reserva in Reserva.query.filter_by(usuario_id=current_user.id).all()
+        }
     
     return render_template(
         'turnos/disponibles.html',
         turnos=turnos,
         filtro_actividad=actividad or '',
+        reservas_usuario=reservas_usuario,
     )
 
 
@@ -724,6 +732,12 @@ def eventos_turnos():
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
         if not _es_feriado_nacional(t.hora_inicio)
     ]
+    reservas_usuario = set()
+    if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+        reservas_usuario = {
+            reserva.turno_id
+            for reserva in Reserva.query.filter_by(usuario_id=current_user.id).all()
+        }
     eventos = [
         {
             'id': str(turno.id),
@@ -735,7 +749,9 @@ def eventos_turnos():
             'extendedProps': {
                 'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                 'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
+                'cancelar_url': url_for('turnos.cancelar_turno', turno_id=turno.id),
                 'sin_cupos': turno.cupos_disponibles <= 0,
+                'ya_reservado': turno.id in reservas_usuario,
                 'tiene_abono': bool(_buscar_abono_activo_para_turno(current_user.id, turno)) if current_user.tipo_usuario == TipoUsuario.CLIENTE else False,
             }
         }

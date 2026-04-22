@@ -112,7 +112,7 @@ La aplicación estará disponible en `http://localhost:5000`
 - fecha_creacion, fecha_actualizacion
 
 ### Turno
-- id, actividad, tipo_clase (abonada, no_abonada), hora_inicio, hora_fin
+- id, actividad, hora_inicio, hora_fin
 - capacidad_maxima, cupos_disponibles
 - usuario_id (reservado por), cancelado
 - fecha_creacion
