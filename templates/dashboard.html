@@ -10,11 +10,6 @@
                 <span class="dashboard-eyebrow">{{ dashboard_context.eyebrow }}</span>
                 <h1>{{ dashboard_context.hero_title }}</h1>
                 <p>{{ dashboard_context.hero_text }}</p>
-                <div class="dashboard-hero-tags">
-                    {% for tag in dashboard_context.hero_tags %}
-                    <span class="dashboard-pill dashboard-pill-soft">{{ tag }}</span>
-                    {% endfor %}
-                </div>
             </div>
 
             <div class="dashboard-profile-card">
@@ -36,15 +31,12 @@
                         <dt>DNI</dt>
                         <dd>{{ current_user.dni }}</dd>
                     </div>
-                    <div>
-                        <dt>Rol</dt>
-                        <dd>{{ current_user.tipo_usuario|capitalize }}</dd>
-                    </div>
                 </dl>
             </div>
         </div>
 
-        <div class="dashboard-stats-grid">
+        {% if current_user.tipo_usuario == 'cliente' %}
+        <div class="dashboard-stats-grid{% if dashboard_context.stats|length <= 2 %} dashboard-stats-grid-compact{% endif %}">
             {% for stat in dashboard_context.stats %}
             <article class="dashboard-stat-card{% if stat.accent %} dashboard-stat-card-accent{% endif %}">
                 <div class="dashboard-stat-label">{{ stat.label }}</div>
@@ -53,15 +45,26 @@
             </article>
             {% endfor %}
         </div>
+        {% endif %}
 
-        <div class="dashboard-main-grid dashboard-main-grid-single">
+        <div class="dashboard-main-grid{% if current_user.tipo_usuario == 'cliente' %} dashboard-main-grid-single{% else %} dashboard-main-grid-internal{% endif %}">
+            {% if current_user.tipo_usuario != 'cliente' and dashboard_context.stats %}
+            <div class="dashboard-internal-stats-stack">
+                {% for stat in dashboard_context.stats %}
+                <article class="dashboard-stat-card{% if stat.accent %} dashboard-stat-card-accent{% endif %}">
+                    <div class="dashboard-stat-label">{{ stat.label }}</div>
+                    <div class="dashboard-stat-value">{{ stat.value }}</div>
+                    <p>{{ stat.description }}</p>
+                </article>
+                {% endfor %}
+            </div>
+            {% endif %}
             <aside class="dashboard-panel dashboard-activity-panel">
                 <div class="dashboard-section-heading">
                     <div>
                         <span class="dashboard-eyebrow">Seguimiento</span>
                         <h2>{{ dashboard_context.activity_heading }}</h2>
                     </div>
-                    <p>{{ dashboard_context.activity_intro }}</p>
                 </div>
 
                 <ul class="dashboard-activity-list">

@@ -73,7 +73,7 @@ def create_app(config_name='development'):
             'mode': 'cliente',
             'eyebrow': 'Panel personal',
             'hero_title': f'Hola, {current_user.nombre}',
-            'hero_text': 'Gestioná tus turnos, controlá tu estado y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.',
+            'hero_text': 'Gestioná tus turnos y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.',
             'hero_tags': [
                 current_user.tipo_usuario.capitalize(),
                 current_user.estado.capitalize() if current_user.estado else 'Sin estado',
@@ -115,12 +115,6 @@ def create_app(config_name='development'):
 
             dashboard_context['stats'] = [
                 {
-                    'label': 'Estado de la cuenta',
-                    'value': current_user.estado.capitalize() if current_user.estado else 'N/A',
-                    'description': 'Tu membresía y acceso actual dentro de Club 360.',
-                    'accent': False,
-                },
-                {
                     'label': 'Turnos reservados',
                     'value': turnos_reservados,
                     'description': 'Reservas activas listas para asistir o gestionar.',
@@ -149,7 +143,6 @@ def create_app(config_name='development'):
             })
 
             clientes_registrados = Usuario.query.filter_by(tipo_usuario=TipoUsuario.CLIENTE).count()
-            empleados_registrados = Usuario.query.filter_by(tipo_usuario=TipoUsuario.EMPLEADO).count()
             reservas_activas = (
                 Reserva.query
                 .join(Turno, Reserva.turno_id == Turno.id)
@@ -160,21 +153,15 @@ def create_app(config_name='development'):
 
             dashboard_context['stats'] = [
                 {
-                    'label': 'Clientes registrados',
-                    'value': clientes_registrados,
-                    'description': 'Base total de clientes para operar desde el panel.',
-                    'accent': False,
-                },
-                {
                     'label': 'Reservas activas',
                     'value': reservas_activas,
                     'description': 'Cupos ya tomados sobre turnos todavía vigentes.',
                     'accent': True,
                 },
                 {
-                    'label': 'Equipo interno',
-                    'value': empleados_registrados,
-                    'description': 'Empleados operativos cargados en el sistema.',
+                    'label': 'Clientes registrados',
+                    'value': clientes_registrados,
+                    'description': 'Base total de clientes para operar desde el panel.',
                     'accent': False,
                 },
             ]

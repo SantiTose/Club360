@@ -399,7 +399,7 @@ section {
 
 .public-info-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.85rem;
 }
 
@@ -966,11 +966,12 @@ textarea:focus {
 .calendar-month-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-auto-rows: 92px;
     gap: 0.55rem;
 }
 
 .calendar-month-cell {
-    min-height: 112px;
+    height: 92px;
     padding: 0.75rem;
     border: 1px solid rgba(31, 79, 95, 0.1);
     border-radius: 18px;
@@ -989,27 +990,78 @@ textarea:focus {
     border-color: rgba(31, 79, 95, 0.18);
 }
 
-.calendar-month-cell.is-today {
-    border-color: rgba(228, 136, 47, 0.28);
-    background: linear-gradient(180deg, rgba(252, 231, 211, 0.7), rgba(255, 255, 255, 0.96));
+.calendar-month-cell.is-empty-day {
+    cursor: default;
+}
+
+.calendar-month-cell.is-empty-day:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(31, 79, 95, 0.1);
 }
 
 .calendar-month-cell.is-outside-month {
-    opacity: 0.55;
-    cursor: default;
-    background: linear-gradient(180deg, rgba(247, 250, 248, 0.96), rgba(243, 247, 245, 0.92));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
 }
 
 .calendar-month-cell.is-outside-month:hover {
     transform: none;
     box-shadow: none;
-    border-color: rgba(31, 79, 95, 0.1);
+    border-color: transparent;
 }
 
 .calendar-month-cell.is-selected-day {
     border-color: rgba(31, 79, 95, 0.3);
     background: linear-gradient(135deg, rgba(31, 79, 95, 0.12), rgba(95, 127, 79, 0.08));
     box-shadow: var(--shadow-md);
+}
+
+.calendar-month-cell.is-past-day {
+    opacity: 0.55;
+    cursor: default;
+    border-color: rgba(31, 79, 95, 0.1);
+    background: linear-gradient(180deg, rgba(247, 250, 248, 0.96), rgba(243, 247, 245, 0.92));
+    box-shadow: none;
+}
+
+.calendar-month-cell.is-past-day .calendar-month-day-number {
+    background: var(--gray-50);
+    color: var(--charcoal);
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+.calendar-month-cell.is-past-day:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(31, 79, 95, 0.1);
+}
+
+.calendar-month-cell.has-available-events {
+    border-color: rgba(47, 125, 89, 0.22);
+    background: linear-gradient(180deg, rgba(232, 246, 238, 0.98), rgba(214, 238, 224, 0.92));
+}
+
+.calendar-month-cell.has-available-events:hover {
+    border-color: rgba(47, 125, 89, 0.34);
+}
+
+.calendar-month-cell.is-status-mode {
+    height: 92px;
+}
+
+.calendar-month-cell.is-status-mode .calendar-month-cell-top {
+    min-height: 100%;
+    align-items: flex-start;
+}
+
+.calendar-month-cell.is-status-mode .calendar-month-day-number {
+    background: rgba(255, 255, 255, 0.72);
 }
 
 .calendar-month-cell-top {
@@ -1243,6 +1295,47 @@ textarea:focus {
     border-radius: 16px;
     background: rgba(241, 244, 242, 0.88);
     border: 1px dashed rgba(174, 185, 179, 0.8);
+}
+
+.reservation-mode-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 0.55rem;
+}
+
+.reservation-mode-pills input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reservation-mode-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0.75rem 1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(31, 79, 95, 0.16);
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--petrol-dark);
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.reservation-mode-pill:hover {
+    transform: translateY(-1px);
+    border-color: rgba(31, 79, 95, 0.28);
+    box-shadow: var(--shadow-sm);
+}
+
+.reservation-mode-pills input[type="radio"]:checked + .reservation-mode-pill {
+    border-color: rgba(31, 79, 95, 0.3);
+    background: linear-gradient(135deg, rgba(31, 79, 95, 0.14), rgba(95, 127, 79, 0.12));
+    color: var(--charcoal);
+    box-shadow: var(--shadow-sm);
 }
 
 .calendar-selector-surface {
@@ -1582,6 +1675,14 @@ textarea:focus {
     gap: 1rem;
 }
 
+.dashboard-stats-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-stats-grid-compact .dashboard-stat-card:only-child {
+    max-width: none;
+}
+
 .dashboard-stat-card {
     padding: 1.35rem;
 }
@@ -1618,6 +1719,16 @@ textarea:focus {
 
 .dashboard-main-grid-single {
     grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-main-grid-internal {
+    grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1.4fr);
+}
+
+.dashboard-internal-stats-stack {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
 }
 
 .dashboard-panel {

@@ -73,6 +73,10 @@ window.Club360CalendarUI = {
             return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
         }
 
+        function addMonths(date, amount) {
+            return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+        }
+
         function eventDateKey(event) {
             return club360ToDateKey(event.start);
         }
@@ -96,6 +100,10 @@ window.Club360CalendarUI = {
             calendarEl.querySelectorAll('[data-calendar-date]').forEach(cell => {
                 cell.classList.toggle('is-selected-day', cell.dataset.calendarDate === state.selectedDate);
             });
+        }
+
+        function dayHasAvailableEvents(dayEvents) {
+            return dayEvents.some(event => !event.extendedProps?.sin_cupos);
         }
 
         function renderDetail() {
@@ -130,28 +138,10 @@ window.Club360CalendarUI = {
                 return;
             }
 
-            const startHour = config.startHour ?? 8;
-            const endHour = config.endHour ?? 22;
-            const slotRows = [];
-
-            for (let hour = startHour; hour < endHour; hour += 1) {
-                const slotEvents = events.filter(event => new Date(event.start).getHours() === hour);
-                const content = slotEvents.length
-                    ? slotEvents.map(event => config.renderAgendaCard(event, {
-                        isActive: String(event.id) === String(state.selectedEventId),
-                        helpers
-                    })).join('')
-                    : '<div class="calendar-slot-empty">Sin turnos en esta franja</div>';
-
-                slotRows.push(`
-                    <div class="calendar-day-slot">
-                        <div class="calendar-slot-hour">${String(hour).padStart(2, '0')}:00</div>
-                        <div class="calendar-slot-events">${content}</div>
-                    </div>
-                `);
-            }
-
-            agendaEl.innerHTML = slotRows.join('');
+            agendaEl.innerHTML = events.map(event => config.renderAgendaCard(event, {
+                isActive: String(event.id) === String(state.selectedEventId),
+                helpers
+            })).join('');
 
             agendaEl.querySelectorAll('[data-event-id]').forEach(button => {
                 button.addEventListener('click', function() {
@@ -183,6 +173,9 @@ window.Club360CalendarUI = {
 
         function renderCalendar() {
             const monthStart = startOfMonth(state.currentMonth);
+            const currentMonthStart = startOfMonth(new Date());
+            const minMonthStart = addMonths(currentMonthStart, -1);
+            const maxMonthStart = addMonths(currentMonthStart, 1);
             const firstDay = new Date(monthStart);
             const startWeekDay = (firstDay.getDay() + 6) % 7;
             const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
@@ -199,9 +192,6 @@ window.Club360CalendarUI = {
                         <div class="calendar-month-cell-top">
                             <span class="calendar-month-day-number">${day}</span>
                         </div>
-                        <div class="calendar-month-preview">
-                            <span class="calendar-month-preview-empty">Sin turnos</span>
-                        </div>
                     </div>
                 `);
             }
@@ -210,20 +200,41 @@ window.Club360CalendarUI = {
                 const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
                 const dateKey = club360ToDateKey(date);
                 const dayEvents = eventsByDate[dateKey] || [];
-                const preview = dayEvents.slice(0, 2).map(event => `
-                    <div class="calendar-month-preview-item">${club360EscapeHtml(club360FormatTime(event.start))} · ${club360EscapeHtml(event.title)}</div>
-                `).join('');
+                const isPastDay = dateKey < todayKey;
+                const isClickable = !config.disableEmptyDateClick || dayEvents.length > 0;
+                const hasAvailableEvents = dayHasAvailableEvents(dayEvents);
+                const monthCellMode = config.monthCellMode || 'preview';
+                const monthCellClassNames = [
+                    'calendar-month-cell',
+                    isPastDay ? 'is-past-day' : '',
+                    dayEvents.length ? 'has-events' : 'is-empty-day',
+                    hasAvailableEvents ? 'has-available-events' : '',
+                    monthCellMode === 'status' ? 'is-status-mode' : ''
+                ].filter(Boolean).join(' ');
+                const previewMarkup = monthCellMode === 'status'
+                    ? ''
+                    : `
+                        <div class="calendar-month-preview">
+                            ${dayEvents.slice(0, 2).map(event => `
+                                <div class="calendar-month-preview-item">${club360EscapeHtml(club360FormatTime(event.start))} · ${club360EscapeHtml(event.title)}</div>
+                            `).join('') || '<span class="calendar-month-preview-empty">Sin turnos</span>'}
+                        </div>
+                    `;
 
-                dayCells.push(`
-                    <button type="button" class="calendar-month-cell ${dateKey === todayKey ? 'is-today' : ''}" data-calendar-date="${dateKey}">
+                dayCells.push(isClickable ? `
+                    <button type="button" class="${monthCellClassNames}" data-calendar-date="${dateKey}">
                         <div class="calendar-month-cell-top">
                             <span class="calendar-month-day-number">${day}</span>
-                            ${dayEvents.length ? `<span class="calendar-month-day-count">${dayEvents.length}</span>` : ''}
                         </div>
-                        <div class="calendar-month-preview">
-                            ${preview || '<span class="calendar-month-preview-empty">Sin turnos</span>'}
-                        </div>
+                        ${previewMarkup}
                     </button>
+                ` : `
+                    <div class="${monthCellClassNames}" aria-disabled="true">
+                        <div class="calendar-month-cell-top">
+                            <span class="calendar-month-day-number">${day}</span>
+                        </div>
+                        ${previewMarkup}
+                    </div>
                 `);
             }
 
@@ -233,9 +244,6 @@ window.Club360CalendarUI = {
                     <div class="calendar-month-cell is-outside-month" aria-hidden="true">
                         <div class="calendar-month-cell-top">
                             <span class="calendar-month-day-number">${day}</span>
-                        </div>
-                        <div class="calendar-month-preview">
-                            <span class="calendar-month-preview-empty">Sin turnos</span>
                         </div>
                     </div>
                 `);
@@ -255,9 +263,8 @@ window.Club360CalendarUI = {
                             <h3>${club360EscapeHtml(club360FormatMonthYear(monthStart))}</h3>
                         </div>
                         <div class="calendar-month-toolbar-actions">
-                            <button type="button" class="calendar-nav-btn" data-calendar-nav="today">Hoy</button>
-                            <button type="button" class="calendar-nav-btn" data-calendar-nav="prev" aria-label="Mes anterior">‹</button>
-                            <button type="button" class="calendar-nav-btn" data-calendar-nav="next" aria-label="Mes siguiente">›</button>
+                            <button type="button" class="calendar-nav-btn" data-calendar-nav="prev" aria-label="Mes anterior" ${monthStart <= minMonthStart ? 'disabled' : ''}>‹</button>
+                            <button type="button" class="calendar-nav-btn" data-calendar-nav="next" aria-label="Mes siguiente" ${monthStart >= maxMonthStart ? 'disabled' : ''}>›</button>
                         </div>
                     </div>
                     ${!hasAnyEvent ? `
@@ -265,12 +272,6 @@ window.Club360CalendarUI = {
                             <div class="calendar-surface-empty-badge">Sin actividad</div>
                             <strong>${club360EscapeHtml(config.emptyCalendarTitle || 'No hay turnos cargados')}</strong>
                             <span>${club360EscapeHtml(config.emptyCalendarMessage || 'Todavía no hay eventos para mostrar en este calendario.')}</span>
-                        </div>
-                    ` : !monthHasEvents ? `
-                        <div class="calendar-inline-empty">
-                            <div class="calendar-surface-empty-badge">Mes sin actividad</div>
-                            <strong>No hay turnos en ${club360EscapeHtml(club360FormatMonthYear(monthStart))}</strong>
-                            <span>Podés navegar a otro mes para revisar la agenda o crear nuevos turnos.</span>
                         </div>
                     ` : ''}
                     <div class="calendar-month-weekdays">
@@ -284,17 +285,18 @@ window.Club360CalendarUI = {
 
             calendarEl.querySelectorAll('[data-calendar-nav]').forEach(button => {
                 button.addEventListener('click', function() {
-                    if (button.dataset.calendarNav === 'today') {
-                        const today = new Date();
-                        state.currentMonth = startOfMonth(today);
-                        renderCalendar();
-                        setSelectedDate(club360ToDateKey(today));
+                    if (button.disabled) {
                         return;
-                    } else if (button.dataset.calendarNav === 'prev') {
-                        state.currentMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
-                    } else if (button.dataset.calendarNav === 'next') {
-                        state.currentMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
                     }
+
+                    if (button.dataset.calendarNav === 'prev' && monthStart > minMonthStart) {
+                        state.currentMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, 1);
+                    } else if (button.dataset.calendarNav === 'next' && monthStart < maxMonthStart) {
+                        state.currentMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+                    } else {
+                        return;
+                    }
+
                     renderCalendar();
                 });
             });
@@ -366,11 +368,12 @@ window.addEventListener('DOMContentLoaded', function() {
     let pendingAction = null;
     let pendingTrigger = null;
 
-    function openModal({ title, message, actionLabel = 'Confirmar', actionClass = 'btn-danger' }) {
+    function openModal({ title, message, actionLabel = 'Confirmar', actionClass = 'btn-danger', cancelLabel = 'Cancelar' }) {
         titleEl.textContent = title;
         messageEl.textContent = message;
         acceptBtn.textContent = actionLabel;
         acceptBtn.className = `btn ${actionClass}`;
+        cancelBtn.textContent = cancelLabel;
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('modal-open');
@@ -411,6 +414,7 @@ window.addEventListener('DOMContentLoaded', function() {
             title: el.dataset.confirmTitle || 'Confirmar acción',
             message: el.dataset.confirmMessage || '¿Querés continuar con esta acción?',
             actionLabel: el.dataset.confirmAction || 'Confirmar',
+            cancelLabel: el.dataset.confirmCancel || 'Cancelar',
             actionClass: el.dataset.confirmVariant === 'secondary' ? 'btn-primary' : 'btn-danger'
         });
     }
@@ -455,6 +459,7 @@ window.addEventListener('DOMContentLoaded', function() {
             title: form.dataset.confirmTitle || 'Confirmar acción',
             message: form.dataset.confirmMessage || '¿Querés continuar con esta acción?',
             actionLabel: form.dataset.confirmAction || 'Confirmar',
+            cancelLabel: form.dataset.confirmCancel || 'Cancelar',
             actionClass: form.dataset.confirmVariant === 'secondary' ? 'btn-primary' : 'btn-danger'
         });
     });

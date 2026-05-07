@@ -2,10 +2,6 @@
 
 {% block title %}Mis Turnos - Club 360{% endblock %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css">
-{% endblock %}
-
 {% block content %}
 <section class="calendar-page">
     <div class="calendar-page-header">
@@ -16,83 +12,46 @@
         </div>
     </div>
 
-    <div class="calendar-layout">
-        <div id="calendar-mis-turnos" class="calendar-surface"></div>
-        <aside class="calendar-side-column calendar-context-panel">
-            <section class="calendar-context-section">
-                <span class="turno-detail-kicker">Agenda del día</span>
-                <h3 id="agenda-reserva-title">Seleccioná un día</h3>
-                <p class="text-muted">Primero elegí una fecha del mes. Después vas a ver tus franjas horarias reservadas.</p>
-                <div id="agenda-reserva-body" class="calendar-day-body"></div>
-            </section>
-
-            <section class="calendar-context-section calendar-context-detail" id="detalle-reserva">
-                <span class="turno-detail-kicker">Mi reserva</span>
-                <h3>Detalle del turno</h3>
-                <p class="text-muted">Seleccioná una franja horaria para ver QR, asistencia y acciones.</p>
-                <div id="detalle-reserva-body"></div>
-            </section>
-        </aside>
+    <div class="calendar-toolbar-card">
+        {% if reservas %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Actividad</th>
+                    <th>Fecha y horario</th>
+                    <th>Modalidad</th>
+                    <th>Estado</th>
+                    <th>QR</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reserva in reservas %}
+                <tr>
+                    <td>{{ reserva.turno.actividad|capitalize }}</td>
+                    <td>
+                        {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}
+                        -
+                        {{ reserva.turno.hora_fin.strftime('%H:%M') }}
+                    </td>
+                    <td>{{ 'Abonada' if reserva.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                    <td>{{ 'Validada' if reserva.asistencia_validada else 'Pendiente' }}</td>
+                    <td>{{ reserva.qr_token }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('turnos.cancelar_turno', turno_id=reserva.turno.id) }}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para {{ reserva.turno.actividad|capitalize }} del {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}." data-confirm-action="Sí" data-confirm-cancel="No">
+                            <button type="submit" class="btn btn-danger">Cancelar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="calendar-empty-state" style="margin-top: 0;">
+            <p>No tienes turnos reservados.</p>
+            <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
+        </div>
+        {% endif %}
     </div>
-
-    {% if not reservas %}
-    <div class="calendar-empty-state">
-        <p>No tienes turnos reservados.</p>
-        <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
-    </div>
-    {% endif %}
 </section>
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    window.Club360CalendarUI.createMonthAgenda({
-        calendarId: 'calendar-mis-turnos',
-        agendaTitleId: 'agenda-reserva-title',
-        agendaBodyId: 'agenda-reserva-body',
-        detailBodyId: 'detalle-reserva-body',
-        eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=mios',
-        emptyCalendarTitle: 'No tenés turnos reservados',
-        emptyCalendarMessage: 'Cuando reserves una clase o cancha, tus próximas reservas van a aparecer acá.',
-        initialAgendaHtml: '<div class="calendar-day-placeholder">Elegí un día del calendario mensual para ver tus reservas por horario.</div>',
-        emptyAgendaHtml: '<div class="calendar-day-placeholder">No tenés reservas para este día.</div>',
-        initialDetailHtml: '<div class="calendar-day-placeholder compact">Seleccioná una franja horaria para ver el detalle completo.</div>',
-        emptyDetailHtml: '<div class="calendar-day-placeholder compact">Este día no tiene reservas seleccionables.</div>',
-        renderAgendaCard(event, context) {
-            const p = event.extendedProps;
-            return `
-                <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
-                    <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
-                    <strong>${context.helpers.escapeHtml(event.title)}</strong>
-                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(p.asistencia)}</span>
-                </button>
-            `;
-        },
-        renderDetail(event, helpers) {
-            const p = event.extendedProps;
-            const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
-            const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
-            return `
-                <div class="turno-detail-header">
-                    <span class="turno-detail-sport">${helpers.escapeHtml(event.title)}</span>
-                    <span class="badge badge-success">${helpers.escapeHtml(p.tipo_clase)}</span>
-                </div>
-                <div class="turno-detail-meta">
-                    <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>
-                    <div><strong>Finaliza</strong><span>${helpers.escapeHtml(fin)}</span></div>
-                    <div><strong>Estado</strong><span>${helpers.escapeHtml(p.asistencia)}</span></div>
-                    <div><strong>Origen</strong><span>${helpers.escapeHtml(p.origen_reserva)}</span></div>
-                    <div><strong>QR</strong><span>${helpers.escapeHtml(p.qr_token)}</span></div>
-                    <div><strong>Cupos</strong><span>${helpers.escapeHtml(p.cupos)}</span></div>
-                </div>
-                <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para ${helpers.escapeHtml(event.title)}." data-confirm-action="Cancelar reserva">
-                    <button type="submit" class="btn btn-danger btn-block">Cancelar reserva</button>
-                </form>
-            `;
-        }
-    });
-});
-</script>
 {% endblock %}

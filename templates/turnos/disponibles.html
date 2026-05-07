@@ -10,23 +10,9 @@
 <section class="calendar-page">
     <div class="calendar-page-header">
         <div>
-            <span class="dashboard-eyebrow calendar-eyebrow">Agenda</span>
             <h2>Buscar Turnos</h2>
-            <p class="text-muted">Explorá la semana, filtrá actividades y reservá desde una vista más clara.</p>
+            <p class="text-muted">Explorá la semana y reservá desde una vista más clara.</p>
         </div>
-    </div>
-
-    <div class="calendar-toolbar-card calendar-toolbar-card-compact">
-        <form method="GET" class="form-inline calendar-filters">
-            <select name="actividad" class="form-control">
-                <option value="">Todas las actividades</option>
-                <option value="futbol" {% if filtro_actividad == 'futbol' %}selected{% endif %}>Fútbol</option>
-                <option value="basquet" {% if filtro_actividad == 'basquet' %}selected{% endif %}>Básquet</option>
-                <option value="voley" {% if filtro_actividad == 'voley' %}selected{% endif %}>Vóley</option>
-                <option value="padel" {% if filtro_actividad == 'padel' %}selected{% endif %}>Pádel</option>
-            </select>
-            <button type="submit" class="btn btn-secondary">Filtrar</button>
-        </form>
     </div>
 
     <div class="calendar-layout">
@@ -54,19 +40,21 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const actividad = document.querySelector('select[name="actividad"]').value;
+    const permiteAsignarCliente = {{ 'true' if permite_asignar_cliente else 'false' }};
     window.Club360CalendarUI.createMonthAgenda({
         calendarId: 'calendar-disponibles',
         agendaTitleId: 'agenda-turno-title',
         agendaBodyId: 'agenda-turno-body',
         detailBodyId: 'detalle-turno-body',
-        eventsUrl: `{{ url_for('turnos.eventos_turnos') }}?scope=disponibles&actividad=${encodeURIComponent(actividad)}`,
+        eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=disponibles',
         emptyCalendarTitle: 'No hay turnos disponibles',
-        emptyCalendarMessage: 'Todavía no hay turnos cargados con los filtros seleccionados. Probá cambiar los filtros o volvé más tarde.',
+        emptyCalendarMessage: 'Todavía no hay turnos cargados. Volvé más tarde.',
         initialAgendaHtml: '<div class="calendar-day-placeholder">Elegí un día del calendario para desplegar las franjas horarias disponibles.</div>',
-        emptyAgendaHtml: '<div class="calendar-day-placeholder">No hay turnos para esta fecha con los filtros actuales.</div>',
+        emptyAgendaHtml: '<div class="calendar-day-placeholder">No hay turnos para esta fecha.</div>',
         initialDetailHtml: '<div class="calendar-day-placeholder compact">Seleccioná una franja horaria para ver detalles y reservar.</div>',
         emptyDetailHtml: '<div class="calendar-day-placeholder compact">Todavía no hay un turno seleccionado.</div>',
+        disableEmptyDateClick: true,
+        monthCellMode: 'status',
         renderAgendaCard(event, context) {
             const p = event.extendedProps;
             return `
@@ -88,19 +76,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const boton = p.ya_reservado
                 ? `<div>
                         <p class="text-muted" style="margin-bottom:.75rem;">Ya reservaste este turno. Si no vas a asistir, podés cancelarlo desde acá.</p>
-                        <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar tu reserva para ${helpers.escapeHtml(event.title)}." data-confirm-action="Cancelar">
+                        <form method="POST" action="${p.cancelar_url}" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar tu reserva para ${helpers.escapeHtml(event.title)}." data-confirm-action="Sí" data-confirm-cancel="No">
                             <button type="submit" class="btn btn-secondary btn-block">Cancelar turno</button>
                         </form>
                    </div>`
                 : canReserve
                 ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${helpers.escapeHtml(event.title)}." data-confirm-action="Reservar">
                         ${mensajeAbono}
+                        ${permiteAsignarCliente ? `
                         <div class="form-group" style="margin-bottom: .8rem;">
-                            <label for="tipo_clase_reserva"><strong>Modalidad de reserva</strong></label>
-                            <select id="tipo_clase_reserva" name="tipo_clase" class="form-control" required>
-                                <option value="abonada">Abonada mensual</option>
-                                <option value="no_abonada" selected>No abonada</option>
-                            </select>
+                            <label for="cliente_email_${event.id}"><strong>Mail del cliente</strong></label>
+                            <input id="cliente_email_${event.id}" type="email" name="cliente_email" class="form-control" placeholder="cliente@email.com" required>
+                        </div>
+                        ` : ''}
+                        <div class="form-group" style="margin-bottom: .8rem;">
+                            <label><strong>Modalidad de reserva</strong></label>
+                            <div class="reservation-mode-pills">
+                                <input type="radio" id="tipo_clase_abonada_${event.id}" name="tipo_clase" value="abonada">
+                                <label for="tipo_clase_abonada_${event.id}" class="reservation-mode-pill">Abonada</label>
+                                <input type="radio" id="tipo_clase_no_abonada_${event.id}" name="tipo_clase" value="no_abonada" checked>
+                                <label for="tipo_clase_no_abonada_${event.id}" class="reservation-mode-pill">No abonada</label>
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-success btn-block">Reservar turno</button>
                    </form>`

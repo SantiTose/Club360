@@ -99,6 +99,30 @@ def _buscar_pago_reserva(usuario_id, turno_id):
     return None
 
 
+def _obtener_cliente_objetivo_para_reserva():
+    if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+        return current_user, None
+
+    if not _es_empleado_o_admin(current_user):
+        return None, 'No tienes permisos para reservar turnos'
+
+    email_cliente = request.form.get('cliente_email', '').strip().lower()
+    if not email_cliente:
+        return None, 'Debes ingresar el mail del cliente'
+
+    cliente = Usuario.query.filter(func.lower(Usuario.email) == email_cliente).first()
+    if not cliente or cliente.tipo_usuario != TipoUsuario.CLIENTE:
+        return None, 'No existe un cliente registrado con ese mail'
+
+    return cliente, None
+
+
+def _resolver_redirect_reserva():
+    if request.form.get('redirect_to') == 'administrar_turnos' and _es_admin(current_user):
+        return redirect(url_for('turnos.administrar_turnos'))
+    return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+
 def _validar_regla_horaria(inicio, fin):
     if inicio.weekday() == 6:
         return False, 'No se permiten turnos los domingos'
@@ -132,6 +156,10 @@ def _construir_inicio_fin(fecha_raw, hora_raw):
 
     inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora, minute=0, second=0, microsecond=0)
     fin = inicio + timedelta(hours=1)
+
+    if fin <= datetime.utcnow():
+        return None, None, 'No se pueden crear o editar turnos en fechas u horarios ya finalizados'
+
     valido, error = _validar_regla_horaria(inicio, fin)
     if not valido:
         return None, None, error
@@ -625,26 +653,19 @@ def _enviar_recordatorios_qr(base_dir, usuario_id=None):
 @login_required
 def ver_turnos_disponibles():
     """Ver turnos disponibles para reservar."""
-    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
-        flash('Esta vista está disponible solo para clientes', 'error')
+    if current_user.tipo_usuario not in {TipoUsuario.CLIENTE, TipoUsuario.EMPLEADO}:
+        flash('Esta vista está disponible solo para clientes y empleados', 'error')
         return redirect(url_for('dashboard'))
 
     if current_user.tipo_usuario == TipoUsuario.CLIENTE:
         _procesar_suspension_automatica(current_user)
-        enviados = _enviar_recordatorios_qr(
+        _enviar_recordatorios_qr(
             os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
             usuario_id=current_user.id,
         )
-        if enviados:
-            flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
+    
+    query = Turno.query.filter_by(cancelado=False).filter(Turno.hora_fin >= datetime.utcnow())
 
-    actividad = request.args.get('actividad')
-    
-    query = Turno.query.filter_by(cancelado=False)
-    
-    if actividad:
-        query = query.filter_by(actividad=actividad)
-    
     turnos = [
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
         if not _es_feriado_nacional(t.hora_inicio)
@@ -660,8 +681,8 @@ def ver_turnos_disponibles():
     return render_template(
         'turnos/disponibles.html',
         turnos=turnos,
-        filtro_actividad=actividad or '',
         reservas_usuario=reservas_usuario,
+        permite_asignar_cliente=_es_empleado_o_admin(current_user),
     )
 
 
@@ -703,7 +724,12 @@ def eventos_turnos():
         if not _es_admin(current_user):
             return jsonify([])
 
-        turnos = Turno.query.order_by(Turno.hora_inicio.asc()).all()
+        turnos = (
+            Turno.query
+            .filter(Turno.hora_fin >= datetime.utcnow())
+            .order_by(Turno.hora_inicio.asc())
+            .all()
+        )
         eventos = [
             {
                 'id': str(turno.id),
@@ -714,19 +740,18 @@ def eventos_turnos():
                 'borderColor': '#263238' if turno.cancelado else '#0d47a1',
                 'extendedProps': {
                     'cancelado': turno.cancelado,
+                    'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                     'editar_url': url_for('turnos.editar_turno', turno_id=turno.id),
                     'cancelar_url': url_for('turnos.cancelar_turno_admin', turno_id=turno.id),
+                    'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
+                    'sin_cupos': turno.cupos_disponibles <= 0,
                 }
             }
             for turno in turnos
         ]
         return jsonify(eventos)
 
-    actividad = request.args.get('actividad')
-
-    query = Turno.query.filter_by(cancelado=False)
-    if actividad:
-        query = query.filter_by(actividad=actividad)
+    query = Turno.query.filter_by(cancelado=False).filter(Turno.hora_fin >= datetime.utcnow())
 
     turnos = [
         t for t in query.order_by(Turno.hora_inicio.asc()).all()
@@ -767,85 +792,92 @@ def reservar_turno(turno_id):
     turno = Turno.query.get_or_404(turno_id)
     tipo_clase = request.form.get('tipo_clase', TipoClase.NO_ABONADA).strip()
 
-    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
-        flash('Solo los clientes pueden reservar turnos', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
-
     if not _validar_tipo_clase(tipo_clase):
         flash('Debes elegir si la reserva es abonada o no abonada', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
+        return _resolver_redirect_reserva()
 
-    _procesar_suspension_automatica(current_user)
-    restricciones = _obtener_restricciones_suspension(current_user)
+    cliente_objetivo, error_cliente = _obtener_cliente_objetivo_para_reserva()
+    if error_cliente:
+        flash(error_cliente, 'error')
+        return _resolver_redirect_reserva()
+    reserva_interna = cliente_objetivo.id != current_user.id
+
+    _procesar_suspension_automatica(cliente_objetivo)
+    restricciones = _obtener_restricciones_suspension(cliente_objetivo)
     if tipo_clase == TipoClase.ABONADA and restricciones['suspendido_abonado']:
-        flash('Tu cuenta está suspendida para reservas abonadas. Debes regularizar tu abono vencido.', 'error')
-        return redirect(url_for('pagos.ver_deuda'))
+        flash('La cuenta del cliente está suspendida para reservas abonadas. Debe regularizar su abono vencido.', 'error')
+        return _resolver_redirect_reserva()
     if tipo_clase == TipoClase.NO_ABONADA and restricciones['suspendido_no_abonado']:
-        flash('Tu cuenta está suspendida para clases no abonadas por acumular 3 clases vencidas impagas.', 'error')
-        return redirect(url_for('pagos.ver_deuda'))
+        flash('La cuenta del cliente está suspendida para clases no abonadas por acumular 3 clases vencidas impagas.', 'error')
+        return _resolver_redirect_reserva()
 
     if turno.cancelado:
         flash('Este turno ya no está disponible', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
+        return _resolver_redirect_reserva()
 
     if _es_feriado_nacional(turno.hora_inicio):
         flash('No se pueden reservar turnos en feriados nacionales', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
+        return _resolver_redirect_reserva()
 
     valido, error = _validar_regla_horaria(turno.hora_inicio, turno.hora_fin)
     if not valido:
         flash(f'El turno no cumple reglas horarias: {error}', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
+        return _resolver_redirect_reserva()
     
     # Verificar si el usuario ya tiene reservado este turno
     turno_existente = Reserva.query.filter_by(
         turno_id=turno_id,
-        usuario_id=current_user.id
+        usuario_id=cliente_objetivo.id
     ).first()
     
     if turno_existente:
-        flash('Ya tienes reservado este turno', 'error')
-        return redirect(url_for('turnos.ver_turnos_disponibles'))
+        flash('El cliente ya tiene reservado este turno' if reserva_interna else 'Ya tienes reservado este turno', 'error')
+        return _resolver_redirect_reserva()
 
     if turno.cupos_disponibles > 0:
         credito_aplicado = 0.0
         monto_final = 0.0
         if tipo_clase == TipoClase.ABONADA:
-            abono = _buscar_abono_activo_para_turno(current_user.id, turno)
+            abono = _buscar_abono_activo_para_turno(cliente_objetivo.id, turno)
             if not abono:
-                abono, creado_abono, conflictos = _crear_abono_mensual_para_turno(current_user, turno)
+                abono, creado_abono, conflictos = _crear_abono_mensual_para_turno(cliente_objetivo, turno)
                 if conflictos:
                     db.session.rollback()
-                    flash('No se pudo activar tu abono mensual porque alguna de las clases futuras del mes no tiene cupo disponible.', 'error')
+                    flash(
+                        'No se pudo activar el abono mensual del cliente porque alguna de las clases futuras del mes no tiene cupo disponible.'
+                        if reserva_interna else
+                        'No se pudo activar tu abono mensual porque alguna de las clases futuras del mes no tiene cupo disponible.',
+                        'error'
+                    )
                     for conflicto in conflictos:
                         flash(conflicto, 'warning')
-                    return redirect(url_for('turnos.ver_turnos_disponibles'))
+                    return _resolver_redirect_reserva()
 
                 if creado_abono:
                     db.session.commit()
                     flash(
-                        f'Se activó tu abono mensual para {turno.actividad.upper()} los '
+                        f'Se activó el abono mensual de {cliente_objetivo.nombre} {cliente_objetivo.apellido} para {turno.actividad.upper()} los '
                         f'{DIAS_SEMANA[turno.hora_inicio.weekday()]} a las {turno.hora_inicio.strftime("%H:%M")} hasta fin de mes.',
                         'success'
                     )
-                    return redirect(url_for('turnos.mis_turnos'))
+                    return _resolver_redirect_reserva()
 
-            _, conflicto = _asegurar_reserva_abono(turno, current_user, abono, crear_pago=True)
+            _, conflicto = _asegurar_reserva_abono(turno, cliente_objetivo, abono, crear_pago=True)
             if conflicto:
                 flash(conflicto, 'error')
-                return redirect(url_for('turnos.ver_turnos_disponibles'))
+                return _resolver_redirect_reserva()
 
             pago_generado = (
                 Pago.query
-                .filter_by(usuario_id=current_user.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
-                .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{turno_id}-{current_user.id}-%"))
+                .filter_by(usuario_id=cliente_objetivo.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+                .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{turno_id}-{cliente_objetivo.id}-%"))
                 .order_by(Pago.fecha_pago.desc())
                 .first()
             )
             monto_final = pago_generado.monto if pago_generado else 0.0
         else:
             reserva = Reserva(
-                usuario_id=current_user.id,
+                usuario_id=cliente_objetivo.id,
                 turno_id=turno_id,
                 tipo_clase=tipo_clase,
                 qr_token=secrets.token_urlsafe(24),
@@ -853,33 +885,38 @@ def reservar_turno(turno_id):
             db.session.add(reserva)
             turno.cupos_disponibles -= 1
             credito_aplicado, monto_final = _crear_pago_pendiente_reserva(
-                current_user,
+                cliente_objetivo,
                 turno,
                 tipo_clase,
-                f"reserva-{turno_id}-{current_user.id}-{int(datetime.utcnow().timestamp())}",
+                f"reserva-{turno_id}-{cliente_objetivo.id}-{int(datetime.utcnow().timestamp())}",
             )
 
         db.session.commit()
         if credito_aplicado > 0:
             flash(f'Turno reservado. Se aplicó un crédito de ${credito_aplicado:.2f}', 'success')
         if tipo_clase == TipoClase.ABONADA:
-            flash(f'Reserva abonada confirmada dentro de tu abono mensual. Se generó una deuda de ${monto_final:.2f}', 'success')
+            flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se generó una deuda de ${monto_final:.2f}', 'success')
         else:
-            flash(f'Turno reservado exitosamente. Se generó una deuda de ${monto_final:.2f}', 'success')
+            flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se generó una deuda de ${monto_final:.2f}', 'success')
     else:
         if tipo_clase == TipoClase.ABONADA:
-            flash('No fue posible activar tu abono mensual porque este turno ya no tiene cupos disponibles.', 'error')
-            return redirect(url_for('turnos.ver_turnos_disponibles'))
+            flash(
+                'No fue posible activar el abono mensual del cliente porque este turno ya no tiene cupos disponibles.'
+                if reserva_interna else
+                'No fue posible activar tu abono mensual porque este turno ya no tiene cupos disponibles.',
+                'error'
+            )
+            return _resolver_redirect_reserva()
 
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
-            usuario_id=current_user.id
+            usuario_id=cliente_objetivo.id
         ).first()
         if existente_espera:
-            flash('Ya estás en la lista de espera para este turno', 'info')
-            return redirect(url_for('turnos.ver_turnos_disponibles'))
+            flash('El cliente ya está en la lista de espera para este turno' if reserva_interna else 'Ya estás en la lista de espera para este turno', 'info')
+            return _resolver_redirect_reserva()
 
-        _agregar_a_lista_espera(turno, current_user.id, tipo_clase)
+        _agregar_a_lista_espera(turno, cliente_objetivo.id, tipo_clase)
         db.session.commit()
 
         personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id).count()
@@ -887,9 +924,9 @@ def reservar_turno(turno_id):
             _notificar_admin_lista_espera_llena(turno, TIPO_LISTA_GENERAL, personas_en_espera)
             flash('La lista de espera de este turno llegó a 10 personas', 'warning')
 
-        flash('Turno lleno. Te agregamos a la lista de espera', 'info')
+        flash(f'Turno lleno. {cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera', 'info')
     
-    return redirect(url_for('turnos.ver_turnos_disponibles'))
+    return _resolver_redirect_reserva()
 
 
 @turnos_bp.route('/cancelar/<int:turno_id>', methods=['POST'])
@@ -1007,6 +1044,7 @@ def mis_turnos():
         Reserva.query
         .join(Turno, Reserva.turno_id == Turno.id)
         .filter(Reserva.usuario_id == current_user.id)
+        .filter(Turno.hora_fin >= datetime.utcnow())
         .order_by(Turno.hora_inicio.asc())
         .all()
     )
