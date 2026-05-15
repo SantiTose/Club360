@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}{{ 'Editar' if turno else 'Crear' }} Turno - Club 360{% endblock %}
+{% block title %}{{ 'Editar Turno' if turno else 'Crear Clase' }} - Club 360{% endblock %}
 
 {% block content %}
 <section class="calendar-page">
     <div class="calendar-page-header">
         <div>
-            <h2>{{ 'Editar' if turno else 'Crear' }} Turno</h2>
+            <h2>{{ 'Editar Turno' if turno else 'Crear Clase' }}</h2>
         </div>
     </div>
 
     <div class="calendar-form-card">
-        <form method="POST" class="form" data-confirm="true" data-confirm-title="{{ 'Guardar cambios' if turno else 'Crear turno' }}" data-confirm-message="{{ 'Se actualizará la información del turno seleccionado.' if turno else 'Se creará un nuevo turno con la configuración cargada.' }}" data-confirm-action="Guardar">
+        <form method="POST" class="form" data-confirm="true" data-confirm-title="{{ 'Guardar cambios' if turno else 'Crear clase semanal' }}" data-confirm-message="{{ 'Se actualizará la información del turno seleccionado.' if turno else 'Se crearán clases semanales desde la próxima ocurrencia del día elegido hasta fin de año.' }}" data-confirm-action="Guardar">
             <div class="form-group-row">
                 <div class="form-group">
                     <label>Actividad</label>
@@ -23,8 +23,18 @@
                     </select>
                 </div>
                 <div class="form-group">
+                    {% if turno %}
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') }}" required>
+                    {% else %}
                     <label>Día</label>
-                    <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') if turno else '' }}" required>
+                    <select name="dia_semana" class="form-control" required>
+                        <option value="">Seleccionar día</option>
+                        {% for valor, nombre in dias_semana %}
+                        <option value="{{ valor }}">{{ nombre|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
                 </div>
                 <div class="form-group">
                     <label>Horario</label>

@@ -70,9 +70,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const canReserve = !p.sin_cupos;
             const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
             const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
+            const esAntesDelDia15 = new Date().getDate() < 15;
             const mensajeAbono = p.tiene_abono
-                ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya tenés un abono mensual activo para esta franja. Si reservás como abonada, se tomará dentro de esa suscripción.</p>'
-                : '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se activará una suscripción mensual para esta franja y se reservarán automáticamente las clases coincidentes hasta fin de mes.</p>';
+                ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya tenés modalidad abonada activa para esta franja. Al confirmar se cobrará esta clase con tarjeta.</p>'
+                : esAntesDelDia15
+                ? '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservarán las clases de esta franja que queden en el mes y se cobrarán al confirmar.</p>'
+                : '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservará esta clase y se cobrará al confirmar.</p>';
             const boton = p.ya_reservado
                 ? `<div>
                         <p class="text-muted" style="margin-bottom:.75rem;">Ya reservaste este turno. Si no vas a asistir, podés cancelarlo desde acá.</p>

@@ -28,7 +28,6 @@
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Buscar Turnos</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario == 'cliente' %}
-                    <li><a href="{{ url_for('pagos.ver_deuda') }}" class="nav-link-pill">Pagos</a></li>
                     <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="nav-link-pill">Suspensiones</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}

@@ -17,7 +17,7 @@
 
     <div class="calendar-toolbar-card calendar-toolbar-card-compact">
         <div class="button-group" style="justify-content: flex-start; margin: 0;">
-            <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Turno</a>
+            <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Clase</a>
             <a href="{{ url_for('turnos.validar_asistencia_manual') }}" class="btn btn-secondary">Validar Asistencia QR</a>
             <form method="POST" action="{{ url_for('turnos.procesar_recordatorios') }}" style="display:inline;" data-confirm="true" data-confirm-title="Enviar recordatorios" data-confirm-message="Se enviarán recordatorios QR a los usuarios con turnos próximos." data-confirm-action="Enviar">
                 <button type="submit" class="btn btn-secondary">Enviar Recordatorios QR</button>

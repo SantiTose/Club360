@@ -10,21 +10,29 @@
         <h3>Estado de tu cuenta</h3>
         <p><strong>Motivo:</strong> {{ suspension.motivo }}</p>
         <p><strong>Fecha de Inicio:</strong> {{ suspension.fecha_inicio.strftime('%d/%m/%Y') }}</p>
+        {% if monto_total > 0 %}
         <p><strong>Total a abonar:</strong> ${{ "%.2f"|format(monto_total) }}</p>
+        {% else %}
+        <p><strong>Deuda pendiente:</strong> No registrás deuda para abonar.</p>
+        {% endif %}
         {% if recargo %}
         <p><strong>Recargo de alta incluido:</strong> ${{ "%.2f"|format(recargo.monto) }}</p>
         {% endif %}
+        {% if monto_total > 0 %}
         <p>Al confirmar el pago con tarjeta de crédito, tu cuenta volverá a estar activa automáticamente. No interviene un administrador.</p>
+        {% else %}
+        <p>Podés reactivar tu cuenta ahora. Esta suspensión no tiene deuda pendiente asociada.</p>
+        {% endif %}
 
         <form
             method="POST"
             class="form"
             data-confirm="true"
-            data-confirm-title="Pagar y reactivar cuenta"
-            data-confirm-message="Se cobrará el total pendiente con tarjeta de crédito y tu cuenta volverá a estar activa automáticamente."
-            data-confirm-action="Pagar ahora"
+            data-confirm-title="{{ 'Pagar y reactivar cuenta' if monto_total > 0 else 'Reactivar cuenta' }}"
+            data-confirm-message="{{ 'Se cobrará el total pendiente con tarjeta de crédito y tu cuenta volverá a estar activa automáticamente.' if monto_total > 0 else 'Tu cuenta volverá a estar activa sin cobrar ningún importe.' }}"
+            data-confirm-action="{{ 'Pagar ahora' if monto_total > 0 else 'Reactivar' }}"
         >
-            <button type="submit" class="btn btn-primary">Pagar y Reactivar</button>
+            <button type="submit" class="btn btn-primary">{{ 'Pagar y Reactivar' if monto_total > 0 else 'Reactivar Cuenta' }}</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
         </form>
     </div>

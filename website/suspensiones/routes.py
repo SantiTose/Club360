@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from website.suspensiones import suspensiones_bp
 from website import db
-from website.models import Suspension, Usuario, EstadoUsuario, TipoUsuario, Pago, TipoClase
+from website.models import Suspension, Usuario, EstadoUsuario, TipoUsuario, Pago, TipoClase, AbonoCliente, EstadoAbono
 from datetime import datetime
 from website.turnos.routes import _obtener_restricciones_suspension, _pagos_no_abonados_vencidos
 
@@ -71,6 +71,37 @@ def _monto_total_alta(usuario_id):
     return total, recargo
 
 
+def _reactivar_cuenta_tras_pago(usuario):
+    suspensiones = Suspension.query.filter_by(
+        usuario_id=usuario.id,
+        estado='activa'
+    ).all()
+    for suspension in suspensiones:
+        suspension.estado = 'resuelta'
+        suspension.fecha_resolucion = datetime.utcnow()
+
+    usuario.estado = EstadoUsuario.ACTIVO
+
+    abonos_suspendidos = AbonoCliente.query.filter_by(
+        usuario_id=usuario.id,
+        estado=EstadoAbono.SUSPENDIDO,
+    ).all()
+    if not abonos_suspendidos:
+        return 0, []
+
+    from website.turnos.routes import _generar_reservas_para_abono
+
+    reservas_restauradas = 0
+    conflictos = []
+    for abono in abonos_suspendidos:
+        abono.estado = EstadoAbono.ACTIVO
+        creadas, errores = _generar_reservas_para_abono(abono, crear_pagos=False)
+        reservas_restauradas += creadas
+        conflictos.extend(errores)
+
+    return reservas_restauradas, conflictos
+
+
 @suspensiones_bp.route('/solicitar-alta', methods=['GET', 'POST'])
 @login_required
 def solicitar_alta_suspension():
@@ -92,8 +123,15 @@ def solicitar_alta_suspension():
 
     if request.method == 'POST':
         if monto_total <= 0:
-            flash('No tienes deuda pendiente para procesar el alta.', 'info')
-            return redirect(url_for('index'))
+            reservas_restauradas, conflictos_abonos = _reactivar_cuenta_tras_pago(current_user)
+            db.session.commit()
+
+            flash('Tu cuenta fue reactivada. No había deuda pendiente para abonar.', 'success')
+            if reservas_restauradas:
+                flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+            for conflicto in conflictos_abonos:
+                flash(conflicto, 'warning')
+            return redirect(url_for('dashboard'))
 
         deudas = _deuda_pendiente_positiva(current_user.id)
         for deuda in deudas:
@@ -102,15 +140,17 @@ def solicitar_alta_suspension():
             if not deuda.referencia_transaccion:
                 deuda.referencia_transaccion = f"alta-online-{current_user.id}-{int(datetime.utcnow().timestamp())}"
 
-        suspension.estado = 'resuelta'
-        suspension.fecha_resolucion = datetime.utcnow()
-        current_user.estado = EstadoUsuario.ACTIVO
+        reservas_restauradas, conflictos_abonos = _reactivar_cuenta_tras_pago(current_user)
         db.session.commit()
 
         flash(
             f'Alta procesada correctamente. Se abonó ${monto_total:.2f} con tarjeta de crédito y tu cuenta volvió a estar activa.',
             'success'
         )
+        if reservas_restauradas:
+            flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+        for conflicto in conflictos_abonos:
+            flash(conflicto, 'warning')
         return redirect(url_for('dashboard'))
     
     return render_template(

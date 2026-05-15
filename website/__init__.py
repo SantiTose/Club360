@@ -67,13 +67,12 @@ def create_app(config_name='development'):
         from website.models import TipoUsuario, Turno, Reserva, Pago, Usuario
 
         turnos_reservados = 0
-        deuda_total = 0.0
         actividad_reciente = []
         dashboard_context = {
             'mode': 'cliente',
             'eyebrow': 'Panel personal',
             'hero_title': f'Hola, {current_user.nombre}',
-            'hero_text': 'Gestioná tus turnos y resolvé pagos desde un mismo lugar, con accesos claros y datos relevantes a primera vista.',
+            'hero_text': 'Gestioná tus turnos con cobro automático al confirmar cada reserva.',
             'hero_tags': [
                 current_user.tipo_usuario.capitalize(),
                 current_user.estado.capitalize() if current_user.estado else 'Sin estado',
@@ -86,8 +85,6 @@ def create_app(config_name='development'):
 
         if current_user.tipo_usuario == TipoUsuario.CLIENTE:
             turnos_reservados = Reserva.query.filter_by(usuario_id=current_user.id).count()
-            pagos_pendientes = Pago.query.filter_by(usuario_id=current_user.id, estado='pendiente').all()
-            deuda_total = sum(p.monto for p in pagos_pendientes)
 
             proximo_turno = (
                 Turno.query
@@ -121,9 +118,9 @@ def create_app(config_name='development'):
                     'accent': False,
                 },
                 {
-                    'label': 'Deuda pendiente',
-                    'value': f"${deuda_total:.2f}",
-                    'description': 'Controlá pagos y mantené tu cuenta al día.',
+                    'label': 'Cobro automático',
+                    'value': 'Activo',
+                    'description': 'Las reservas se cobran al confirmar con tarjeta de crédito.',
                     'accent': True,
                 },
             ]
@@ -193,7 +190,6 @@ def create_app(config_name='development'):
         return render_template(
             'dashboard.html',
             turnos_reservados=turnos_reservados,
-            deuda_total=deuda_total,
             actividad_reciente=actividad_reciente,
             dashboard_context=dashboard_context,
         )
@@ -213,12 +209,10 @@ def create_app(config_name='development'):
     # Register blueprints
     from website.auth import auth_bp
     from website.turnos import turnos_bp
-    from website.pagos import pagos_bp
     from website.suspensiones import suspensiones_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(turnos_bp)
-    app.register_blueprint(pagos_bp)
     app.register_blueprint(suspensiones_bp)
 
     # Create tables
@@ -229,6 +223,7 @@ def create_app(config_name='development'):
         _drop_legacy_usuario_tipo_cliente_column()
         _ensure_usuario_recordatorio_column()
         _ensure_usuario_cancelaciones_credito_columns()
+        _ensure_abono_descuento_column()
         _ensure_usuario_requiere_cambio_password_column()
         _ensure_usuario_reset_password_columns()
         _ensure_usuario_edad_columns()
@@ -237,6 +232,7 @@ def create_app(config_name='development'):
         _ensure_reserva_abono_column()
         _ensure_lista_espera_tipo_clase_column()
         _ensure_pago_tipo_clase_column()
+        _clear_pending_client_debts()
         _backfill_reserva_qr_tokens()
 
     return app
@@ -472,11 +468,32 @@ def _ensure_usuario_cancelaciones_credito_columns():
         updates.append("ALTER TABLE usuarios ADD COLUMN cancelaciones_abonado INTEGER NOT NULL DEFAULT 0")
     if 'beneficio_abonado_activo' not in columnas:
         updates.append("ALTER TABLE usuarios ADD COLUMN beneficio_abonado_activo BOOLEAN NOT NULL DEFAULT 1")
+    if 'cupon_abono_mes' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cupon_abono_mes VARCHAR(7)")
+    if 'cupon_abono_actividad' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cupon_abono_actividad VARCHAR(20)")
+    if 'cupon_abono_dia_semana' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cupon_abono_dia_semana INTEGER")
+    if 'cupon_abono_hora_inicio' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cupon_abono_hora_inicio INTEGER")
+    if 'cupon_abono_porcentaje' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN cupon_abono_porcentaje FLOAT NOT NULL DEFAULT 0")
 
     for sql in updates:
         db.session.execute(text(sql))
 
     if updates:
+        db.session.commit()
+
+
+def _ensure_abono_descuento_column():
+    inspector = inspect(db.engine)
+    if 'abonos_clientes' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('abonos_clientes')}
+    if 'descuento_porcentaje' not in columnas:
+        db.session.execute(text("ALTER TABLE abonos_clientes ADD COLUMN descuento_porcentaje FLOAT NOT NULL DEFAULT 0"))
         db.session.commit()
 
 
@@ -564,6 +581,25 @@ def _ensure_pago_tipo_clase_column():
     if 'tipo_clase' not in columnas:
         db.session.execute(text("ALTER TABLE pagos ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
         db.session.commit()
+
+
+def _clear_pending_client_debts():
+    """El sistema ya no maneja deudas: cancela pendientes historicos de clientes."""
+    inspector = inspect(db.engine)
+    if 'pagos' not in inspector.get_table_names():
+        return
+
+    db.session.execute(text(
+        """
+        UPDATE pagos
+        SET estado = 'completado',
+            monto = 0,
+            metodo_pago = 'tarjeta_credito',
+            referencia_transaccion = COALESCE(referencia_transaccion, 'deuda-removida')
+        WHERE estado = 'pendiente'
+        """
+    ))
+    db.session.commit()
 
 
 def _ensure_reserva_tipo_clase_column():
