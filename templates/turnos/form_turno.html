@@ -11,7 +11,7 @@
     </div>
 
     <div class="calendar-form-card">
-        <form method="POST" class="form" data-confirm="true" data-confirm-title="{{ 'Guardar cambios' if turno else 'Crear clase semanal' }}" data-confirm-message="{{ 'Se actualizará la información del turno seleccionado.' if turno else 'Se crearán clases semanales desde la próxima ocurrencia del día elegido hasta fin de año.' }}" data-confirm-action="Guardar">
+        <form method="POST" class="form"{% if turno %} data-confirm="true" data-confirm-title="Guardar cambios" data-confirm-message="Se actualizará la información del turno seleccionado." data-confirm-action="Guardar"{% endif %}>
             <div class="form-group-row">
                 <div class="form-group">
                     <label>Actividad</label>

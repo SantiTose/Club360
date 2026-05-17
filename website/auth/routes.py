@@ -167,7 +167,6 @@ def login():
             if usuario.requiere_cambio_password:
                 flash('Debes cambiar tu contraseña temporal para continuar', 'warning')
                 return redirect(url_for('auth.cambiar_password_inicial'))
-            flash(f'✅ ¡Bienvenido {usuario.nombre}!', 'success')
             return redirect(url_for('dashboard'))
         else:
             field_errors['email'] = 'Email o contraseña incorrectos'

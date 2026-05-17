@@ -1424,7 +1424,7 @@ def cancelar_abono(abono_id):
     _cancelar_reservas_futuras_de_abono(abono)
     abono.estado = EstadoAbono.CANCELADO
     db.session.commit()
-    flash('Tu abono mensual fue dado de baja y se liberaron sus reservas futuras.', 'success')
+    flash('Tu abono mensual fue dado de baja.', 'success')
     return redirect(url_for('turnos.administrar_abonos'))
 
 
@@ -1509,7 +1509,12 @@ def crear_turno():
             )
 
         db.session.commit()
-        flash(f'Se crearon {len(turnos_creados)} clases semanales hasta fin de año', 'success')
+        dia_semana = DIAS_SEMANA[int(dia_semana_raw)]
+        flash(
+            f"Se crearon {len(turnos_creados)} clases semanales de {actividad.capitalize()} "
+            f"los {dia_semana} a las {int(hora_slot_raw):02d}:00 con capacidad para {capacidad_maxima} personas.",
+            'success',
+        )
         if conflictos_existentes:
             flash(f'Se omitieron {conflictos_existentes} fechas porque ya existía esa clase.', 'info')
         if creadas_abono:
