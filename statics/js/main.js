@@ -38,6 +38,12 @@ function club360FormatMonthYear(value) {
     });
 }
 
+function club360FormatWeekday(value) {
+    return value.toLocaleDateString('es-AR', {
+        weekday: 'short'
+    }).replace('.', '');
+}
+
 function club360GetHourRange(start, end) {
     return `${club360FormatTime(start)} - ${club360FormatTime(end)}`;
 }
@@ -64,11 +70,31 @@ window.Club360CalendarUI = {
             selectedDate: null,
             selectedEventId: null,
             activityFilter: 'all',
-            currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+            currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            currentWeek: startOfWeek(new Date())
         };
 
         function startOfMonth(date) {
             return new Date(date.getFullYear(), date.getMonth(), 1);
+        }
+
+        function startOfWeek(date) {
+            const copy = new Date(date);
+            const day = copy.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            copy.setDate(copy.getDate() + diff);
+            copy.setHours(0, 0, 0, 0);
+            return copy;
+        }
+
+        function addDays(date, amount) {
+            const copy = new Date(date);
+            copy.setDate(copy.getDate() + amount);
+            return copy;
+        }
+
+        function addWeeks(date, amount) {
+            return addDays(date, amount * 7);
         }
 
         function isSameMonth(a, b) {
@@ -230,6 +256,38 @@ window.Club360CalendarUI = {
             renderAgenda();
         }
 
+        function selectInitialWeekDate() {
+            if (state.selectedDate || config.viewMode !== 'week') {
+                return;
+            }
+
+            const todayKey = club360ToDateKey(new Date());
+            const futureEvents = state.events
+                .filter(event => eventDateKey(event) >= todayKey)
+                .sort((a, b) => new Date(a.start) - new Date(b.start));
+            const todayEvents = futureEvents.filter(event => eventDateKey(event) === todayKey);
+            const initialEvent = todayEvents[0] || futureEvents[0];
+
+            if (!initialEvent) {
+                state.selectedDate = todayKey;
+                state.currentWeek = startOfWeek(new Date());
+                return;
+            }
+
+            state.selectedDate = eventDateKey(initialEvent);
+            state.currentWeek = startOfWeek(new Date(`${state.selectedDate}T12:00:00`));
+        }
+
+        function selectDefaultDateForWeek(weekStart) {
+            const eventsByDate = groupedEvents();
+            const weekDays = Array.from({ length: 6 }, (_, index) => addDays(weekStart, index));
+            const firstDayWithEvents = weekDays.find(date => (eventsByDate[club360ToDateKey(date)] || []).length > 0);
+
+            state.selectedDate = firstDayWithEvents ? club360ToDateKey(firstDayWithEvents) : null;
+            state.selectedEventId = null;
+            state.activityFilter = 'all';
+        }
+
         function renderCalendarError(title, message) {
             calendarEl.innerHTML = `
                 <div class="calendar-surface-empty">
@@ -240,7 +298,111 @@ window.Club360CalendarUI = {
             `;
         }
 
+        function renderWeekCalendar() {
+            const todayKey = club360ToDateKey(new Date());
+            const eventsByDate = groupedEvents();
+            const weekStart = startOfWeek(state.currentWeek);
+            const currentWeekStart = startOfWeek(new Date());
+            const eventDates = state.events.map(event => new Date(event.start)).sort((a, b) => a - b);
+            const lastEventWeek = eventDates.length ? startOfWeek(eventDates[eventDates.length - 1]) : currentWeekStart;
+            const maxWeekStart = lastEventWeek > currentWeekStart ? lastEventWeek : addWeeks(currentWeekStart, 8);
+            const weekEnd = addDays(weekStart, 5);
+            const weekDays = Array.from({ length: 6 }, (_, index) => addDays(weekStart, index));
+            const hasAnyEvent = state.events.length > 0;
+            const weekRange = `${weekStart.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`;
+
+            calendarEl.innerHTML = `
+                <div class="calendar-week-shell">
+                    <div class="calendar-week-toolbar">
+                        <div>
+                            <div class="calendar-month-toolbar-label">Semana</div>
+                            <h3>${club360EscapeHtml(weekRange)}</h3>
+                        </div>
+                        <div class="calendar-month-toolbar-actions">
+                            <button type="button" class="calendar-nav-btn" data-calendar-week-nav="prev" aria-label="Semana anterior" ${weekStart <= currentWeekStart ? 'disabled' : ''}>‹</button>
+                            <button type="button" class="calendar-nav-btn" data-calendar-week-nav="next" aria-label="Semana siguiente" ${weekStart >= maxWeekStart ? 'disabled' : ''}>›</button>
+                        </div>
+                    </div>
+                    ${!hasAnyEvent ? `
+                        <div class="calendar-inline-empty">
+                            <div class="calendar-surface-empty-badge">Sin actividad</div>
+                            <strong>${club360EscapeHtml(config.emptyCalendarTitle || 'No hay turnos cargados')}</strong>
+                            <span>${club360EscapeHtml(config.emptyCalendarMessage || 'Todavía no hay eventos para mostrar en este calendario.')}</span>
+                        </div>
+                    ` : ''}
+                    <div class="calendar-week-strip" aria-label="Elegir día de la semana">
+                        ${weekDays.map(date => {
+                            const dateKey = club360ToDateKey(date);
+                            const dayEvents = eventsByDate[dateKey] || [];
+                            const availableEvents = dayEvents.filter(event => !event.extendedProps?.sin_cupos);
+                            const isPastDay = dateKey < todayKey;
+                            const isClickable = !config.disableEmptyDateClick || dayEvents.length > 0;
+                            const statusLabel = dayEvents.length
+                                ? `${dayEvents.length} clase${dayEvents.length === 1 ? '' : 's'}`
+                                : 'Sin clases';
+                            const className = [
+                                'calendar-week-day',
+                                dateKey === todayKey ? 'is-today' : '',
+                                isPastDay ? 'is-past-day' : '',
+                                dayEvents.length ? 'has-events' : 'is-empty-day',
+                                availableEvents.length ? 'has-available-events' : '',
+                                dateKey === state.selectedDate ? 'is-selected-day' : ''
+                            ].filter(Boolean).join(' ');
+                            const content = `
+                                <span class="calendar-week-day-name">${club360EscapeHtml(club360FormatWeekday(date))}</span>
+                                <strong>${date.getDate()}</strong>
+                                <span class="calendar-week-day-status">${club360EscapeHtml(statusLabel)}</span>
+                            `;
+
+                            return isClickable ? `
+                                <button type="button" class="${className}" data-calendar-date="${dateKey}">
+                                    ${content}
+                                </button>
+                            ` : `
+                                <div class="${className}" aria-disabled="true">
+                                    ${content}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+
+            calendarEl.querySelectorAll('[data-calendar-week-nav]').forEach(button => {
+                button.addEventListener('click', function() {
+                    if (button.disabled) {
+                        return;
+                    }
+
+                    if (button.dataset.calendarWeekNav === 'prev' && weekStart > currentWeekStart) {
+                        state.currentWeek = addWeeks(weekStart, -1);
+                    } else if (button.dataset.calendarWeekNav === 'next' && weekStart < maxWeekStart) {
+                        state.currentWeek = addWeeks(weekStart, 1);
+                    } else {
+                        return;
+                    }
+
+                    selectDefaultDateForWeek(state.currentWeek);
+                    renderCalendar();
+                    renderAgenda();
+                });
+            });
+
+            calendarEl.querySelectorAll('[data-calendar-date]').forEach(button => {
+                button.addEventListener('click', function() {
+                    setSelectedDate(button.dataset.calendarDate);
+                });
+            });
+
+            updateSelectedDayStyle();
+        }
+
         function renderCalendar() {
+            if (config.viewMode === 'week') {
+                renderWeekCalendar();
+                return;
+            }
+
             const monthStart = startOfMonth(state.currentMonth);
             const currentMonthStart = startOfMonth(new Date());
             const minMonthStart = addMonths(currentMonthStart, -1);
@@ -404,6 +566,7 @@ window.Club360CalendarUI = {
                 state.events = Array.isArray(events)
                     ? events.map(event => ({ ...event, id: String(event.id) }))
                     : [];
+                selectInitialWeekDate();
                 renderCalendar();
                 renderAgenda();
             })

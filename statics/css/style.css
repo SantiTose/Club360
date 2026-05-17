@@ -656,6 +656,18 @@ textarea:focus {
     align-items: start;
 }
 
+.calendar-layout-week {
+    width: min(1000px, 100%);
+    justify-self: center;
+}
+
+.calendar-layout-week .calendar-surface,
+.calendar-layout-week .calendar-side-column {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+}
+
 .calendar-surface,
 .turno-card {
     padding: 0.9rem;
@@ -933,6 +945,116 @@ textarea:focus {
 .calendar-month-toolbar-actions {
     display: flex;
     gap: 0.55rem;
+}
+
+.calendar-week-shell {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.calendar-week-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.calendar-week-toolbar h3 {
+    margin: 0;
+    font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+    text-transform: capitalize;
+}
+
+.calendar-week-strip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.calendar-week-day {
+    min-height: 92px;
+    padding: 0.8rem 0.75rem;
+    border: 1px solid rgba(31, 79, 95, 0.12);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(244, 248, 246, 0.98));
+    color: var(--charcoal);
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 0.28rem;
+    text-align: left;
+    cursor: pointer;
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.calendar-week-day:hover {
+    transform: translateY(-2px);
+    border-color: rgba(31, 79, 95, 0.22);
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-week-day.is-empty-day {
+    cursor: default;
+    opacity: 0.72;
+}
+
+.calendar-week-day.is-empty-day:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(31, 79, 95, 0.12);
+}
+
+.calendar-week-day.has-available-events {
+    border-color: rgba(47, 125, 89, 0.24);
+    background: linear-gradient(180deg, rgba(232, 246, 238, 0.98), rgba(214, 238, 224, 0.9));
+}
+
+.calendar-week-day.has-events:not(.has-available-events) {
+    border-color: rgba(230, 133, 41, 0.28);
+    background: linear-gradient(180deg, rgba(255, 249, 240, 0.98), rgba(250, 238, 220, 0.92));
+}
+
+.calendar-week-day.is-selected-day {
+    border-color: rgba(31, 79, 95, 0.36);
+    background: linear-gradient(135deg, rgba(31, 79, 95, 0.14), rgba(95, 127, 79, 0.12));
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-week-day.is-today .calendar-week-day-name::after {
+    content: "Hoy";
+    margin-left: 0.35rem;
+    padding: 0.12rem 0.35rem;
+    border-radius: 999px;
+    background: rgba(31, 79, 95, 0.1);
+    color: var(--petrol-dark);
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.calendar-week-day-name,
+.calendar-week-day-status {
+    font-size: 0.74rem;
+    font-weight: 800;
+}
+
+.calendar-week-day-name {
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.calendar-week-day strong {
+    font-size: 1.55rem;
+    line-height: 1;
+}
+
+.calendar-week-day-status {
+    color: var(--petrol-dark);
+}
+
+.calendar-week-day.is-empty-day .calendar-week-day-status {
+    color: var(--gray-500);
 }
 
 .calendar-nav-btn {
@@ -2135,9 +2257,14 @@ tbody tr:hover {
     }
 
     .calendar-month-toolbar,
-    .calendar-month-toolbar-actions {
+    .calendar-month-toolbar-actions,
+    .calendar-week-toolbar {
         align-items: stretch;
         flex-wrap: wrap;
+    }
+
+    .calendar-week-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .calendar-month-weekdays {
@@ -2155,6 +2282,11 @@ tbody tr:hover {
 
     .calendar-slot-hour {
         padding-top: 0;
+    }
+
+    .calendar-week-day {
+        min-height: 82px;
+        border-radius: 14px;
     }
 
     .confirm-modal-actions {
