@@ -50,6 +50,7 @@ window.Club360CalendarUI = {
         const detailEl = document.getElementById(config.detailBodyId);
 
         if (!calendarEl || !agendaEl || !agendaTitleEl || !detailEl) return;
+        const detailSectionEl = detailEl.closest('.calendar-context-detail');
 
         const helpers = {
             escapeHtml: club360EscapeHtml,
@@ -62,6 +63,7 @@ window.Club360CalendarUI = {
             events: [],
             selectedDate: null,
             selectedEventId: null,
+            activityFilter: 'all',
             currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
         };
 
@@ -96,6 +98,47 @@ window.Club360CalendarUI = {
                 .sort((a, b) => new Date(a.start) - new Date(b.start));
         }
 
+        function eventActivity(event) {
+            return String(event.extendedProps?.actividad || event.title || '')
+                .replace(/\s*\([^)]*\)\s*$/, '')
+                .trim();
+        }
+
+        function filteredDayEvents(events) {
+            if (state.activityFilter === 'all') {
+                return events;
+            }
+            return events.filter(event => eventActivity(event).toLowerCase() === state.activityFilter);
+        }
+
+        function renderActivityFilter(events) {
+            if (!config.enableActivityFilter) {
+                return '';
+            }
+
+            const activities = [...new Set(events.map(event => eventActivity(event)).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b, 'es'));
+
+            if (activities.length <= 1) {
+                return '';
+            }
+
+            const buttons = [
+                { value: 'all', label: 'Todos' },
+                ...activities.map(activity => ({ value: activity.toLowerCase(), label: activity }))
+            ];
+
+            return `
+                <div class="calendar-agenda-filter" aria-label="Filtrar por deporte">
+                    ${buttons.map(button => `
+                        <button type="button" class="calendar-agenda-filter-btn ${state.activityFilter === button.value ? 'is-active' : ''}" data-activity-filter="${club360EscapeHtml(button.value)}">
+                            ${club360EscapeHtml(button.label)}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         function updateSelectedDayStyle() {
             calendarEl.querySelectorAll('[data-calendar-date]').forEach(cell => {
                 cell.classList.toggle('is-selected-day', cell.dataset.calendarDate === state.selectedDate);
@@ -106,15 +149,20 @@ window.Club360CalendarUI = {
             return dayEvents.some(event => !event.extendedProps?.sin_cupos);
         }
 
-        function renderDetail() {
-            if (!state.selectedDate) {
-                detailEl.innerHTML = config.initialDetailHtml;
-                return;
-            }
+        function setDetailVisibility(isVisible) {
+            if (!detailSectionEl) return;
+            detailSectionEl.hidden = !isVisible;
+            detailSectionEl.parentElement?.classList.toggle('has-visible-detail', isVisible);
+        }
 
-            const event = sortedDayEvents().find(item => String(item.id) === String(state.selectedEventId));
-            if (!event) {
-                detailEl.innerHTML = config.emptyDetailHtml || config.initialDetailHtml;
+        function renderDetail() {
+            const dayEvents = filteredDayEvents(sortedDayEvents());
+            const event = dayEvents.find(item => String(item.id) === String(state.selectedEventId));
+            const shouldShowDetail = Boolean(event);
+            setDetailVisibility(shouldShowDetail);
+
+            if (!shouldShowDetail) {
+                detailEl.innerHTML = '';
                 return;
             }
 
@@ -138,10 +186,30 @@ window.Club360CalendarUI = {
                 return;
             }
 
-            agendaEl.innerHTML = events.map(event => config.renderAgendaCard(event, {
+            const visibleEvents = filteredDayEvents(events);
+            const filterMarkup = renderActivityFilter(events);
+
+            if (state.selectedEventId && !visibleEvents.some(event => String(event.id) === String(state.selectedEventId))) {
+                state.selectedEventId = null;
+            }
+
+            const eventsMarkup = visibleEvents.length
+                ? visibleEvents.map(event => config.renderAgendaCard(event, {
                 isActive: String(event.id) === String(state.selectedEventId),
                 helpers
-            })).join('');
+            })).join('')
+                : '<div class="calendar-day-placeholder">No hay turnos para este deporte en esta fecha.</div>';
+
+            agendaEl.innerHTML = `${filterMarkup}${eventsMarkup}`;
+
+            agendaEl.querySelectorAll('[data-activity-filter]').forEach(button => {
+                button.addEventListener('click', function() {
+                    state.activityFilter = button.dataset.activityFilter;
+                    state.selectedEventId = null;
+                    renderAgenda();
+                    renderDetail();
+                });
+            });
 
             agendaEl.querySelectorAll('[data-event-id]').forEach(button => {
                 button.addEventListener('click', function() {
@@ -157,6 +225,7 @@ window.Club360CalendarUI = {
         function setSelectedDate(dateStr, eventId = null) {
             state.selectedDate = dateStr;
             state.selectedEventId = eventId;
+            state.activityFilter = 'all';
             updateSelectedDayStyle();
             renderAgenda();
         }
@@ -177,13 +246,14 @@ window.Club360CalendarUI = {
             const minMonthStart = addMonths(currentMonthStart, -1);
             const maxMonthStart = addMonths(currentMonthStart, 1);
             const firstDay = new Date(monthStart);
-            const startWeekDay = (firstDay.getDay() + 6) % 7;
+            const startWeekDay = firstDay.getDay() === 0 ? 0 : (firstDay.getDay() + 6) % 7;
             const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
             const prevMonthDays = new Date(monthStart.getFullYear(), monthStart.getMonth(), 0).getDate();
             const todayKey = club360ToDateKey(new Date());
             const eventsByDate = groupedEvents();
             const weekdayLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
             const dayCells = [];
+            let visibleCellCount = startWeekDay;
 
             for (let i = 0; i < startWeekDay; i += 1) {
                 const day = prevMonthDays - startWeekDay + i + 1;
@@ -198,6 +268,9 @@ window.Club360CalendarUI = {
 
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+                if (date.getDay() !== 0) {
+                    visibleCellCount += 1;
+                }
                 const dateKey = club360ToDateKey(date);
                 const dayEvents = eventsByDate[dateKey] || [];
                 const isPastDay = dateKey < todayKey;
@@ -206,6 +279,7 @@ window.Club360CalendarUI = {
                 const monthCellMode = config.monthCellMode || 'preview';
                 const monthCellClassNames = [
                     'calendar-month-cell',
+                    date.getDay() === 0 ? 'is-sunday' : '',
                     isPastDay ? 'is-past-day' : '',
                     dayEvents.length ? 'has-events' : 'is-empty-day',
                     hasAvailableEvents ? 'has-available-events' : '',
@@ -238,7 +312,7 @@ window.Club360CalendarUI = {
                 `);
             }
 
-            const trailingCells = (7 - (dayCells.length % 7)) % 7;
+            const trailingCells = (6 - (visibleCellCount % 6)) % 6;
             for (let day = 1; day <= trailingCells; day += 1) {
                 dayCells.push(`
                     <div class="calendar-month-cell is-outside-month" aria-hidden="true">

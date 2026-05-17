@@ -25,7 +25,7 @@
                 <div id="agenda-turno-body" class="calendar-day-body"></div>
             </section>
 
-            <section class="calendar-context-section calendar-context-detail" id="detalle-turno">
+            <section class="calendar-context-section calendar-context-detail" id="detalle-turno" hidden>
                 <span class="turno-detail-kicker">Resumen</span>
                 <h3>Detalle del turno</h3>
                 <p class="text-muted">Seleccioná una franja horaria para ver cupos y reservar.</p>
@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initialDetailHtml: '<div class="calendar-day-placeholder compact">Seleccioná una franja horaria para ver detalles y reservar.</div>',
         emptyDetailHtml: '<div class="calendar-day-placeholder compact">Todavía no hay un turno seleccionado.</div>',
         disableEmptyDateClick: true,
+        enableActivityFilter: true,
         monthCellMode: 'status',
         renderAgendaCard(event, context) {
             const p = event.extendedProps;
@@ -67,15 +68,27 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         renderDetail(event, helpers) {
             const p = event.extendedProps;
-            const canReserve = !p.sin_cupos;
+            const isFull = Boolean(p.sin_cupos);
             const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
             const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
+            const actividad = event.title.replace(/\s*\([^)]*\)\s*$/, '');
+            const fechaConfirmacion = new Date(event.start).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+            const horarioConfirmacion = helpers.getHourRange(event.start, event.end);
             const esAntesDelDia15 = new Date().getDate() < 15;
             const mensajeAbono = p.tiene_abono
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya tenés modalidad abonada activa para esta franja. Al confirmar se cobrará esta clase con tarjeta.</p>'
                 : esAntesDelDia15
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservarán las clases de esta franja que queden en el mes y se cobrarán al confirmar.</p>'
                 : '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservará esta clase y se cobrará al confirmar.</p>';
+            const mensajeReserva = isFull
+                ? '<p class="text-muted" style="margin-bottom:.75rem;">Este turno no tiene cupos disponibles. Podés anotarte en la lista de espera para esta fecha y horario.</p>'
+                : mensajeAbono;
+            const tituloConfirmacion = isFull ? 'Anotarse en lista de espera' : 'Confirmar reserva';
+            const mensajeConfirmacion = isFull
+                ? `Vas a anotarte en la lista de espera para ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`
+                : `Vas a reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`;
+            const accionConfirmacion = isFull ? 'Anotarme' : 'Reservar';
+            const textoBoton = isFull ? 'Anotarme en lista de espera' : 'Reservar turno';
             const boton = p.ya_reservado
                 ? `<div>
                         <p class="text-muted" style="margin-bottom:.75rem;">Ya reservaste este turno. Si no vas a asistir, podés cancelarlo desde acá.</p>
@@ -83,9 +96,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button type="submit" class="btn btn-secondary btn-block">Cancelar turno</button>
                         </form>
                    </div>`
-                : canReserve
-                ? `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="Confirmar reserva" data-confirm-message="Vas a reservar este turno para ${helpers.escapeHtml(event.title)}." data-confirm-action="Reservar">
-                        ${mensajeAbono}
+                : `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="${tituloConfirmacion}" data-confirm-message="${mensajeConfirmacion}" data-confirm-action="${accionConfirmacion}">
+                        ${mensajeReserva}
                         ${permiteAsignarCliente ? `
                         <div class="form-group" style="margin-bottom: .8rem;">
                             <label for="cliente_email_${event.id}"><strong>Mail del cliente</strong></label>
@@ -101,14 +113,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <label for="tipo_clase_no_abonada_${event.id}" class="reservation-mode-pill">No abonada</label>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-success btn-block">Reservar turno</button>
-                   </form>`
-                : '<p class="text-warning">Sin cupos disponibles</p>';
+                        <button type="submit" class="btn ${isFull ? 'btn-secondary' : 'btn-success'} btn-block">${textoBoton}</button>
+                   </form>`;
 
             return `
                 <div class="turno-detail-header">
                     <span class="turno-detail-sport">${helpers.escapeHtml(event.title)}</span>
-                    <span class="badge badge-primary">${p.ya_reservado ? 'Ya reservado' : 'Turno disponible'}</span>
+                    <span class="badge badge-primary">${p.ya_reservado ? 'Ya reservado' : isFull ? 'Lista de espera' : 'Turno disponible'}</span>
                 </div>
                 <div class="turno-detail-meta">
                     <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>

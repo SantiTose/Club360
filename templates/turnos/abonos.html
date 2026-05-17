@@ -35,13 +35,9 @@
                     <td>{{ abono.fecha_desde.strftime('%d/%m/%Y') }} al {{ abono.fecha_hasta.strftime('%d/%m/%Y') }}</td>
                     <td>{{ abono.estado|capitalize }}</td>
                     <td>
-                        {% if abono.estado == 'activo' %}
                         <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono mensual" data-confirm-message="Se darán de baja tus reservas futuras generadas por este abono." data-confirm-action="Cancelar abono">
                             <button type="submit" class="btn btn-danger">Cancelar</button>
                         </form>
-                        {% else %}
-                        <span class="text-muted">Sin acción</span>
-                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

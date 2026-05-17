@@ -61,7 +61,8 @@ def _calcular_monto_reserva(actividad, tipo_clase, usuario=None, descuento_porce
     }
     base = base_por_actividad.get(actividad, 250.0)
     if tipo_clase == TipoClase.ABONADA:
-        return round(base, 2)
+        descuento = max(0.0, min(float(descuento_porcentaje or 0.0), 100.0))
+        return round(base * (1 - descuento / 100), 2)
     return round(base, 2)
 
 
@@ -338,13 +339,11 @@ def _obtener_restricciones_suspension(cliente):
     }
 
 
-def _obtener_siguiente_lista_espera(turno):
-    return (
-        ListaEspera.query
-        .filter_by(turno_id=turno.id)
-        .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
-        .first()
-    )
+def _obtener_siguiente_lista_espera(turno, tipo_clase=None):
+    query = ListaEspera.query.filter_by(turno_id=turno.id)
+    if tipo_clase:
+        query = query.filter_by(tipo_clase=tipo_clase)
+    return query.order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc()).first()
 
 
 def _recalcular_posiciones_lista(turno_id):
@@ -367,6 +366,132 @@ def _agregar_a_lista_espera(turno, usuario_id, tipo_clase):
         tipo_clase=tipo_clase,
         posicion=posicion,
     ))
+
+
+def _limpiar_esperas_de_abono(usuario_id, abono):
+    turnos_ids = [turno.id for turno in _obtener_turnos_para_abono(abono)]
+    if not turnos_ids:
+        return
+    ListaEspera.query.filter(
+        ListaEspera.usuario_id == usuario_id,
+        ListaEspera.tipo_clase == TipoClase.ABONADA,
+        ListaEspera.turno_id.in_(turnos_ids),
+    ).delete(synchronize_session=False)
+    for turno_id in turnos_ids:
+        _recalcular_posiciones_lista(turno_id)
+
+
+def _crear_abono_desde_lista_espera(usuario, turno):
+    fecha_desde = turno.hora_inicio.date()
+    fecha_hasta = _fin_de_mes(fecha_desde)
+
+    abonos_existentes = (
+        AbonoCliente.query
+        .filter_by(
+            usuario_id=usuario.id,
+            actividad=turno.actividad,
+            dia_semana=turno.hora_inicio.weekday(),
+            hora_inicio=turno.hora_inicio.hour,
+            estado=EstadoAbono.ACTIVO,
+        )
+        .all()
+    )
+    for existente in abonos_existentes:
+        if not (fecha_hasta < existente.fecha_desde or fecha_desde > existente.fecha_hasta):
+            return existente, 0, []
+
+    abono = AbonoCliente(
+        usuario_id=usuario.id,
+        actividad=turno.actividad,
+        dia_semana=turno.hora_inicio.weekday(),
+        hora_inicio=turno.hora_inicio.hour,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=EstadoAbono.ACTIVO,
+        descuento_porcentaje=0.0,
+    )
+    turnos_abono = _obtener_turnos_para_abono(abono)
+    abono.descuento_porcentaje = _calcular_descuento_abono(turnos_abono)
+
+    _, conflictos = _validar_cupos_turnos_abono(turnos_abono, usuario)
+    if conflictos:
+        return None, 0, conflictos
+
+    db.session.add(abono)
+    db.session.flush()
+    creadas, conflictos = _generar_reservas_para_abono(abono, crear_pagos=True)
+    return abono, creadas, conflictos
+
+
+def _promover_siguiente_lista_espera(turno, tipo_clase=None):
+    siguiente = _obtener_siguiente_lista_espera(turno, tipo_clase=tipo_clase)
+    if not siguiente or turno.cupos_disponibles <= 0:
+        return None
+
+    usuario_id = siguiente.usuario_id
+    tipo_clase = siguiente.tipo_clase
+    usuario_promovido = Usuario.query.get(usuario_id)
+    if not usuario_promovido:
+        db.session.delete(siguiente)
+        _recalcular_posiciones_lista(turno.id)
+        return None
+
+    if tipo_clase == TipoClase.ABONADA:
+        abono, creadas, conflictos = _crear_abono_desde_lista_espera(usuario_promovido, turno)
+        if conflictos or not abono:
+            return None
+
+        _limpiar_esperas_de_abono(usuario_id, abono)
+        asunto = 'Abono confirmado desde lista de espera - Club 360'
+        cuerpo = (
+            f"Hola {usuario_promovido.nombre},\n\n"
+            f"Se liberó un cupo para {turno.actividad} "
+            f"los {DIAS_SEMANA[turno.hora_inicio.weekday()]} a las {turno.hora_inicio.strftime('%H:%M')} "
+            f"y se confirmó tu abono mensual con {creadas} clase(s)."
+        )
+        enviar_email_simulado(
+            os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
+            usuario_promovido.email,
+            asunto,
+            cuerpo,
+        )
+        return usuario_promovido
+
+    db.session.add(Reserva(
+        usuario_id=usuario_id,
+        turno_id=turno.id,
+        tipo_clase=tipo_clase,
+        qr_token=secrets.token_urlsafe(24),
+    ))
+    turno.cupos_disponibles -= 1
+    db.session.delete(siguiente)
+
+    monto = _calcular_monto_reserva(turno.actividad, tipo_clase, usuario_promovido)
+    db.session.add(Pago(
+        usuario_id=usuario_id,
+        monto=monto,
+        metodo_pago='tarjeta_credito',
+        estado='completado',
+        tipo_clase=tipo_clase,
+        fecha_pago=datetime.utcnow(),
+        referencia_transaccion=f"espera-{turno.id}-{usuario_id}-{int(datetime.utcnow().timestamp())}",
+    ))
+
+    asunto = 'Promoción desde lista de espera - Club 360'
+    cuerpo = (
+        f"Hola {usuario_promovido.nombre},\n\n"
+        f"Se liberó un cupo y quedaste confirmado para {turno.actividad} "
+        f"el {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}."
+    )
+    enviar_email_simulado(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
+        usuario_promovido.email,
+        asunto,
+        cuerpo,
+    )
+
+    _recalcular_posiciones_lista(turno.id)
+    return usuario_promovido
 
 
 def _abono_cubre_turno(abono, turno):
@@ -393,12 +518,6 @@ def _mes_siguiente(fecha):
 
 def _clave_mes(fecha):
     return fecha.strftime('%Y-%m')
-
-
-def _es_abono_tardio_mes_actual(turno):
-    hoy = datetime.utcnow().date()
-    fecha_turno = turno.hora_inicio.date()
-    return hoy.day >= 15 and fecha_turno.year == hoy.year and fecha_turno.month == hoy.month
 
 
 def _obtener_descuento_cupon_abono(usuario, turno):
@@ -456,6 +575,13 @@ def _obtener_turnos_para_abono(abono):
     return [turno for turno in turnos if _abono_cubre_turno(abono, turno)]
 
 
+def _calcular_descuento_abono(turnos_abono):
+    cantidad_clases = len(turnos_abono)
+    if 1 < cantidad_clases <= 3:
+        return 20.0
+    return 0.0
+
+
 def _validar_cupos_turnos_abono(turnos, usuario):
     conflictos = []
     disponibles = []
@@ -504,7 +630,6 @@ def _crear_pago_abono_inmediato(usuario, abono, turnos):
 def _crear_abono_mensual_para_turno(usuario, turno):
     fecha_desde = turno.hora_inicio.date()
     fecha_hasta = _fin_de_mes(fecha_desde)
-    es_tardio = _es_abono_tardio_mes_actual(turno)
 
     abonos_existentes = (
         AbonoCliente.query
@@ -534,12 +659,9 @@ def _crear_abono_mensual_para_turno(usuario, turno):
     db.session.add(abono)
     db.session.flush()
 
-    if es_tardio:
-        creada, conflicto = _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True)
-        conflictos = [conflicto] if conflicto else []
-        return abono, True, conflictos, 1 if creada else 0, False, True
-
     turnos_abono = _obtener_turnos_para_abono(abono)
+    abono.descuento_porcentaje = _calcular_descuento_abono(turnos_abono)
+
     _, conflictos = _validar_cupos_turnos_abono(turnos_abono, usuario)
     if conflictos:
         return abono, True, conflictos, 0, False, False
@@ -623,7 +745,9 @@ def _cancelar_reservas_futuras_de_abono(abono):
         .all()
     )
 
+    turnos_liberados = []
     for reserva in reservas:
+        turno = reserva.turno
         pagos = (
             Pago.query
             .filter_by(usuario_id=reserva.usuario_id)
@@ -643,8 +767,12 @@ def _cancelar_reservas_futuras_de_abono(abono):
                     tipo_clase=pago.tipo_clase,
                     referencia_transaccion=f"reintegro-abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-{int(datetime.utcnow().timestamp())}",
                 ))
-        reserva.turno.cupos_disponibles += 1
+        turno.cupos_disponibles += 1
         db.session.delete(reserva)
+        turnos_liberados.append(turno)
+
+    for turno in turnos_liberados:
+        _promover_siguiente_lista_espera(turno, tipo_clase=TipoClase.ABONADA)
 
 
 def _aplicar_abonos_a_turno(turno):
@@ -1017,15 +1145,6 @@ def reservar_turno(turno_id):
         else:
             flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.', 'success')
     else:
-        if tipo_clase == TipoClase.ABONADA:
-            flash(
-                'No fue posible reservar el turno abonado del cliente porque ya no tiene cupos disponibles.'
-                if reserva_interna else
-                'No fue posible reservar tu turno abonado porque ya no tiene cupos disponibles.',
-                'error'
-            )
-            return _resolver_redirect_reserva()
-
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
             usuario_id=cliente_objetivo.id
@@ -1275,8 +1394,9 @@ def administrar_abonos():
 
     abonos = (
         AbonoCliente.query
-        .filter_by(usuario_id=current_user.id)
-        .order_by(AbonoCliente.estado.asc(), AbonoCliente.fecha_desde.asc())
+        .filter_by(usuario_id=current_user.id, estado=EstadoAbono.ACTIVO)
+        .filter(AbonoCliente.fecha_hasta >= datetime.utcnow().date())
+        .order_by(AbonoCliente.fecha_desde.asc())
         .all()
     )
     return render_template(

@@ -35,7 +35,7 @@
                 <div id="agenda-admin-body" class="calendar-day-body"></div>
             </section>
 
-            <section class="calendar-context-section calendar-context-detail" id="detalle-admin">
+            <section class="calendar-context-section calendar-context-detail" id="detalle-admin" hidden>
                 <span class="turno-detail-kicker">Acciones</span>
                 <h3>Detalle del turno</h3>
                 <p class="text-muted">Seleccioná una franja horaria para editar o cancelar.</p>
@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initialDetailHtml: '<div class="calendar-day-placeholder compact">Elegí una franja para editar o cancelar el turno.</div>',
         emptyDetailHtml: '<div class="calendar-day-placeholder compact">No hay un turno seleccionado.</div>',
         disableEmptyDateClick: true,
+        enableActivityFilter: true,
         monthCellMode: 'status',
         renderAgendaCard(event, context) {
             const p = event.extendedProps;
