@@ -41,6 +41,15 @@
                     <input type="email" id="email" name="email" class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}" value="{{ form_data.get('email', '') }}" required>
                     {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
                 </div>
+                <div class="form-group">
+                    <label for="tarjeta_credito" class="form-label">Tarjeta de crédito</label>
+                    <input type="text" id="tarjeta_credito" name="tarjeta_credito" inputmode="numeric" autocomplete="cc-number" class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}" value="{{ form_data.get('tarjeta_credito', '') }}" placeholder="4111 1111 1111 1111">
+                    {% if field_errors.get('tarjeta_credito') %}
+                        <small class="form-text error">{{ field_errors['tarjeta_credito'] }}</small>
+                    {% else %}
+                        <small class="form-text">Requerida para clientes. Solo se guardan marca y últimos 4 dígitos.</small>
+                    {% endif %}
+                </div>
             </div>
 
             <div class="form-group-row">
@@ -62,14 +71,6 @@
             <div class="form-group">
                 <label class="form-label">Credenciales iniciales</label>
                 <p class="form-text">El sistema generará automáticamente una contraseña temporal y la enviará por email para que el usuario la cambie en su primer ingreso.</p>
-            </div>
-
-            <div class="form-group">
-                <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
-                    <input type="checkbox" id="autorizacion_menor" name="autorizacion_menor" {% if form_data.get('autorizacion_menor') %}checked{% endif %} style="width: 18px; height: 18px; margin-top: 0.25rem;">
-                    <span class="form-text">Para clientes menores de 18 años, marcar si se recibió autorización física.</span>
-                </label>
-                {% if field_errors.get('autorizacion_menor') %}<small class="form-text error">{{ field_errors['autorizacion_menor'] }}</small>{% endif %}
             </div>
 
             <div class="button-group" style="justify-content: flex-start;">

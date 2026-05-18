@@ -252,6 +252,7 @@ def create_app(config_name='development'):
         _ensure_usuario_requiere_cambio_password_column()
         _ensure_usuario_reset_password_columns()
         _ensure_usuario_edad_columns()
+        _ensure_usuario_tarjeta_columns()
         _ensure_reserva_qr_columns()
         _ensure_reserva_tipo_clase_column()
         _ensure_reserva_abono_column()
@@ -564,6 +565,25 @@ def _ensure_usuario_edad_columns():
         updates.append("ALTER TABLE usuarios ADD COLUMN fecha_nacimiento DATE")
     if 'autorizacion_menor' not in columnas:
         updates.append("ALTER TABLE usuarios ADD COLUMN autorizacion_menor BOOLEAN NOT NULL DEFAULT 0")
+
+    for sql in updates:
+        db.session.execute(text(sql))
+
+    if updates:
+        db.session.commit()
+
+
+def _ensure_usuario_tarjeta_columns():
+    inspector = inspect(db.engine)
+    if 'usuarios' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('usuarios')}
+    updates = []
+    if 'tarjeta_credito_marca' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_marca VARCHAR(20)")
+    if 'tarjeta_credito_ultimos4' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_ultimos4 VARCHAR(4)")
 
     for sql in updates:
         db.session.execute(text(sql))

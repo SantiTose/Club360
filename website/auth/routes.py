@@ -39,6 +39,40 @@ def _edad(fecha_nacimiento):
     return hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
 
 
+def _tarjeta_es_valida(numero):
+    total = 0
+    invertir = numero[::-1]
+    for index, caracter in enumerate(invertir):
+        digito = int(caracter)
+        if index % 2 == 1:
+            digito *= 2
+            if digito > 9:
+                digito -= 9
+        total += digito
+    return total % 10 == 0
+
+
+def _marca_tarjeta(numero):
+    if numero.startswith('4'):
+        return 'Visa'
+    if numero[:2] in {'51', '52', '53', '54', '55'} or 2221 <= int(numero[:4]) <= 2720:
+        return 'Mastercard'
+    if numero[:2] in {'34', '37'}:
+        return 'American Express'
+    return 'Tarjeta'
+
+
+def _normalizar_tarjeta_credito(tarjeta_raw):
+    numero = re.sub(r'\D', '', tarjeta_raw or '')
+    if not numero:
+        return None, None, 'Debes ingresar una tarjeta de crédito'
+    if len(numero) < 13 or len(numero) > 19:
+        return None, None, 'La tarjeta debe tener entre 13 y 19 dígitos'
+    if not _tarjeta_es_valida(numero):
+        return None, None, 'El número de tarjeta no es válido'
+    return _marca_tarjeta(numero), numero[-4:], None
+
+
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     """Registrar nuevo usuario."""
@@ -47,10 +81,9 @@ def register():
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
-        autorizacion_menor = request.form.get('autorizacion_menor') == 'on'
+        tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-        password_confirm = request.form.get('password_confirm', '')
         
         # Diccionario de errores por campo
         field_errors = {}
@@ -69,17 +102,18 @@ def register():
         if not fecha_nacimiento:
             field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
         else:
-            if _edad(fecha_nacimiento) < 18 and not autorizacion_menor:
-                field_errors['autorizacion_menor'] = 'Si eres menor de 18, debes registrar autorización'
+            if _edad(fecha_nacimiento) < 18:
+                field_errors['fecha_nacimiento'] = 'Solo pueden registrarse mayores de edad'
+
+        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_tarjeta_credito(tarjeta_credito_raw)
+        if error_tarjeta:
+            field_errors['tarjeta_credito'] = error_tarjeta
         
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
         
         if len(password) < 6:
             field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
-        
-        if password != password_confirm:
-            field_errors['password_confirm'] = 'Las contraseñas no coinciden'
         
         # Verificar duplicados
         if not field_errors.get('email') and Usuario.query.filter_by(email=email).first():
@@ -97,7 +131,7 @@ def register():
                                      'apellido': apellido,
                                      'dni': dni,
                                      'fecha_nacimiento': fecha_nacimiento_raw,
-                                     'autorizacion_menor': autorizacion_menor,
+                                     'tarjeta_credito': tarjeta_credito_raw,
                                      'email': email
                                  })
         
@@ -107,7 +141,9 @@ def register():
                 apellido=apellido,
                 dni=dni,
                 fecha_nacimiento=fecha_nacimiento,
-                autorizacion_menor=autorizacion_menor,
+                autorizacion_menor=False,
+                tarjeta_credito_marca=tarjeta_marca,
+                tarjeta_credito_ultimos4=tarjeta_ultimos4,
                 email=email,
                 password=generate_password_hash(password),
                 tipo_usuario=TipoUsuario.CLIENTE,
@@ -129,7 +165,7 @@ def register():
                                      'apellido': apellido,
                                      'dni': dni,
                                      'fecha_nacimiento': fecha_nacimiento_raw,
-                                     'autorizacion_menor': autorizacion_menor,
+                                     'tarjeta_credito': tarjeta_credito_raw,
                                      'email': email
                                  })
     
@@ -230,7 +266,7 @@ def crear_usuario():
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
-        autorizacion_menor = request.form.get('autorizacion_menor') == 'on'
+        tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
         email = request.form.get('email', '').strip().lower()
         tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
 
@@ -244,16 +280,22 @@ def crear_usuario():
         fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
         if not fecha_nacimiento:
             field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
+        elif _edad(fecha_nacimiento) < 18:
+            field_errors['fecha_nacimiento'] = 'Solo pueden registrarse mayores de edad'
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
+
+        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = (None, None, None)
+        if tipo_usuario == TipoUsuario.CLIENTE:
+            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_tarjeta_credito(tarjeta_credito_raw)
+            if error_tarjeta:
+                field_errors['tarjeta_credito'] = error_tarjeta
 
         tipos_permitidos = {TipoUsuario.CLIENTE}
         if _es_admin(current_user):
             tipos_permitidos.update({TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR})
         if tipo_usuario not in tipos_permitidos:
             field_errors['tipo_usuario'] = 'No puedes crear este tipo de usuario'
-        if tipo_usuario == TipoUsuario.CLIENTE and fecha_nacimiento and _edad(fecha_nacimiento) < 18 and not autorizacion_menor:
-            field_errors['autorizacion_menor'] = 'Para clientes menores de 18 debes registrar autorización'
 
         if Usuario.query.filter_by(email=email).first():
             field_errors['email'] = 'El email ya está registrado'
@@ -269,7 +311,7 @@ def crear_usuario():
                     'apellido': apellido,
                     'dni': dni,
                     'fecha_nacimiento': fecha_nacimiento_raw,
-                    'autorizacion_menor': autorizacion_menor,
+                    'tarjeta_credito': tarjeta_credito_raw,
                     'email': email,
                     'tipo_usuario': tipo_usuario,
                 },
@@ -283,7 +325,9 @@ def crear_usuario():
             apellido=apellido,
             dni=dni,
             fecha_nacimiento=fecha_nacimiento,
-            autorizacion_menor=autorizacion_menor,
+            autorizacion_menor=False,
+            tarjeta_credito_marca=tarjeta_marca,
+            tarjeta_credito_ultimos4=tarjeta_ultimos4,
             email=email,
             password=generate_password_hash(password_temporal),
             tipo_usuario=tipo_usuario,
