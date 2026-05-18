@@ -1339,9 +1339,8 @@ def cancelar_turno(turno_id):
         flash('No tienes permiso para cancelar este turno', 'error')
         return redirect(url_for('turnos.mis_turnos'))
     
-    reserva_origen_id = reserva.id
     es_reserva_abonada = _es_reserva_abonada(reserva)
-    abono_id = reserva.abono_id
+    credito_generado = None
     db.session.delete(reserva)
     turno.cupos_disponibles += 1
 
@@ -1349,25 +1348,14 @@ def cancelar_turno(turno_id):
     if es_reserva_abonada:
         current_user.cancelaciones_abonado += 1
         if horas >= 48:
-            pago_pendiente = _buscar_pago_pendiente_reserva(current_user.id, turno_id)
-            if pago_pendiente and pago_pendiente.monto > 0:
-                descuento = round(min(pago_pendiente.monto, _calcular_monto_reserva(turno.actividad, TipoClase.ABONADA, current_user)), 2)
-                pago_pendiente.monto = round(max(pago_pendiente.monto - descuento, 0), 2)
-                flash(f'Cancelación abonada con +48h: se descontó ${descuento:.2f} del pago pendiente del abono.', 'info')
-            else:
-                pago_reserva = _buscar_pago_reserva(current_user.id, turno_id) or _buscar_pago_abono_completado(current_user.id, abono_id)
-                monto_credito = round(
-                    pago_reserva.monto if pago_reserva and pago_reserva.monto > 0 else _calcular_monto_reserva(turno.actividad, TipoClase.ABONADA, current_user),
-                    2,
-                )
-                db.session.add(CreditoCliente(
-                    usuario_id=current_user.id,
-                    actividad=turno.actividad,
-                    monto=monto_credito,
-                    fecha_vencimiento=_vencimiento_credito(datetime.utcnow().date()),
-                    reserva_origen_id=reserva_origen_id,
-                ))
-                flash(f'Cancelación abonada con +48h: se generó un crédito de {turno.actividad.upper()} por ${monto_credito:.2f}', 'info')
+            monto_credito = round(_calcular_monto_reserva(turno.actividad, TipoClase.ABONADA, current_user), 2)
+            credito_generado = CreditoCliente(
+                usuario_id=current_user.id,
+                actividad=turno.actividad,
+                monto=monto_credito,
+                fecha_vencimiento=_vencimiento_credito(datetime.utcnow().date()),
+            )
+            db.session.add(credito_generado)
         else:
             flash('Cancelación abonada con menos de 48h: no se genera crédito', 'warning')
 
@@ -1442,7 +1430,13 @@ def cancelar_turno(turno_id):
 
     db.session.commit()
     
-    flash('Turno cancelado exitosamente', 'success')
+    if credito_generado:
+        flash(
+            f'Turno cancelado exitosamente. Se generó un crédito de {turno.actividad.upper()} por ${credito_generado.monto:.2f}, válido hasta {credito_generado.fecha_vencimiento.strftime("%d/%m/%Y")}.',
+            'success',
+        )
+    else:
+        flash('Turno cancelado exitosamente', 'success')
     return redirect(url_for('turnos.mis_turnos'))
 
 
