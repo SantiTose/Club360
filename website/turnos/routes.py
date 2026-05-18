@@ -610,6 +610,20 @@ def _marcar_credito_usado(credito, reserva):
     credito.fecha_uso = datetime.utcnow()
 
 
+def _crear_credito_por_cancelacion_abonada(reserva, turno, pago):
+    if not pago or pago.estado != 'completado' or pago.monto <= 0:
+        return None
+
+    credito = CreditoCliente(
+        usuario_id=reserva.usuario_id,
+        actividad=turno.actividad,
+        monto=round(abs(pago.monto), 2),
+        fecha_vencimiento=_vencimiento_credito(datetime.utcnow().date()),
+    )
+    db.session.add(credito)
+    return credito
+
+
 def _obtener_descuento_cupon_abono(usuario, turno):
     fecha_turno = turno.hora_inicio.date()
     if (
@@ -852,7 +866,7 @@ def _generar_reservas_para_abono(abono, crear_pagos=True, agregar_espera_sin_cup
     return creadas, conflictos, turnos_en_espera
 
 
-def _cancelar_reservas_futuras_de_abono(abono):
+def _cancelar_reservas_futuras_de_abono(abono, generar_creditos=False):
     ahora = datetime.utcnow()
     reservas = (
         Reserva.query
@@ -863,33 +877,54 @@ def _cancelar_reservas_futuras_de_abono(abono):
     )
 
     turnos_liberados = []
+    creditos_generados = []
+    reservas_sin_credito_por_pago = 0
+    reservas_sin_credito_por_tiempo = 0
+    credito_de_abono_generado = False
     for reserva in reservas:
         turno = reserva.turno
-        pagos = (
+        pago_completado = (
             Pago.query
-            .filter_by(usuario_id=reserva.usuario_id)
+            .filter_by(usuario_id=reserva.usuario_id, estado='completado', tipo_clase=TipoClase.ABONADA)
             .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-%"))
             .filter(Pago.monto > 0)
+            .order_by(Pago.fecha_pago.desc())
+            .first()
+        )
+
+        pagos_pendientes = (
+            Pago.query
+            .filter_by(usuario_id=reserva.usuario_id, estado='pendiente')
+            .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-%"))
             .all()
         )
-        for pago in pagos:
-            if pago.estado == 'pendiente':
-                db.session.delete(pago)
+        for pago in pagos_pendientes:
+            db.session.delete(pago)
+
+        if generar_creditos and not credito_de_abono_generado:
+            if _horas_anticipacion(turno) >= 48:
+                credito = _crear_credito_por_cancelacion_abonada(reserva, turno, pago_completado)
+                if credito:
+                    creditos_generados.append(credito)
+                    credito_de_abono_generado = True
+                else:
+                    reservas_sin_credito_por_pago += 1
             else:
-                db.session.add(Pago(
-                    usuario_id=pago.usuario_id,
-                    monto=-round(abs(pago.monto), 2),
-                    metodo_pago=pago.metodo_pago,
-                    estado='completado',
-                    tipo_clase=pago.tipo_clase,
-                    referencia_transaccion=f"reintegro-abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-{int(datetime.utcnow().timestamp())}",
-                ))
+                reservas_sin_credito_por_tiempo += 1
+
         turno.cupos_disponibles += 1
         db.session.delete(reserva)
         turnos_liberados.append(turno)
 
     for turno in turnos_liberados:
         _promover_siguiente_lista_espera(turno, tipo_clase=TipoClase.ABONADA)
+
+    return {
+        'creditos_generados': creditos_generados,
+        'reservas_sin_credito_por_pago': reservas_sin_credito_por_pago,
+        'reservas_sin_credito_por_tiempo': reservas_sin_credito_por_tiempo,
+        'reservas_canceladas': len(reservas),
+    }
 
 
 def _aplicar_abonos_a_turno(turno):
@@ -1341,6 +1376,7 @@ def cancelar_turno(turno_id):
     
     es_reserva_abonada = _es_reserva_abonada(reserva)
     credito_generado = None
+    pago_reserva = _buscar_pago_reserva(current_user.id, turno_id) if es_reserva_abonada else None
     db.session.delete(reserva)
     turno.cupos_disponibles += 1
 
@@ -1348,14 +1384,9 @@ def cancelar_turno(turno_id):
     if es_reserva_abonada:
         current_user.cancelaciones_abonado += 1
         if horas >= 48:
-            monto_credito = round(_calcular_monto_reserva(turno.actividad, TipoClase.ABONADA, current_user), 2)
-            credito_generado = CreditoCliente(
-                usuario_id=current_user.id,
-                actividad=turno.actividad,
-                monto=monto_credito,
-                fecha_vencimiento=_vencimiento_credito(datetime.utcnow().date()),
-            )
-            db.session.add(credito_generado)
+            credito_generado = _crear_credito_por_cancelacion_abonada(reserva, turno, pago_reserva)
+            if not credito_generado:
+                flash('Cancelación abonada con +48h: no se genera crédito porque no había pago confirmado.', 'info')
         else:
             flash('Cancelación abonada con menos de 48h: no se genera crédito', 'warning')
 
@@ -1593,10 +1624,26 @@ def cancelar_abono(abono_id):
         flash('El abono ya estaba dado de baja.', 'info')
         return redirect(url_for('turnos.administrar_abonos'))
 
-    _cancelar_reservas_futuras_de_abono(abono)
+    era_abono_activo = abono.estado == EstadoAbono.ACTIVO
+    resultado_cancelacion = _cancelar_reservas_futuras_de_abono(abono, generar_creditos=era_abono_activo)
     abono.estado = EstadoAbono.CANCELADO
     db.session.commit()
-    flash('Tu abono mensual fue dado de baja.', 'success')
+
+    creditos_generados = resultado_cancelacion['creditos_generados']
+    if creditos_generados:
+        actividades = ', '.join(sorted({credito.actividad.upper() for credito in creditos_generados}))
+        primer_vencimiento = min(credito.fecha_vencimiento for credito in creditos_generados)
+        flash(
+            f'Tu abono mensual fue dado de baja. Se generaron {len(creditos_generados)} crédito(s) de {actividades}, válidos hasta {primer_vencimiento.strftime("%d/%m/%Y")}.',
+            'success',
+        )
+    else:
+        flash('Tu abono mensual fue dado de baja. No se generaron créditos.', 'success')
+
+    if resultado_cancelacion['reservas_sin_credito_por_tiempo']:
+        flash('Las clases con menos de 48 hs de anticipación no generaron crédito.', 'warning')
+    if resultado_cancelacion['reservas_sin_credito_por_pago']:
+        flash('Las clases del abono sin pago confirmado no generaron crédito.', 'info')
     return redirect(url_for('turnos.administrar_abonos'))
 
 

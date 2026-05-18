@@ -35,7 +35,7 @@
                     <td>{{ abono.fecha_desde.strftime('%d/%m/%Y') }} al {{ abono.fecha_hasta.strftime('%d/%m/%Y') }}</td>
                     <td>{{ abono.estado|capitalize }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}">
+                        <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono" data-confirm-message="Vas a dar de baja este abono. Si hay una clase paga con más de 48 hs de anticipación, se generará un crédito de esa actividad." data-confirm-action="Cancelar abono" data-confirm-cancel="Volver">
                             <button type="submit" class="btn btn-danger">Cancelar</button>
                         </form>
                     </td>
