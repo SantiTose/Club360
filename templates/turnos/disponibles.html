@@ -3,7 +3,7 @@
 {% block title %}Turnos Disponibles - Club 360{% endblock %}
 
 {% block content %}
-<section class="calendar-page">
+<section class="calendar-page calendar-page-disponibles">
     <div class="calendar-page-header">
         <div>
             <h2>Buscar Turnos</h2>
@@ -13,7 +13,7 @@
 
     <div class="calendar-layout calendar-layout-week">
         <div id="calendar-disponibles" class="calendar-surface"></div>
-        <aside class="calendar-side-column calendar-context-panel">
+        <aside class="calendar-side-column calendar-context-panel calendar-context-panel-inline">
             <section class="calendar-context-section">
                 <span class="turno-detail-kicker">Agenda del día</span>
                 <h3 id="agenda-turno-title">Seleccioná un día</h3>
@@ -35,12 +35,42 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const permiteAsignarCliente = {{ 'true' if permite_asignar_cliente else 'false' }};
+    const imagenesDeporte = {
+        futbol: '{{ url_for("static", filename="images/deportes/futbol.jpeg") }}',
+        basquet: '{{ url_for("static", filename="images/deportes/basquet.jpeg") }}',
+        voley: '{{ url_for("static", filename="images/deportes/voley.jpeg") }}',
+        padel: '{{ url_for("static", filename="images/deportes/padel.jpeg") }}'
+    };
+    const nombresDeporte = {
+        futbol: 'Fútbol',
+        basquet: 'Básquet',
+        voley: 'Vóley',
+        padel: 'Pádel'
+    };
+
+    function deporteDesdeEvento(event) {
+        const raw = String(event.extendedProps.actividad || event.title || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        return raw;
+    }
+
+    function nombreDeporte(event) {
+        const deporte = deporteDesdeEvento(event);
+        return nombresDeporte[deporte] || event.title.replace(/\s*\([^)]*\)\s*$/, '');
+    }
+
+    const creditoActividad = new URLSearchParams(window.location.search).get('credito') || '';
+    const eventosUrl = new URL('{{ url_for("turnos.eventos_turnos") }}', window.location.origin);
+    eventosUrl.searchParams.set('scope', 'disponibles');
+    if (creditoActividad) {
+        eventosUrl.searchParams.set('credito', creditoActividad);
+    }
+
     window.Club360CalendarUI.createMonthAgenda({
         calendarId: 'calendar-disponibles',
         agendaTitleId: 'agenda-turno-title',
         agendaBodyId: 'agenda-turno-body',
         detailBodyId: 'detalle-turno-body',
-        eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=disponibles',
+        eventsUrl: eventosUrl.toString(),
         emptyCalendarTitle: 'No hay turnos disponibles',
         emptyCalendarMessage: 'Todavía no hay turnos cargados. Volvé más tarde.',
         initialAgendaHtml: '<div class="calendar-day-placeholder">Elegí un día de la semana para desplegar las franjas horarias disponibles.</div>',
@@ -51,22 +81,49 @@ document.addEventListener('DOMContentLoaded', function() {
         enableActivityFilter: true,
         viewMode: 'week',
         renderAgendaCard(event, context) {
-            const actividad = event.title.replace(/\s*\([^)]*\)\s*$/, '');
+            const deporte = deporteDesdeEvento(event);
+            const actividad = nombreDeporte(event);
             const estado = event.extendedProps.sin_cupos ? 'Lista de espera' : 'Disponible';
+            const precio = Number(event.extendedProps.precio || 0);
+            const cupos = Number(event.extendedProps.cupos_disponibles || 0);
+            const cuposTexto = event.extendedProps.sin_cupos
+                ? 'Lista de espera'
+                : `${cupos} cupo${cupos === 1 ? '' : 's'} libres`;
+            const duracion = Number(event.extendedProps.duracion_minutos || 60);
+            const imagen = imagenesDeporte[deporte] || imagenesDeporte.futbol;
             return `
-                <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
-                    <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
-                    <strong>${context.helpers.escapeHtml(actividad)}</strong>
-                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(estado)}</span>
-                </button>
+                <div class="calendar-class-item ${context.isActive ? 'is-expanded' : ''}">
+                    <button type="button" class="calendar-class-row ${context.isActive ? 'is-active' : ''} ${event.extendedProps.sin_cupos ? 'is-full' : ''}" data-event-id="${event.id}">
+                        <span class="calendar-class-time">
+                            <strong>${context.helpers.formatTime(event.start)}</strong>
+                            <span>${duracion} mins</span>
+                        </span>
+                        <span class="calendar-class-image" style="background-image: url('${imagen}')"></span>
+                        <span class="calendar-class-main">
+                            <strong>${context.helpers.escapeHtml(actividad)}</strong>
+                            <span>Club 360</span>
+                            <small>${context.helpers.escapeHtml(estado)}</small>
+                        </span>
+                        <span class="calendar-class-side">
+                            <strong>$${precio.toFixed(2)}</strong>
+                            <span>${context.helpers.escapeHtml(cuposTexto)}</span>
+                        </span>
+                    </button>
+                    ${context.isActive ? `<div class="calendar-inline-detail">${renderTurnoDetail(event, context.helpers)}</div>` : ''}
+                </div>
             `;
         },
         renderDetail(event, helpers) {
+            return renderTurnoDetail(event, helpers);
+        }
+    });
+
+    function renderTurnoDetail(event, helpers) {
             const p = event.extendedProps;
             const isFull = Boolean(p.sin_cupos);
             const inicio = new Date(event.start).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
             const fin = new Date(event.end).toLocaleString('es-AR', { timeStyle: 'short' });
-            const actividad = event.title.replace(/\s*\([^)]*\)\s*$/, '');
+            const actividad = nombreDeporte(event);
             const fechaConfirmacion = new Date(event.start).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
             const horarioConfirmacion = helpers.getHourRange(event.start, event.end);
             const esAntesDelDia15 = new Date().getDate() < 15;
@@ -84,6 +141,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 : `Vas a reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`;
             const accionConfirmacion = isFull ? 'Anotarme' : 'Reservar';
             const textoBoton = isFull ? 'Anotarme en lista de espera' : 'Reservar turno';
+            const usaCredito = Boolean(p.credito_disponible);
+            const textoBotonFinal = usaCredito && !isFull ? 'Reservar turno con crédito' : textoBoton;
             const boton = p.ya_reservado
                 ? `<div>
                         <p class="text-muted" style="margin-bottom:.75rem;">Ya reservaste este turno. Si no vas a asistir, podés cancelarlo desde acá.</p>
@@ -93,6 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                    </div>`
                 : `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="${tituloConfirmacion}" data-confirm-message="${mensajeConfirmacion}" data-confirm-action="${accionConfirmacion}">
                         ${mensajeReserva}
+                        ${usaCredito ? '<input type="hidden" name="usar_credito" value="1">' : ''}
                         ${permiteAsignarCliente ? `
                         <div class="form-group" style="margin-bottom: .8rem;">
                             <label for="cliente_email_${event.id}"><strong>Mail del cliente</strong></label>
@@ -108,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <label for="tipo_clase_no_abonada_${event.id}" class="reservation-mode-pill">No abonada</label>
                             </div>
                         </div>
-                        <button type="submit" class="btn ${isFull ? 'btn-secondary' : 'btn-success'} btn-block">${textoBoton}</button>
+                        <button type="submit" class="btn ${isFull ? 'btn-secondary' : 'btn-success'} btn-block">${textoBotonFinal}</button>
                    </form>`;
 
             return `
@@ -122,8 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <div class="turno-detail-actions">${boton}</div>
             `;
-        }
-    });
+    }
 });
 </script>
 {% endblock %}

@@ -169,6 +169,34 @@ class Pago(db.Model):
         return f'<Pago {self.usuario_id} - ${self.monto}>'
 
 
+class EstadoCredito(str, Enum):
+    DISPONIBLE = "disponible"
+    USADO = "usado"
+    VENCIDO = "vencido"
+
+
+class CreditoCliente(db.Model):
+    __tablename__ = 'creditos_clientes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    actividad = db.Column(db.String(20), nullable=False)
+    monto = db.Column(db.Float, nullable=False)
+    estado = db.Column(db.String(20), nullable=False, default=EstadoCredito.DISPONIBLE)
+    fecha_vencimiento = db.Column(db.Date, nullable=False)
+    reserva_origen_id = db.Column(db.Integer, db.ForeignKey('reservas.id'))
+    reserva_uso_id = db.Column(db.Integer, db.ForeignKey('reservas.id'))
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    fecha_uso = db.Column(db.DateTime)
+
+    usuario = db.relationship('Usuario', backref='creditos')
+    reserva_origen = db.relationship('Reserva', foreign_keys=[reserva_origen_id])
+    reserva_uso = db.relationship('Reserva', foreign_keys=[reserva_uso_id])
+
+    def __repr__(self):
+        return f'<CreditoCliente usuario={self.usuario_id} {self.actividad} ${self.monto}>'
+
+
 class Suspension(db.Model):
     __tablename__ = 'suspensiones'
     

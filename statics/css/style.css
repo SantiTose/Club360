@@ -861,6 +861,18 @@ textarea:focus {
     gap: 1rem;
 }
 
+.calendar-page-disponibles {
+    width: min(1360px, calc(100vw - 2rem));
+    margin-left: 50%;
+    transform: translateX(-50%);
+}
+
+.calendar-page-disponibles .calendar-layout-week,
+.calendar-page-disponibles .calendar-surface,
+.calendar-page-disponibles .calendar-side-column {
+    width: min(1250px, 100%);
+}
+
 .calendar-page-header {
     display: flex;
     justify-content: space-between;
@@ -1345,6 +1357,14 @@ textarea:focus {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+.calendar-context-panel-inline.has-visible-detail {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.calendar-context-panel-inline .calendar-context-detail {
+    display: none;
+}
+
 .calendar-context-section {
     padding: 1.2rem 1.25rem;
 }
@@ -1480,6 +1500,164 @@ textarea:focus {
     border-radius: 16px;
     background: rgba(241, 244, 242, 0.88);
     border: 1px dashed rgba(174, 185, 179, 0.8);
+}
+
+.calendar-class-item {
+    display: grid;
+    gap: 0;
+}
+
+.calendar-class-item.is-expanded {
+    gap: 0.75rem;
+}
+
+.calendar-class-row {
+    width: 100%;
+    min-height: 124px;
+    display: grid;
+    grid-template-columns: 98px 150px minmax(0, 1fr) minmax(112px, 0.32fr);
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    border: 1px solid rgba(31, 79, 95, 0.11);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--charcoal);
+    cursor: pointer;
+    text-align: left;
+    box-shadow: 0 14px 26px rgba(31, 79, 95, 0.05);
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.calendar-class-row + .calendar-class-row {
+    margin-top: 0.15rem;
+}
+
+.calendar-class-row:hover {
+    transform: translateY(-2px);
+    border-color: rgba(31, 79, 95, 0.22);
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-class-row.is-active {
+    border-color: rgba(31, 79, 95, 0.34);
+    background: linear-gradient(135deg, rgba(31, 79, 95, 0.1), rgba(95, 127, 79, 0.07));
+}
+
+.calendar-class-time {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.calendar-class-time strong {
+    color: var(--charcoal);
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+
+.calendar-class-time span,
+.calendar-class-main span,
+.calendar-class-main small,
+.calendar-class-side span {
+    color: var(--muted);
+}
+
+.calendar-class-time span {
+    font-weight: 700;
+}
+
+.calendar-class-image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    min-height: 92px;
+    border-radius: 14px;
+    background-size: cover;
+    background-position: center;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.calendar-class-main {
+    display: grid;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.calendar-class-main strong {
+    font-size: 1.05rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.calendar-class-main span {
+    font-weight: 700;
+}
+
+.calendar-class-main small {
+    font-size: 0.86rem;
+}
+
+.calendar-class-side {
+    display: grid;
+    justify-items: end;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.calendar-class-side strong {
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.calendar-class-side span {
+    color: var(--success);
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-align: right;
+}
+
+.calendar-class-side::after {
+    content: "Reservar";
+    min-width: 104px;
+    padding: 0.62rem 0.95rem;
+    border: 1px solid rgba(178, 93, 72, 0.36);
+    border-radius: 12px;
+    color: var(--danger);
+    background: rgba(255, 255, 255, 0.72);
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-align: center;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.calendar-class-row:hover .calendar-class-side::after,
+.calendar-class-row.is-active .calendar-class-side::after {
+    border-color: rgba(31, 79, 95, 0.35);
+    background: rgba(31, 79, 95, 0.1);
+    color: var(--petrol-dark);
+}
+
+.calendar-class-row.is-full .calendar-class-side::after {
+    content: "Lista";
+}
+
+.calendar-class-row.is-full .calendar-class-side span {
+    color: var(--warning);
+}
+
+.calendar-inline-detail {
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(31, 79, 95, 0.12);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 246, 0.94));
+    box-shadow: 0 12px 24px rgba(31, 79, 95, 0.06);
+}
+
+.calendar-inline-detail .turno-detail-header {
+    margin-top: 0;
+}
+
+.calendar-inline-detail .turno-detail-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .reservation-mode-pills {
@@ -2024,6 +2202,116 @@ textarea:focus {
     color: var(--danger);
 }
 
+.dashboard-credits-panel {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.dashboard-credits-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.95rem;
+}
+
+.dashboard-credit-card {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(31, 79, 95, 0.1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 248, 0.98));
+}
+
+.dashboard-credit-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+}
+
+.dashboard-credit-icon {
+    flex: 0 0 50px;
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--petrol);
+    color: #fff;
+    font-weight: 900;
+}
+
+.dashboard-credit-card h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+}
+
+.dashboard-credit-card p,
+.dashboard-credit-card small {
+    display: block;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.dashboard-credit-card strong {
+    display: block;
+    margin: 0.2rem 0;
+    color: var(--petrol-dark);
+    font-size: 1.05rem;
+}
+
+.dashboard-credit-link {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 12px;
+    border: 1px solid rgba(31, 79, 95, 0.26);
+    color: var(--petrol-dark);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.dashboard-credit-link:hover {
+    background: rgba(31, 79, 95, 0.08);
+}
+
+.dashboard-credit-basquet .dashboard-credit-icon,
+.dashboard-credit-basquet .dashboard-credit-link {
+    border-color: rgba(228, 136, 47, 0.34);
+}
+
+.dashboard-credit-basquet .dashboard-credit-icon {
+    background: var(--orange);
+}
+
+.dashboard-credit-voley .dashboard-credit-icon {
+    background: var(--moss);
+}
+
+.dashboard-empty-credit {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.25rem;
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px dashed rgba(31, 79, 95, 0.18);
+    background: rgba(241, 244, 242, 0.72);
+}
+
+.dashboard-empty-credit strong {
+    color: var(--charcoal);
+}
+
+.dashboard-empty-credit span {
+    color: var(--muted);
+}
+
 .dashboard-activity-panel {
     min-height: 100%;
 }
@@ -2146,6 +2434,10 @@ tbody tr:hover {
         flex-direction: column;
     }
 
+    .dashboard-credits-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .user-menu {
         padding-left: 0;
         border-left: none;
@@ -2171,6 +2463,14 @@ tbody tr:hover {
     .calendar-context-panel.has-visible-detail .calendar-context-section + .calendar-context-section {
         border-left: 0;
         border-top: 1px solid var(--gray-200);
+    }
+
+    .calendar-context-panel-inline.has-visible-detail .calendar-context-section + .calendar-context-section {
+        border-top: 0;
+    }
+
+    .calendar-class-row {
+        grid-template-columns: 84px 128px minmax(0, 1fr) minmax(104px, 0.28fr);
     }
 }
 
@@ -2232,6 +2532,10 @@ tbody tr:hover {
         grid-template-columns: 1fr;
     }
 
+    .dashboard-credits-grid {
+        grid-template-columns: 1fr;
+    }
+
     .dashboard-actions-grid-internal {
         grid-template-columns: 1fr;
     }
@@ -2282,6 +2586,41 @@ tbody tr:hover {
 
     .calendar-slot-hour {
         padding-top: 0;
+    }
+
+    .calendar-class-row {
+        grid-template-columns: 74px minmax(0, 1fr);
+        gap: 0.85rem;
+        min-height: 0;
+    }
+
+    .calendar-class-image {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        min-height: 150px;
+    }
+
+    .calendar-class-main {
+        grid-column: 2;
+    }
+
+    .calendar-class-side {
+        grid-column: 1 / -1;
+        justify-items: stretch;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+    }
+
+    .calendar-class-side span {
+        text-align: left;
+    }
+
+    .calendar-class-side::after {
+        min-width: 0;
+    }
+
+    .calendar-inline-detail .turno-detail-meta {
+        grid-template-columns: 1fr;
     }
 
     .calendar-week-day {

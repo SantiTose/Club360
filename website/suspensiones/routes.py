@@ -95,7 +95,7 @@ def _reactivar_cuenta_tras_pago(usuario):
     conflictos = []
     for abono in abonos_suspendidos:
         abono.estado = EstadoAbono.ACTIVO
-        creadas, errores = _generar_reservas_para_abono(abono, crear_pagos=False)
+        creadas, errores, _ = _generar_reservas_para_abono(abono, crear_pagos=False)
         reservas_restauradas += creadas
         conflictos.extend(errores)
 

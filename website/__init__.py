@@ -3,7 +3,7 @@ from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_required, current_user
 from flask_migrate import Migrate
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 import secrets
 from datetime import datetime
 
@@ -64,7 +64,7 @@ def create_app(config_name='development'):
     @app.route('/dashboard')
     @login_required
     def dashboard():
-        from website.models import TipoUsuario, Turno, Reserva, Pago, Usuario
+        from website.models import TipoUsuario, Turno, Reserva, Pago, Usuario, CreditoCliente, EstadoCredito
 
         turnos_reservados = 0
         actividad_reciente = []
@@ -84,7 +84,31 @@ def create_app(config_name='development'):
         }
 
         if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+            hoy = datetime.utcnow().date()
+            CreditoCliente.query.filter(
+                CreditoCliente.usuario_id == current_user.id,
+                CreditoCliente.estado == EstadoCredito.DISPONIBLE,
+                CreditoCliente.fecha_vencimiento < hoy,
+            ).update({'estado': EstadoCredito.VENCIDO}, synchronize_session=False)
+            db.session.commit()
+
             turnos_reservados = Reserva.query.filter_by(usuario_id=current_user.id).count()
+            creditos = (
+                db.session.query(
+                    CreditoCliente.actividad,
+                    func.count(CreditoCliente.id).label('cantidad'),
+                    func.coalesce(func.sum(CreditoCliente.monto), 0).label('monto_total'),
+                    func.min(CreditoCliente.fecha_vencimiento).label('vence_primero'),
+                )
+                .filter(
+                    CreditoCliente.usuario_id == current_user.id,
+                    CreditoCliente.estado == EstadoCredito.DISPONIBLE,
+                )
+                .filter(CreditoCliente.fecha_vencimiento >= hoy)
+                .group_by(CreditoCliente.actividad)
+                .order_by(CreditoCliente.actividad.asc())
+                .all()
+            )
 
             proximo_turno = (
                 Turno.query
@@ -192,6 +216,7 @@ def create_app(config_name='development'):
             turnos_reservados=turnos_reservados,
             actividad_reciente=actividad_reciente,
             dashboard_context=dashboard_context,
+            creditos=creditos if current_user.tipo_usuario == TipoUsuario.CLIENTE else [],
         )
 
     @app.before_request
@@ -232,6 +257,7 @@ def create_app(config_name='development'):
         _ensure_reserva_abono_column()
         _ensure_lista_espera_tipo_clase_column()
         _ensure_pago_tipo_clase_column()
+        _ensure_creditos_clientes_table()
         _clear_pending_client_debts()
         _backfill_reserva_qr_tokens()
 
@@ -581,6 +607,31 @@ def _ensure_pago_tipo_clase_column():
     if 'tipo_clase' not in columnas:
         db.session.execute(text("ALTER TABLE pagos ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
         db.session.commit()
+
+
+def _ensure_creditos_clientes_table():
+    inspector = inspect(db.engine)
+    if 'creditos_clientes' in inspector.get_table_names():
+        return
+
+    db.session.execute(text("""
+        CREATE TABLE creditos_clientes (
+            id INTEGER NOT NULL PRIMARY KEY,
+            usuario_id INTEGER NOT NULL,
+            actividad VARCHAR(20) NOT NULL,
+            monto FLOAT NOT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'disponible',
+            fecha_vencimiento DATE NOT NULL,
+            reserva_origen_id INTEGER,
+            reserva_uso_id INTEGER,
+            fecha_creacion DATETIME NOT NULL,
+            fecha_uso DATETIME,
+            FOREIGN KEY(usuario_id) REFERENCES usuarios (id),
+            FOREIGN KEY(reserva_origen_id) REFERENCES reservas (id),
+            FOREIGN KEY(reserva_uso_id) REFERENCES reservas (id)
+        )
+    """))
+    db.session.commit()
 
 
 def _clear_pending_client_debts():
