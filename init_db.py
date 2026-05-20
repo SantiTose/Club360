@@ -4,7 +4,7 @@ Ejecutar: python init_db.py
 """
 
 from website import create_app, db
-from website.models import Usuario, Turno, Pago, Reserva
+from website.models import Usuario, Turno, Pago, Reserva, EstadoUsuario
 from werkzeug.security import generate_password_hash
 
 
@@ -71,8 +71,18 @@ def init_database():
             tipo_usuario='cliente',
             estado='activo'
         )
+
+        cliente_suspendido = Usuario(
+            nombre='Suspendido',
+            apellido='Prueba',
+            dni='56789012',
+            email='suspendido@example.com',
+            password=generate_password_hash('suspendido123'),
+            tipo_usuario='cliente',
+            estado=EstadoUsuario.SUSPENDIDO
+        )
         
-        db.session.add_all([cliente1, cliente2])
+        db.session.add_all([cliente1, cliente2, cliente_suspendido])
         db.session.commit()
         print("✓ Clientes creados")
         
@@ -85,6 +95,7 @@ def init_database():
         print("- Empleado: juan@club360.com / empleado123")
         print("- Cliente 1: carlos@example.com / cliente123")
         print("- Cliente 2: maria@example.com / cliente123")
+        print("- Cliente suspendido: suspendido@example.com / suspendido123")
 
 
 if __name__ == '__main__':
