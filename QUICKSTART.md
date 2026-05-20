@@ -28,6 +28,7 @@ Después de ejecutar `init_db.py`, tendrás:
 | Empleado | juan@club360.com | empleado123 |
 | Cliente 1 | carlos@example.com | cliente123 |
 | Cliente 2 | maria@example.com | cliente123 |
+| Cliente sin fondos | sinfondos@example.com | cliente123 |
 | Cliente suspendido | suspendido@example.com | suspendido123 |
 
 ## 3. Características Disponibles

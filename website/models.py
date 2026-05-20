@@ -38,6 +38,7 @@ class Usuario(UserMixin, db.Model):
     autorizacion_menor = db.Column(db.Boolean, nullable=False, default=False)
     tarjeta_credito_marca = db.Column(db.String(20))
     tarjeta_credito_ultimos4 = db.Column(db.String(4))
+    tarjeta_credito_saldo = db.Column(db.Float, nullable=False, default=100000.0)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     tipo_usuario = db.Column(db.String(20), nullable=False, default=TipoUsuario.CLIENTE)
@@ -131,6 +132,7 @@ class Reserva(db.Model):
 
 class EstadoAbono(str, Enum):
     ACTIVO = "activo"
+    PENDIENTE = "pendiente"
     SUSPENDIDO = "suspendido"
     CANCELADO = "cancelado"
 

@@ -584,12 +584,18 @@ def _ensure_usuario_tarjeta_columns():
         updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_marca VARCHAR(20)")
     if 'tarjeta_credito_ultimos4' not in columnas:
         updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_ultimos4 VARCHAR(4)")
+    agregar_saldo = 'tarjeta_credito_saldo' not in columnas
+    if agregar_saldo:
+        updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_saldo FLOAT NOT NULL DEFAULT 100000")
 
     for sql in updates:
         db.session.execute(text(sql))
 
     if updates:
         db.session.commit()
+        if agregar_saldo:
+            db.session.execute(text("UPDATE usuarios SET tarjeta_credito_saldo = 100000 WHERE tipo_usuario = 'cliente'"))
+            db.session.commit()
 
 
 def _ensure_reserva_qr_columns():

@@ -361,6 +361,11 @@ p {
     color: #fff;
 }
 
+.btn-warning {
+    background: linear-gradient(140deg, #f1b24a, #c7781f);
+    color: #fff;
+}
+
 .btn-sm {
     font-size: 0.82rem;
     padding: 0.5rem 0.82rem;

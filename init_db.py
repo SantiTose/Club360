@@ -59,7 +59,8 @@ def init_database():
             email='carlos@example.com',
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
-            estado='activo'
+            estado='activo',
+            tarjeta_credito_saldo=100000.0
         )
         
         cliente2 = Usuario(
@@ -69,7 +70,19 @@ def init_database():
             email='maria@example.com',
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
-            estado='activo'
+            estado='activo',
+            tarjeta_credito_saldo=100000.0
+        )
+
+        cliente_sin_fondos = Usuario(
+            nombre='Sin Fondos',
+            apellido='Prueba',
+            dni='67890123',
+            email='sinfondos@example.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado='activo',
+            tarjeta_credito_saldo=0.0
         )
 
         cliente_suspendido = Usuario(
@@ -79,10 +92,11 @@ def init_database():
             email='suspendido@example.com',
             password=generate_password_hash('suspendido123'),
             tipo_usuario='cliente',
-            estado=EstadoUsuario.SUSPENDIDO
+            estado=EstadoUsuario.SUSPENDIDO,
+            tarjeta_credito_saldo=0.0
         )
         
-        db.session.add_all([cliente1, cliente2, cliente_suspendido])
+        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, cliente_suspendido])
         db.session.commit()
         print("✓ Clientes creados")
         
@@ -95,6 +109,7 @@ def init_database():
         print("- Empleado: juan@club360.com / empleado123")
         print("- Cliente 1: carlos@example.com / cliente123")
         print("- Cliente 2: maria@example.com / cliente123")
+        print("- Cliente sin fondos: sinfondos@example.com / cliente123")
         print("- Cliente suspendido: suspendido@example.com / suspendido123")
 
 

@@ -33,11 +33,25 @@
                         {{ dias[abono.dia_semana] }} {{ '%02d'|format(abono.hora_inicio) }}:00 - {{ '%02d'|format(abono.hora_inicio + 1) }}:00
                     </td>
                     <td>{{ abono.fecha_desde.strftime('%d/%m/%Y') }} al {{ abono.fecha_hasta.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ abono.estado|capitalize }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono" data-confirm-message="Vas a dar de baja este abono. Si hay una clase paga con más de 48 hs de anticipación, se generará un crédito de esa actividad." data-confirm-action="Cancelar abono" data-confirm-cancel="Volver">
-                            <button type="submit" class="btn btn-danger">Cancelar</button>
-                        </form>
+                        {{ abono.estado|capitalize }}
+                        {% if abono.estado in ['pendiente', 'suspendido'] and pagos_pendientes_por_abono.get(abono.id, 0) > 0 %}
+                            <br><small class="text-muted">Pendiente: ${{ '%.2f'|format(pagos_pendientes_por_abono.get(abono.id, 0)) }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if abono.estado == 'pendiente' %}
+                            <form method="POST" action="{{ url_for('turnos.reintentar_pago_abono', abono_id=abono.id) }}" style="margin-bottom: .5rem;">
+                                <button type="submit" class="btn btn-warning">Reintentar cobro</button>
+                            </form>
+                        {% elif abono.estado == 'suspendido' %}
+                            <a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="btn btn-warning" style="margin-bottom: .5rem;">Abonar suspensión</a>
+                        {% endif %}
+                        {% if abono.estado != 'suspendido' %}
+                            <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono" data-confirm-message="Vas a dar de baja este abono y liberar sus reservas futuras. Los créditos solo se generan al cancelar un turno abonado con más de 48 hs de anticipación." data-confirm-action="Cancelar abono" data-confirm-cancel="Volver">
+                                <button type="submit" class="btn btn-danger">Cancelar</button>
+                            </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
