@@ -31,7 +31,30 @@ Después de ejecutar `init_db.py`, tendrás:
 | Cliente sin fondos | sinfondos@example.com | cliente123 |
 | Cliente suspendido | suspendido@example.com | suspendido123 |
 
-## 3. Características Disponibles
+## 3. Actualizar datos de cuentas
+
+Lugar fisico de la base de datos Club360/instance/club360.db
+
+- Instanciar la base de datos
+sqlite3 instance/club360.db
+
+- Ver usuarios y saldos
+SELECT id, email, tarjeta_credito_saldo FROM usuarios;
+
+- Poner fondos
+UPDATE usuarios
+SET tarjeta_credito_saldo = 100000
+WHERE email = 'sinfondos@example.com';
+
+- Sacar fondos
+UPDATE usuarios
+SET tarjeta_credito_saldo = 0
+WHERE email = 'sinfondos@example.com';
+
+- Salir
+.exit
+
+## 4. Características Disponibles
 
 ### Para Clientes
 - ✓ Registrarse e iniciar sesión
@@ -58,7 +81,7 @@ Después de ejecutar `init_db.py`, tendrás:
 - Duración fija de 1 hora (08-09, 09-10, etc.)
 - Los domingos y feriados nacionales no se pueden crear ni reservar turnos
 
-## 4. Estructura de Módulos
+## 5. Estructura de Módulos
 
 ```
 website/
@@ -69,7 +92,7 @@ website/
 └── models.py      → Modelos de base de datos
 ```
 
-## 5. Rutas Principales
+## 6. Rutas Principales
 
 | Ruta | Descripción |
 |------|------------|
@@ -82,7 +105,7 @@ website/
 | `/pagos/deuda` | Ver deudas |
 | `/suspensiones/solicitar-alta` | Solicitar alta |
 
-## 6. Stack Tecnológico
+## 7. Stack Tecnológico
 
 - **Backend:** Flask 3.1.3
 - **Base de Datos:** SQLite (desarrollo)
@@ -91,7 +114,7 @@ website/
 - **Validación de Formularios:** Validaciones HTML + backend (Flask)
 - **Frontend:** HTML5 + CSS + Vanilla JavaScript
 
-## 7. Desarrollo Local
+## 8. Desarrollo Local
 
 ### Agregar una nueva ruta
 
@@ -117,7 +140,7 @@ flask db upgrade
 ```
 3. O simplemente eliminar `club360.db` y ejecutar `init_db.py` nuevamente
 
-## 8. Archivos Importantes
+## 9. Archivos Importantes
 
 - `app.py` - Punto de entrada
 - `config.py` - Configuración (dev, prod, testing)
@@ -126,7 +149,7 @@ flask db upgrade
 - `website/__init__.py` - Configuración de Flask
 - `website/models.py` - Modelos de datos
 
-## 9. Tips de Desarrollo
+## 10. Tips de Desarrollo
 
 ### Ver logs en tiempo real
 ```bash
@@ -148,7 +171,7 @@ pip freeze > requirements.txt
 ### Testing de rutas
 Usar Postman, Insomnia o curl
 
-## 10. Próximos Pasos
+## 11. Próximos Pasos
 
 1. **Implementar panel de administrador**
 2. **Agregar notificaciones por email**
@@ -157,7 +180,7 @@ Usar Postman, Insomnia o curl
 5. **Pruebas unitarias**
 6. **Despliegue en producción**
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### ❌ "ModuleNotFoundError: No module named 'flask'"
 ```bash
@@ -182,7 +205,7 @@ python init_db.py
 - Limpiar caché del navegador (Ctrl+Shift+Delete)
 - Verificar que `DEBUG = True` en `config.py`
 
-## 12. Contacto y Soporte
+## 13. Contacto y Soporte
 
 - 📧 Email del equipo de desarrollo
 - 💬 Canal de Slack/Discord

@@ -133,7 +133,16 @@ def solicitar_alta_suspension():
                 flash(conflicto, 'warning')
             return redirect(url_for('dashboard'))
 
+        saldo_disponible = float(current_user.tarjeta_credito_saldo or 0.0)
+        if saldo_disponible < monto_total:
+            flash(
+                f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${monto_total:.2f}.',
+                'error',
+            )
+            return redirect(url_for('suspensiones.solicitar_alta_suspension'))
+
         deudas = _deuda_pendiente_positiva(current_user.id)
+        current_user.tarjeta_credito_saldo = round(saldo_disponible - monto_total, 2)
         for deuda in deudas:
             deuda.estado = 'completado'
             deuda.metodo_pago = 'tarjeta_credito'

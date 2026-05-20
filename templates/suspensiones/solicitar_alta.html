@@ -56,10 +56,6 @@
         <form
             method="POST"
             class="suspension-actions"
-            data-confirm="true"
-            data-confirm-title="{{ 'Pagar y reactivar cuenta' if monto_total > 0 else 'Reactivar cuenta' }}"
-            data-confirm-message="{{ 'Se cobrará el total pendiente con tarjeta de crédito y tu cuenta volverá a estar activa automáticamente.' if monto_total > 0 else 'Tu cuenta volverá a estar activa sin cobrar ningún importe.' }}"
-            data-confirm-action="{{ 'Pagar ahora' if monto_total > 0 else 'Reactivar' }}"
         >
             <button type="submit" class="btn btn-primary">{{ 'Pagar y reactivar' if monto_total > 0 else 'Reactivar cuenta' }}</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>

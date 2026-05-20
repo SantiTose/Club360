@@ -259,7 +259,6 @@ def create_app(config_name='development'):
         _ensure_lista_espera_tipo_clase_column()
         _ensure_pago_tipo_clase_column()
         _ensure_creditos_clientes_table()
-        _clear_pending_client_debts()
         _backfill_reserva_qr_tokens()
 
     return app
@@ -661,7 +660,7 @@ def _ensure_creditos_clientes_table():
 
 
 def _clear_pending_client_debts():
-    """El sistema ya no maneja deudas: cancela pendientes historicos de clientes."""
+    """Legacy: se conserva para instalaciones antiguas, pero ya no se ejecuta al iniciar."""
     inspector = inspect(db.engine)
     if 'pagos' not in inspector.get_table_names():
         return
