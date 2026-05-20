@@ -154,8 +154,8 @@ def register():
             db.session.add(nuevo_usuario)
             db.session.commit()
             
-            flash('✅ Usuario registrado exitosamente. Por favor, inicia sesión.', 'success')
-            return redirect(url_for('auth.login'))
+            flash('Tu cuenta se creo exitosamente', 'success')
+            return redirect(url_for('auth.register'))
         
         except Exception as e:
             db.session.rollback()

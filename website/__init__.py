@@ -131,7 +131,7 @@ def create_app(config_name='development'):
             )
             if ultimo_pago:
                 actividad_reciente.append(
-                    f"Último pago: ${ultimo_pago.monto:.2f} ({ultimo_pago.metodo_pago})"
+                    f"Último pago: ${ultimo_pago.monto:.2f}"
                 )
 
             dashboard_context['stats'] = [

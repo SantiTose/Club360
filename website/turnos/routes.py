@@ -1923,7 +1923,7 @@ def crear_turno():
             flash(f'Se generaron {creadas_abono} reservas abonadas fijas en esta nueva franja.', 'info')
         for conflicto in conflictos_abono:
             flash(conflicto, 'warning')
-        return redirect(url_for('turnos.administrar_turnos'))
+        return redirect(url_for('turnos.crear_turno'))
 
     return render_template(
         'turnos/form_turno.html',
