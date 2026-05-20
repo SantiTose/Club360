@@ -163,6 +163,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input id="cliente_email_${event.id}" type="email" name="cliente_email" class="form-control" placeholder="cliente@email.com" required>
                         </div>
                         ` : ''}
+                        ${permiteAsignarCliente && !usaCredito && !isFull ? `
+                        <div class="form-group" style="margin-bottom: .8rem;">
+                            <label><strong>Forma de pago</strong></label>
+                            <div class="reservation-mode-pills">
+                                <input type="radio" id="metodo_pago_efectivo_${event.id}" name="metodo_pago_reserva" value="efectivo" checked>
+                                <label for="metodo_pago_efectivo_${event.id}" class="reservation-mode-pill">Efectivo</label>
+                                <input type="radio" id="metodo_pago_tarjeta_${event.id}" name="metodo_pago_reserva" value="tarjeta_credito">
+                                <label for="metodo_pago_tarjeta_${event.id}" class="reservation-mode-pill">Tarjeta de crédito</label>
+                            </div>
+                        </div>
+                        ` : ''}
                         ${usaCredito ? '' : `<div class="form-group" style="margin-bottom: .8rem;">
                             <label><strong>Modalidad de reserva</strong></label>
                             <div class="reservation-mode-pills">

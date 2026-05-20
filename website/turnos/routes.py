@@ -168,6 +168,16 @@ def _obtener_cliente_objetivo_para_reserva():
     return cliente, None
 
 
+def _obtener_metodo_pago_reserva(reserva_interna):
+    if not reserva_interna:
+        return 'tarjeta_credito', None
+
+    metodo_pago = request.form.get('metodo_pago_reserva', 'tarjeta_credito').strip()
+    if metodo_pago not in {'efectivo', 'tarjeta_credito'}:
+        return None, 'Debes elegir una forma de pago válida'
+    return metodo_pago, None
+
+
 def _resolver_redirect_reserva():
     if request.form.get('redirect_to') == 'administrar_turnos' and _es_admin(current_user):
         return redirect(url_for('turnos.administrar_turnos'))
@@ -781,7 +791,7 @@ def _crear_pago_abono_inmediato(usuario, abono, turnos):
     return pago
 
 
-def _crear_abono_mensual_para_turno(usuario, turno, credito=None):
+def _crear_abono_mensual_para_turno(usuario, turno, credito=None, metodo_pago='tarjeta_credito'):
     fecha_desde = turno.hora_inicio.date()
     fecha_hasta = _fin_de_mes(fecha_desde)
 
@@ -825,17 +835,26 @@ def _crear_abono_mensual_para_turno(usuario, turno, credito=None):
         crear_pagos=True,
         agregar_espera_sin_cupo=True,
         credito=credito,
+        metodo_pago=metodo_pago,
     )
     return abono, True, conflictos, creadas, turnos_en_espera, False, False
 
 
-def _crear_pago_pendiente_reserva(usuario, turno, tipo_clase, referencia, descuento_porcentaje=0.0, credito=None):
+def _crear_pago_pendiente_reserva(
+    usuario,
+    turno,
+    tipo_clase,
+    referencia,
+    descuento_porcentaje=0.0,
+    credito=None,
+    metodo_pago='tarjeta_credito',
+):
     monto_base = _calcular_monto_reserva(turno.actividad, tipo_clase, usuario, descuento_porcentaje=descuento_porcentaje)
     credito_aplicado = round(min(float(credito.monto), monto_base), 2) if credito else 0.0
     monto_final = round(max(monto_base - credito_aplicado, 0), 2)
     estado_pago = 'completado'
 
-    if tipo_clase == TipoClase.ABONADA and monto_final > 0:
+    if metodo_pago == 'tarjeta_credito' and monto_final > 0:
         saldo = float(usuario.tarjeta_credito_saldo or 0.0)
         if saldo >= monto_final:
             usuario.tarjeta_credito_saldo = round(saldo - monto_final, 2)
@@ -845,16 +864,16 @@ def _crear_pago_pendiente_reserva(usuario, turno, tipo_clase, referencia, descue
     db.session.add(Pago(
         usuario_id=usuario.id,
         monto=monto_final,
-        metodo_pago='tarjeta_credito',
+        metodo_pago=metodo_pago,
         estado=estado_pago,
         tipo_clase=tipo_clase,
         fecha_pago=datetime.utcnow(),
         referencia_transaccion=referencia,
     ))
-    return credito_aplicado, monto_final
+    return credito_aplicado, monto_final, estado_pago
 
 
-def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True, credito=None):
+def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True, credito=None, metodo_pago='tarjeta_credito'):
     reserva_existente = Reserva.query.filter_by(turno_id=turno.id, usuario_id=usuario.id).first()
     if reserva_existente:
         if reserva_existente.tipo_clase != TipoClase.ABONADA:
@@ -888,11 +907,12 @@ def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True, credito=None
             referencia,
             descuento_porcentaje=abono.descuento_porcentaje,
             credito=credito,
+            metodo_pago=metodo_pago,
         )
     return True, None
 
 
-def _generar_reservas_para_abono(abono, crear_pagos=True, agregar_espera_sin_cupo=False, credito=None):
+def _generar_reservas_para_abono(abono, crear_pagos=True, agregar_espera_sin_cupo=False, credito=None, metodo_pago='tarjeta_credito'):
     usuario = abono.usuario or Usuario.query.get(abono.usuario_id)
     turnos = _obtener_turnos_para_abono(abono)
 
@@ -914,7 +934,14 @@ def _generar_reservas_para_abono(abono, crear_pagos=True, agregar_espera_sin_cup
             continue
 
         credito_turno = credito if credito and credito.estado == EstadoCredito.DISPONIBLE else None
-        creada, conflicto = _asegurar_reserva_abono(turno, usuario, abono, crear_pago=crear_pagos, credito=credito_turno)
+        creada, conflicto = _asegurar_reserva_abono(
+            turno,
+            usuario,
+            abono,
+            crear_pago=crear_pagos,
+            credito=credito_turno,
+            metodo_pago=metodo_pago,
+        )
         if conflicto:
             conflictos.append(conflicto)
         elif creada:
@@ -1322,6 +1349,10 @@ def reservar_turno(turno_id):
         flash(error_cliente, 'error')
         return _resolver_redirect_reserva()
     reserva_interna = cliente_objetivo.id != current_user.id
+    metodo_pago_reserva, error_metodo_pago = _obtener_metodo_pago_reserva(reserva_interna)
+    if error_metodo_pago:
+        flash(error_metodo_pago, 'error')
+        return _resolver_redirect_reserva()
 
     if not usar_credito:
         _procesar_suspension_automatica(cliente_objetivo)
@@ -1359,6 +1390,7 @@ def reservar_turno(turno_id):
     if turno.cupos_disponibles > 0:
         credito_aplicado = 0.0
         monto_final = 0.0
+        estado_pago = 'completado'
         credito = _obtener_credito_disponible(cliente_objetivo.id, turno.actividad) if usar_credito else None
         if usar_credito and not credito:
             flash('No hay créditos disponibles para esta actividad.', 'error')
@@ -1386,7 +1418,12 @@ def reservar_turno(turno_id):
         if tipo_clase == TipoClase.ABONADA:
             abono = _buscar_abono_activo_para_turno(cliente_objetivo.id, turno)
             if not abono:
-                abono, creado_abono, conflictos, reservas_creadas, turnos_en_espera, _, pago_inmediato = _crear_abono_mensual_para_turno(cliente_objetivo, turno, credito=credito)
+                abono, creado_abono, conflictos, reservas_creadas, turnos_en_espera, _, pago_inmediato = _crear_abono_mensual_para_turno(
+                    cliente_objetivo,
+                    turno,
+                    credito=credito,
+                    metodo_pago=metodo_pago_reserva,
+                )
                 if conflictos:
                     db.session.rollback()
                     flash(
@@ -1411,9 +1448,18 @@ def reservar_turno(turno_id):
                         .scalar()
                     )
                     if abono.estado == EstadoAbono.PENDIENTE:
+                        if reserva_interna and metodo_pago_reserva == 'tarjeta_credito':
+                            db.session.rollback()
+                            flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
+                            return _resolver_redirect_reserva()
                         mensaje = (
                             f'Se reservaron {reservas_creadas} clase(s) del abono para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
                             'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.'
+                        )
+                    elif metodo_pago_reserva == 'efectivo':
+                        mensaje = (
+                            f'Se confirmaron {reservas_creadas} reserva(s) abonadas para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. '
+                            f'Se registró pago en efectivo por ${monto_cobrado:.2f}.'
                         )
                     else:
                         mensaje = (
@@ -1438,14 +1484,21 @@ def reservar_turno(turno_id):
                         )
                     return _resolver_redirect_reserva()
 
-            _, conflicto = _asegurar_reserva_abono(turno, cliente_objetivo, abono, crear_pago=True, credito=credito)
+            _, conflicto = _asegurar_reserva_abono(
+                turno,
+                cliente_objetivo,
+                abono,
+                crear_pago=True,
+                credito=credito,
+                metodo_pago=metodo_pago_reserva,
+            )
             if conflicto:
                 flash(conflicto, 'error')
                 return _resolver_redirect_reserva()
 
             pago_generado = (
                 Pago.query
-                .filter_by(usuario_id=cliente_objetivo.id, estado='completado', tipo_clase=TipoClase.ABONADA)
+                .filter_by(usuario_id=cliente_objetivo.id, tipo_clase=TipoClase.ABONADA)
                 .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{turno_id}-{cliente_objetivo.id}-%"))
                 .order_by(Pago.fecha_pago.desc())
                 .first()
@@ -1453,6 +1506,11 @@ def reservar_turno(turno_id):
             if _abono_tiene_pagos_pendientes(abono):
                 abono.estado = EstadoAbono.PENDIENTE
             monto_final = pago_generado.monto if pago_generado else 0.0
+            estado_pago = pago_generado.estado if pago_generado else 'completado'
+            if reserva_interna and metodo_pago_reserva == 'tarjeta_credito' and estado_pago == 'pendiente':
+                db.session.rollback()
+                flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
+                return _resolver_redirect_reserva()
             if credito and credito.estado == EstadoCredito.USADO:
                 credito_aplicado = round(credito.monto, 2)
         else:
@@ -1467,13 +1525,18 @@ def reservar_turno(turno_id):
             db.session.flush()
             if credito:
                 _marcar_credito_usado(credito, reserva)
-            credito_aplicado, monto_final = _crear_pago_pendiente_reserva(
+            credito_aplicado, monto_final, estado_pago = _crear_pago_pendiente_reserva(
                 cliente_objetivo,
                 turno,
                 tipo_clase,
                 f"reserva-{turno_id}-{cliente_objetivo.id}-{int(datetime.utcnow().timestamp())}",
                 credito=credito,
+                metodo_pago=metodo_pago_reserva,
             )
+            if reserva_interna and metodo_pago_reserva == 'tarjeta_credito' and estado_pago == 'pendiente':
+                db.session.rollback()
+                flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
+                return _resolver_redirect_reserva()
 
         db.session.commit()
         if credito_aplicado > 0:
@@ -1482,10 +1545,21 @@ def reservar_turno(turno_id):
             extra_credito = ' Se aplicó un crédito.' if credito_aplicado > 0 else ''
             if abono.estado == EstadoAbono.PENDIENTE:
                 flash('Reserva abonada pendiente de pago. Podés reintentar el cobro desde Mis Abonos.', 'warning')
+            elif metodo_pago_reserva == 'efectivo':
+                flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró pago en efectivo por ${monto_final:.2f}.{extra_credito}', 'success')
             else:
                 flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.{extra_credito}', 'success')
         else:
-            flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.', 'success')
+            if estado_pago == 'pendiente':
+                flash(
+                    f'Turno reservado para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
+                    'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.',
+                    'warning',
+                )
+            elif metodo_pago_reserva == 'efectivo':
+                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró pago en efectivo por ${monto_final:.2f}.', 'success')
+            else:
+                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.', 'success')
     else:
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
