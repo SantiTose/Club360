@@ -1364,6 +1364,25 @@ def reservar_turno(turno_id):
             flash('No hay créditos disponibles para esta actividad.', 'error')
             return _resolver_redirect_reserva()
 
+        if usar_credito:
+            if restricciones['suspendido_no_abonado']:
+                flash('La reserva falló debido a que el usuario se encuentra suspendido para turnos no abonados.', 'error')
+                return _resolver_redirect_reserva()
+
+            reserva = Reserva(
+                usuario_id=cliente_objetivo.id,
+                turno_id=turno_id,
+                tipo_clase=TipoClase.NO_ABONADA,
+                qr_token=secrets.token_urlsafe(24),
+            )
+            db.session.add(reserva)
+            turno.cupos_disponibles -= 1
+            db.session.flush()
+            _marcar_credito_usado(credito, reserva)
+            db.session.commit()
+            flash('Ha utilizado su credito y se reservo el turno exitosamente.', 'success')
+            return _resolver_redirect_reserva()
+
         if tipo_clase == TipoClase.ABONADA:
             abono = _buscar_abono_activo_para_turno(cliente_objetivo.id, turno)
             if not abono:

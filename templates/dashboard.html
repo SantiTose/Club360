@@ -49,9 +49,10 @@
         <section class="dashboard-panel dashboard-credits-panel">
             <div class="dashboard-section-heading">
                 <div>
-                    <span class="dashboard-eyebrow">Créditos</span>
                     <h2>Mis Créditos</h2>
+                    {% if creditos %}
                     <p>Tenés créditos disponibles por deporte para reservar clases sueltas.</p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -98,8 +99,7 @@
             {% endif %}
             <aside class="dashboard-panel dashboard-activity-panel">
                 <div class="dashboard-section-heading">
-                    <div>
-                        <span class="dashboard-eyebrow">Seguimiento</span>
+                <div>
                         <h2>{{ dashboard_context.activity_heading }}</h2>
                     </div>
                 </div>

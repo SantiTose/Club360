@@ -584,15 +584,6 @@ window.Club360Dialogs = {
     showNotice() {}
 };
 
-window.addEventListener('load', function() {
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            alert.style.display = 'none';
-        }, 5000);
-    });
-});
-
 window.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('confirm-modal');
     if (!modal) return;

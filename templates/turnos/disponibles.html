@@ -21,7 +21,6 @@
             </section>
 
             <section class="calendar-context-section calendar-context-detail" id="detalle-turno" hidden>
-                <span class="turno-detail-kicker">Resumen</span>
                 <h3>Detalle del turno</h3>
                 <p class="text-muted">Seleccioná una franja horaria para ver detalles y reservar.</p>
                 <div id="detalle-turno-body"></div>
@@ -132,16 +131,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 : esAntesDelDia15
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservarán las clases de esta franja que queden en el mes y se cobrarán al confirmar.</p>'
                 : '<p class="text-muted" style="margin-bottom:.75rem;">Si elegís modalidad abonada, se reservará esta clase y se cobrará al confirmar.</p>';
-            const mensajeReserva = isFull
+            const usaCredito = Boolean(p.credito_disponible);
+            const mensajeCredito = '<p class="text-muted" style="margin-bottom:.75rem;">Vas a usar un crédito disponible para reservar esta clase suelta sin cargo.</p>';
+            const mensajeReserva = usaCredito && !isFull
+                ? mensajeCredito
+                : isFull
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Este turno ya está completo. Podés anotarte en la lista de espera para esta fecha y horario.</p>'
                 : mensajeAbono;
-            const tituloConfirmacion = isFull ? 'Anotarse en lista de espera' : 'Confirmar reserva';
+            const tituloConfirmacion = usaCredito && !isFull ? 'Reservar con crédito' : isFull ? 'Anotarse en lista de espera' : 'Confirmar reserva';
             const mensajeConfirmacion = isFull
                 ? `Vas a anotarte en la lista de espera para ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`
+                : usaCredito
+                ? `Vas a usar un crédito para reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`
                 : `Vas a reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`;
-            const accionConfirmacion = isFull ? 'Anotarme' : 'Reservar';
+            const accionConfirmacion = usaCredito && !isFull ? 'Reservar con crédito' : isFull ? 'Anotarme' : 'Reservar';
             const textoBoton = isFull ? 'Anotarme en lista de espera' : 'Reservar turno';
-            const usaCredito = Boolean(p.credito_disponible);
             const textoBotonFinal = usaCredito && !isFull ? 'Reservar turno con crédito' : textoBoton;
             const boton = p.ya_reservado
                 ? `<div>
@@ -159,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input id="cliente_email_${event.id}" type="email" name="cliente_email" class="form-control" placeholder="cliente@email.com" required>
                         </div>
                         ` : ''}
-                        <div class="form-group" style="margin-bottom: .8rem;">
+                        ${usaCredito ? '' : `<div class="form-group" style="margin-bottom: .8rem;">
                             <label><strong>Modalidad de reserva</strong></label>
                             <div class="reservation-mode-pills">
                                 <input type="radio" id="tipo_clase_abonada_${event.id}" name="tipo_clase" value="abonada">
@@ -167,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <input type="radio" id="tipo_clase_no_abonada_${event.id}" name="tipo_clase" value="no_abonada" checked>
                                 <label for="tipo_clase_no_abonada_${event.id}" class="reservation-mode-pill">No abonada</label>
                             </div>
-                        </div>
+                        </div>`}
                         <button type="submit" class="btn ${isFull ? 'btn-secondary' : 'btn-success'} btn-block">${textoBotonFinal}</button>
                    </form>`;
 
