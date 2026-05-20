@@ -24,7 +24,7 @@ from website.models import (
     TipoUsuario,
     TipoClase,
 )
-from website.services import enviar_email_simulado
+from website.services import enviar_email_simulado, generar_qr_asistencia
 
 
 HORA_APERTURA = 8
@@ -559,27 +559,17 @@ def _promover_siguiente_lista_espera(turno, tipo_clase=None):
             return None
 
         _limpiar_esperas_de_abono(usuario_id, abono)
-        asunto = 'Abono confirmado desde lista de espera - Club 360'
-        cuerpo = (
-            f"Hola {usuario_promovido.nombre},\n\n"
-            f"Se liberó un cupo para {turno.actividad} "
-            f"los {DIAS_SEMANA[turno.hora_inicio.weekday()]} a las {turno.hora_inicio.strftime('%H:%M')} "
-            f"y se confirmó tu abono mensual con {creadas} clase(s)."
-        )
-        enviar_email_simulado(
-            os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
-            usuario_promovido.email,
-            asunto,
-            cuerpo,
-        )
+        reservas_qr = Reserva.query.filter_by(usuario_id=usuario_id, abono_id=abono.id).all()
+        _enviar_emails_qr_reservas(reservas_qr, asunto='Abono confirmado desde lista de espera - Club 360')
         return usuario_promovido
 
-    db.session.add(Reserva(
+    reserva_promovida = Reserva(
         usuario_id=usuario_id,
         turno_id=turno.id,
         tipo_clase=tipo_clase,
         qr_token=secrets.token_urlsafe(24),
-    ))
+    )
+    db.session.add(reserva_promovida)
     turno.cupos_disponibles -= 1
     db.session.delete(siguiente)
 
@@ -594,18 +584,8 @@ def _promover_siguiente_lista_espera(turno, tipo_clase=None):
         referencia_transaccion=f"espera-{turno.id}-{usuario_id}-{int(datetime.utcnow().timestamp())}",
     ))
 
-    asunto = 'Promoción desde lista de espera - Club 360'
-    cuerpo = (
-        f"Hola {usuario_promovido.nombre},\n\n"
-        f"Se liberó un cupo y quedaste confirmado para {turno.actividad} "
-        f"el {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}."
-    )
-    enviar_email_simulado(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
-        usuario_promovido.email,
-        asunto,
-        cuerpo,
-    )
+    db.session.flush()
+    _enviar_email_qr_reserva(reserva_promovida, asunto='Promoción desde lista de espera - Club 360')
 
     _recalcular_posiciones_lista(turno.id)
     return usuario_promovido
@@ -993,6 +973,89 @@ def _intentar_cobrar_abono(abono):
     return total, True
 
 
+def _obtener_deudas_pendientes(usuario_id):
+    return (
+        Pago.query
+        .filter_by(usuario_id=usuario_id, estado='pendiente')
+        .filter(Pago.monto > 0)
+        .order_by(Pago.fecha_pago.asc(), Pago.id.asc())
+        .all()
+    )
+
+
+def _total_deudas_pendientes(usuario_id):
+    return round(sum(deuda.monto for deuda in _obtener_deudas_pendientes(usuario_id)), 2)
+
+
+def _descripcion_deuda(deuda):
+    if deuda.referencia_transaccion and deuda.referencia_transaccion.startswith('recargo-alta-'):
+        return 'Recargo de alta'
+
+    turno = _obtener_turno_desde_pago(deuda)
+    if turno:
+        return f"{turno.actividad.upper()} - {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}"
+
+    if deuda.tipo_clase == TipoClase.ABONADA:
+        return 'Abono pendiente'
+    return 'Clase pendiente'
+
+
+def _reactivar_si_sin_deudas(usuario):
+    if _total_deudas_pendientes(usuario.id) > 0:
+        return 0, []
+
+    suspensiones = Suspension.query.filter_by(usuario_id=usuario.id, estado='activa').all()
+    for suspension in suspensiones:
+        suspension.estado = 'resuelta'
+        suspension.fecha_resolucion = datetime.utcnow()
+
+    if suspensiones:
+        usuario.estado = EstadoUsuario.ACTIVO
+
+    reservas_restauradas = 0
+    conflictos = []
+    abonos_suspendidos = AbonoCliente.query.filter_by(
+        usuario_id=usuario.id,
+        estado=EstadoAbono.SUSPENDIDO,
+    ).all()
+    for abono in abonos_suspendidos:
+        abono.estado = EstadoAbono.ACTIVO
+        creadas, errores, _ = _generar_reservas_para_abono(abono, crear_pagos=False)
+        reservas_restauradas += creadas
+        conflictos.extend(errores)
+
+    return reservas_restauradas, conflictos
+
+
+def _marcar_deudas_como_pagadas(usuario, metodo_pago):
+    deudas = _obtener_deudas_pendientes(usuario.id)
+    total = round(sum(deuda.monto for deuda in deudas), 2)
+    for deuda in deudas:
+        deuda.estado = 'completado'
+        deuda.metodo_pago = metodo_pago
+        deuda.fecha_pago = datetime.utcnow()
+        if not deuda.referencia_transaccion:
+            deuda.referencia_transaccion = f"deuda-{metodo_pago}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
+
+    reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
+    return total, reservas_restauradas, conflictos
+
+
+def _marcar_deuda_como_pagada(usuario, deuda, metodo_pago):
+    if deuda.usuario_id != usuario.id or deuda.estado != 'pendiente' or deuda.monto <= 0:
+        return 0.0, 0, []
+
+    total = round(deuda.monto, 2)
+    deuda.estado = 'completado'
+    deuda.metodo_pago = metodo_pago
+    deuda.fecha_pago = datetime.utcnow()
+    if not deuda.referencia_transaccion:
+        deuda.referencia_transaccion = f"deuda-{metodo_pago}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
+
+    reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
+    return total, reservas_restauradas, conflictos
+
+
 def _cancelar_abono_si_sin_reservas_futuras(abono_id):
     if not abono_id:
         return False
@@ -1144,6 +1207,38 @@ def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
         enviar_email_simulado(base_dir, admin.email, asunto, cuerpo)
 
 
+def _enviar_email_qr_reserva(reserva, asunto='Reserva confirmada - Club 360'):
+    turno = reserva.turno
+    usuario = reserva.usuario
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    validation_url = url_for('turnos.validar_asistencia_qr', qr_token=reserva.qr_token, _external=True)
+    try:
+        qr_path = generar_qr_asistencia(base_dir, reserva, validation_url)
+    except RuntimeError as exc:
+        qr_path = f"No generado: {exc}"
+    modalidad = 'Abonada' if reserva.tipo_clase == TipoClase.ABONADA else 'No abonada'
+    cuerpo = (
+        f"Hola {usuario.nombre},\n\n"
+        "Tu reserva quedó confirmada.\n\n"
+        f"Actividad: {turno.actividad.upper()}\n"
+        f"Fecha y hora: {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}\n"
+        f"Modalidad: {modalidad}\n"
+        f"Código de asistencia: {reserva.qr_token}\n"
+        f"Link de validación para recepción: {validation_url}\n"
+        f"QR generado: {qr_path}\n\n"
+        "Presentá este QR en recepción para que un empleado registre tu asistencia."
+    )
+    enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+
+
+def _enviar_emails_qr_reservas(reservas, asunto='Reserva confirmada - Club 360'):
+    enviados = 0
+    for reserva in reservas:
+        _enviar_email_qr_reserva(reserva, asunto=asunto)
+        enviados += 1
+    return enviados
+
+
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
     """Envia recordatorio por email con QR el mismo dia de la clase."""
     hoy = datetime.utcnow().date().isoformat()
@@ -1163,12 +1258,18 @@ def _enviar_recordatorios_qr(base_dir, usuario_id=None):
     for reserva in reservas:
         turno = reserva.turno
         usuario = reserva.usuario
-        qr_url = f"QR:{reserva.qr_token}"
+        validation_url = url_for('turnos.validar_asistencia_qr', qr_token=reserva.qr_token, _external=True)
+        try:
+            qr_path = generar_qr_asistencia(base_dir, reserva, validation_url)
+        except RuntimeError as exc:
+            qr_path = f"No generado: {exc}"
         asunto = 'Recordatorio de clase - Club 360'
         cuerpo = (
             f"Hola {usuario.nombre},\n\n"
             f"Te recordamos tu clase de {turno.actividad} el {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}.\n"
-            f"Código QR de asistencia: {qr_url}\n"
+            f"Código de asistencia: {reserva.qr_token}\n"
+            f"Link de validación para recepción: {validation_url}\n"
+            f"QR generado: {qr_path}\n"
             "Presentalo en recepción para validar asistencia."
         )
         enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
@@ -1412,6 +1513,7 @@ def reservar_turno(turno_id):
             db.session.flush()
             _marcar_credito_usado(credito, reserva)
             db.session.commit()
+            _enviar_email_qr_reserva(reserva)
             flash('Ha utilizado su credito y se reservo el turno exitosamente.', 'success')
             return _resolver_redirect_reserva()
 
@@ -1439,7 +1541,20 @@ def reservar_turno(turno_id):
                 if creado_abono:
                     if _abono_tiene_pagos_pendientes(abono):
                         abono.estado = EstadoAbono.PENDIENTE
+                    if abono.estado == EstadoAbono.PENDIENTE and reserva_interna and metodo_pago_reserva == 'tarjeta_credito':
+                        db.session.rollback()
+                        flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
+                        return _resolver_redirect_reserva()
                     db.session.commit()
+                    reservas_qr = (
+                        Reserva.query
+                        .filter_by(usuario_id=cliente_objetivo.id, abono_id=abono.id)
+                        .join(Turno, Reserva.turno_id == Turno.id)
+                        .filter(Turno.hora_inicio >= _ahora_local())
+                        .order_by(Turno.hora_inicio.asc())
+                        .all()
+                    )
+                    _enviar_emails_qr_reservas(reservas_qr)
                     monto_cobrado = (
                         Pago.query
                         .filter_by(usuario_id=cliente_objetivo.id, estado='completado', tipo_clase=TipoClase.ABONADA)
@@ -1448,10 +1563,6 @@ def reservar_turno(turno_id):
                         .scalar()
                     )
                     if abono.estado == EstadoAbono.PENDIENTE:
-                        if reserva_interna and metodo_pago_reserva == 'tarjeta_credito':
-                            db.session.rollback()
-                            flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
-                            return _resolver_redirect_reserva()
                         mensaje = (
                             f'Se reservaron {reservas_creadas} clase(s) del abono para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
                             'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.'
@@ -1496,6 +1607,11 @@ def reservar_turno(turno_id):
                 flash(conflicto, 'error')
                 return _resolver_redirect_reserva()
 
+            reserva_para_qr = (
+                Reserva.query
+                .filter_by(turno_id=turno_id, usuario_id=cliente_objetivo.id)
+                .first()
+            )
             pago_generado = (
                 Pago.query
                 .filter_by(usuario_id=cliente_objetivo.id, tipo_clase=TipoClase.ABONADA)
@@ -1539,6 +1655,10 @@ def reservar_turno(turno_id):
                 return _resolver_redirect_reserva()
 
         db.session.commit()
+        if tipo_clase == TipoClase.ABONADA and reserva_para_qr:
+            _enviar_email_qr_reserva(reserva_para_qr)
+        elif tipo_clase == TipoClase.NO_ABONADA:
+            _enviar_email_qr_reserva(reserva)
         if credito_aplicado > 0:
             flash(f'Turno reservado. Se aplicó un crédito de ${credito_aplicado:.2f}', 'success')
         if tipo_clase == TipoClase.ABONADA:
@@ -1637,16 +1757,18 @@ def cancelar_turno(turno_id):
             flash('Cancelación no abonada con menos de 24h: seña no reembolsable', 'warning')
 
     abono_cancelado_por_vacio = _cancelar_abono_si_sin_reservas_futuras(abono_id_cancelado)
+    reserva_promovida_para_qr = None
 
     # Si hay lista de espera, asciende automáticamente al primero.
     siguiente = _obtener_siguiente_lista_espera(turno)
     if siguiente and turno.cupos_disponibles > 0:
-        db.session.add(Reserva(
+        reserva_promovida_para_qr = Reserva(
             usuario_id=siguiente.usuario_id,
             turno_id=turno_id,
             tipo_clase=siguiente.tipo_clase,
             qr_token=secrets.token_urlsafe(24),
-        ))
+        )
+        db.session.add(reserva_promovida_para_qr)
         turno.cupos_disponibles -= 1
         (
             ListaEspera.query
@@ -1667,24 +1789,12 @@ def cancelar_turno(turno_id):
             referencia_transaccion=f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}"
         ))
 
-        if usuario_promovido:
-            asunto = 'Promoción desde lista de espera - Club 360'
-            cuerpo = (
-                f"Hola {usuario_promovido.nombre},\n\n"
-                f"Se liberó un cupo y quedaste confirmado para {turno.actividad} "
-                f"el {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}."
-            )
-            enviar_email_simulado(
-                os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')),
-                usuario_promovido.email,
-                asunto,
-                cuerpo,
-            )
-
         # Recalcular posiciones restantes por cada tipo de lista.
         _recalcular_posiciones_lista(turno_id)
 
     db.session.commit()
+    if reserva_promovida_para_qr:
+        _enviar_email_qr_reserva(reserva_promovida_para_qr, asunto='Promoción desde lista de espera - Club 360')
     
     if credito_generado:
         flash(
@@ -1748,16 +1858,19 @@ def buscar_turno(turno_id):
 
 
 @turnos_bp.route('/validar-asistencia/<string:qr_token>', methods=['GET', 'POST'])
-@login_required
 def validar_asistencia_qr(qr_token):
     """Validación presencial de asistencia mediante QR."""
-    if not _es_empleado_o_admin(current_user):
-        flash('No tienes permisos para validar asistencia', 'error')
-        return redirect(url_for('index'))
+    if not current_user.is_authenticated or not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para escanear un QR de asistencia, intenta iniciar sesion con una cuenta de empleado valida', 'error')
+        return redirect(url_for('auth.login'))
 
     reserva = Reserva.query.filter_by(qr_token=qr_token).first()
     if not reserva:
-        flash('Código QR inválido', 'error')
+        flash('Ese qr no tiene datos valios', 'error')
+        return redirect(url_for('dashboard'))
+
+    if reserva.asistencia_validada:
+        flash('El qr provisto ya fue registrado escaneado previamente, intente con otro', 'error')
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
@@ -1775,11 +1888,15 @@ def validar_asistencia_qr(qr_token):
 def validar_asistencia_manual():
     """Permite al personal validar asistencia ingresando un token QR manualmente."""
     if not _es_empleado_o_admin(current_user):
-        flash('No tienes permisos para validar asistencia', 'error')
-        return redirect(url_for('index'))
+        flash('No tienes permisos para escanear un QR de asistencia, intenta iniciar sesion con una cuenta de empleado valida', 'error')
+        return redirect(url_for('auth.login'))
 
     if request.method == 'POST':
         qr_token = request.form.get('qr_token', '').strip()
+        if qr_token.startswith('QR:'):
+            qr_token = qr_token[3:].strip()
+        if '/validar-asistencia/' in qr_token:
+            qr_token = qr_token.rstrip('/').rsplit('/', 1)[-1]
         if not qr_token:
             flash('Debes ingresar un token QR', 'error')
             return redirect(url_for('turnos.validar_asistencia_manual'))
@@ -1902,6 +2019,170 @@ def cancelar_abono(abono_id):
     if resultado_cancelacion['reservas_sin_credito_por_pago']:
         flash('Las clases del abono sin pago confirmado no generaron crédito.', 'info')
     return redirect(url_for('turnos.administrar_abonos'))
+
+
+@turnos_bp.route('/mis-deudas')
+@login_required
+def mis_deudas():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta sección está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    _procesar_suspension_automatica(current_user)
+    deudas = _obtener_deudas_pendientes(current_user.id)
+    total = round(sum(deuda.monto for deuda in deudas), 2)
+    return render_template(
+        'turnos/mis_deudas.html',
+        deudas=deudas,
+        total=total,
+        descripcion_deuda=_descripcion_deuda,
+    )
+
+
+@turnos_bp.route('/mis-deudas/pagar', methods=['POST'])
+@login_required
+def pagar_mis_deudas():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta sección está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    total = _total_deudas_pendientes(current_user.id)
+    if total <= 0:
+        flash('No tenés deudas pendientes.', 'info')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    saldo = float(current_user.tarjeta_credito_saldo or 0.0)
+    if saldo < total:
+        flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${total:.2f}.', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    current_user.tarjeta_credito_saldo = round(saldo - total, 2)
+    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_como_pagadas(current_user, 'tarjeta_credito')
+    db.session.commit()
+
+    flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.mis_deudas'))
+
+
+@turnos_bp.route('/mis-deudas/pagar/<int:pago_id>', methods=['POST'])
+@login_required
+def pagar_mi_deuda(pago_id):
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta sección está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    deuda = Pago.query.get_or_404(pago_id)
+    if deuda.usuario_id != current_user.id or deuda.estado != 'pendiente' or deuda.monto <= 0:
+        flash('La deuda indicada no está disponible para pago.', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    monto = round(deuda.monto, 2)
+    saldo = float(current_user.tarjeta_credito_saldo or 0.0)
+    if saldo < monto:
+        flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${monto:.2f}.', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    current_user.tarjeta_credito_saldo = round(saldo - monto, 2)
+    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_como_pagada(current_user, deuda, 'tarjeta_credito')
+    db.session.commit()
+
+    flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.mis_deudas'))
+
+
+@turnos_bp.route('/cobrar-deudas')
+@login_required
+def cobrar_deudas():
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para cobrar deudas', 'error')
+        return redirect(url_for('dashboard'))
+
+    email = request.args.get('email', '').strip().lower()
+    cliente = None
+    deudas = []
+    total = 0.0
+    if email:
+        cliente = Usuario.query.filter(func.lower(Usuario.email) == email).first()
+        if not cliente or cliente.tipo_usuario != TipoUsuario.CLIENTE:
+            flash('No existe un cliente registrado con ese mail', 'error')
+            cliente = None
+        else:
+            _procesar_suspension_automatica(cliente)
+            deudas = _obtener_deudas_pendientes(cliente.id)
+            total = round(sum(deuda.monto for deuda in deudas), 2)
+
+    return render_template(
+        'turnos/cobrar_deudas.html',
+        email=email,
+        cliente=cliente,
+        deudas=deudas,
+        total=total,
+        descripcion_deuda=_descripcion_deuda,
+    )
+
+
+@turnos_bp.route('/cobrar-deudas/<int:usuario_id>', methods=['POST'])
+@login_required
+def cobrar_deudas_cliente(usuario_id):
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para cobrar deudas', 'error')
+        return redirect(url_for('dashboard'))
+
+    cliente = Usuario.query.get_or_404(usuario_id)
+    if cliente.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Solo se pueden cobrar deudas de clientes.', 'error')
+        return redirect(url_for('turnos.cobrar_deudas'))
+
+    total = _total_deudas_pendientes(cliente.id)
+    if total <= 0:
+        flash('El cliente no tiene deudas pendientes.', 'info')
+        return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_como_pagadas(cliente, 'efectivo')
+    db.session.commit()
+
+    flash(f'Se cobró ${total_pagado:.2f} en efectivo y se saldó la deuda de {cliente.nombre} {cliente.apellido}.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+
+@turnos_bp.route('/cobrar-deudas/<int:usuario_id>/<int:pago_id>', methods=['POST'])
+@login_required
+def cobrar_deuda_cliente(usuario_id, pago_id):
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para cobrar deudas', 'error')
+        return redirect(url_for('dashboard'))
+
+    cliente = Usuario.query.get_or_404(usuario_id)
+    if cliente.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Solo se pueden cobrar deudas de clientes.', 'error')
+        return redirect(url_for('turnos.cobrar_deudas'))
+
+    deuda = Pago.query.get_or_404(pago_id)
+    if deuda.usuario_id != cliente.id or deuda.estado != 'pendiente' or deuda.monto <= 0:
+        flash('La deuda indicada no está disponible para cobro.', 'error')
+        return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_como_pagada(cliente, deuda, 'efectivo')
+    db.session.commit()
+
+    flash(f'Se cobró ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
 
 @turnos_bp.route('/crear', methods=['GET', 'POST'])

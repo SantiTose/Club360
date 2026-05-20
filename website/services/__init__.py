@@ -1,1 +1,2 @@
 from website.services.notificaciones import enviar_email_simulado
+from website.services.qr import generar_qr_asistencia

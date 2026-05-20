@@ -9,3 +9,4 @@ Jinja2==3.1.6
 MarkupSafe==3.0.3
 Werkzeug==3.1.8
 SQLAlchemy==2.0.49
+qrcode[pil]==8.2

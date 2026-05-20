@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Deudas - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <h2>Mis Deudas</h2>
+            <p class="text-muted">Revisá y aboná los importes pendientes del complejo.</p>
+        </div>
+    </div>
+
+    <div class="calendar-toolbar-card">
+        {% if deudas %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th>Tipo</th>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for deuda in deudas %}
+                <tr>
+                    <td>{{ descripcion_deuda(deuda) }}</td>
+                    <td>{{ 'Abonada' if deuda.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                    <td>{{ deuda.fecha_pago.strftime('%d/%m/%Y') if deuda.fecha_pago else '-' }}</td>
+                    <td>${{ '%.2f'|format(deuda.monto) }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('turnos.pagar_mi_deuda', pago_id=deuda.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">Pagar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="suspension-payment-summary" style="margin-top: 1rem;">
+            <span>Total pendiente</span>
+            <strong>${{ '%.2f'|format(total) }}</strong>
+            <small>Se cobra con la tarjeta guardada en tu cuenta.</small>
+        </div>
+
+        <form method="POST" action="{{ url_for('turnos.pagar_mis_deudas') }}" style="margin-top: 1rem;">
+            <button type="submit" class="btn btn-success">Pagar el Total</button>
+        </form>
+        {% else %}
+        <div class="calendar-empty-state" style="margin-top: 0;">
+            <h3>No tenés deudas pendientes.</h3>
+            <p>Cuando haya un importe pendiente en el complejo, va a aparecer en esta sección.</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

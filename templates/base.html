@@ -23,6 +23,7 @@
                     {% if current_user.tipo_usuario == 'cliente' %}
                     <li><a href="{{ url_for('turnos.mis_turnos') }}" class="nav-link-pill">Mis Turnos</a></li>
                     <li><a href="{{ url_for('turnos.administrar_abonos') }}" class="nav-link-pill">Mis Abonos</a></li>
+                    <li><a href="{{ url_for('turnos.mis_deudas') }}" class="nav-link-pill">Mis Deudas</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario in ['cliente', 'empleado'] %}
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Buscar Turnos</a></li>
@@ -31,6 +32,7 @@
                     <li><a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="nav-link-pill">Suspensiones</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
+                    <li><a href="{{ url_for('turnos.cobrar_deudas') }}" class="nav-link-pill nav-link-pill-alt">Cobrar Deudas</a></li>
                     <li><a href="{{ url_for('auth.crear_usuario') }}" class="nav-link-pill nav-link-pill-alt">Crear Usuario</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario == 'administrador' %}

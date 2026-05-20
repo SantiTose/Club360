@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Cobrar Deudas - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <h2>Cobrar Deudas</h2>
+            <p class="text-muted">Buscá un cliente por email para ver sus importes pendientes y registrar el cobro en efectivo.</p>
+        </div>
+    </div>
+
+    <div class="calendar-toolbar-card">
+        <form method="GET" action="{{ url_for('turnos.cobrar_deudas') }}" class="form" style="max-width: 720px;">
+            <div class="form-group">
+                <label for="email">Email del cliente</label>
+                <input id="email" name="email" type="email" class="form-control" value="{{ email }}" placeholder="cliente@email.com" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Buscar cliente</button>
+        </form>
+    </div>
+
+    {% if cliente %}
+    <div class="calendar-toolbar-card">
+        <h3>{{ cliente.nombre }} {{ cliente.apellido }}</h3>
+        <p class="text-muted">{{ cliente.email }}</p>
+
+        {% if deudas %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th>Tipo</th>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for deuda in deudas %}
+                <tr>
+                    <td>{{ descripcion_deuda(deuda) }}</td>
+                    <td>{{ 'Abonada' if deuda.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                    <td>{{ deuda.fecha_pago.strftime('%d/%m/%Y') if deuda.fecha_pago else '-' }}</td>
+                    <td>${{ '%.2f'|format(deuda.monto) }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('turnos.cobrar_deuda_cliente', usuario_id=cliente.id, pago_id=deuda.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">Cobrar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="suspension-payment-summary" style="margin-top: 1rem;">
+            <span>Total pendiente</span>
+            <strong>${{ '%.2f'|format(total) }}</strong>
+            <small>El cobro se registra en efectivo desde la cuenta del empleado.</small>
+        </div>
+
+        <form method="POST" action="{{ url_for('turnos.cobrar_deudas_cliente', usuario_id=cliente.id) }}" style="margin-top: 1rem;">
+            <button type="submit" class="btn btn-success">Cobrar total</button>
+        </form>
+        {% else %}
+        <div class="calendar-empty-state" style="margin-top: 0;">
+            <h3>Este cliente no tiene deudas pendientes.</h3>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
