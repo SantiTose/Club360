@@ -966,6 +966,28 @@ def _intentar_cobrar_abono(abono):
     return total, True
 
 
+def _cancelar_abono_si_sin_reservas_futuras(abono_id):
+    if not abono_id:
+        return False
+
+    abono = AbonoCliente.query.get(abono_id)
+    if not abono or abono.estado != EstadoAbono.ACTIVO:
+        return False
+
+    reservas_futuras = (
+        Reserva.query
+        .join(Turno, Reserva.turno_id == Turno.id)
+        .filter(Reserva.abono_id == abono.id)
+        .filter(Turno.hora_inicio >= _ahora_local())
+        .count()
+    )
+    if reservas_futuras > 0:
+        return False
+
+    abono.estado = EstadoAbono.CANCELADO
+    return True
+
+
 def _cancelar_reservas_futuras_de_abono(abono, generar_creditos=False, eliminar_pagos_pendientes=True):
     ahora = datetime.utcnow()
     reservas = (
@@ -1484,6 +1506,7 @@ def cancelar_turno(turno_id):
     es_reserva_abonada = _es_reserva_abonada(reserva)
     credito_generado = None
     pago_reserva = _buscar_pago_reserva(current_user.id, turno_id) if es_reserva_abonada else None
+    abono_id_cancelado = reserva.abono_id if es_reserva_abonada else None
     db.session.delete(reserva)
     turno.cupos_disponibles += 1
 
@@ -1519,6 +1542,8 @@ def cancelar_turno(turno_id):
                 flash('Cancelación no abonada con +24h: no había pago confirmado para reintegrar', 'info')
         else:
             flash('Cancelación no abonada con menos de 24h: seña no reembolsable', 'warning')
+
+    abono_cancelado_por_vacio = _cancelar_abono_si_sin_reservas_futuras(abono_id_cancelado)
 
     # Si hay lista de espera, asciende automáticamente al primero.
     siguiente = _obtener_siguiente_lista_espera(turno)
@@ -1575,6 +1600,8 @@ def cancelar_turno(turno_id):
         )
     else:
         flash('Turno cancelado exitosamente', 'success')
+    if abono_cancelado_por_vacio:
+        flash('El abono quedó sin clases futuras y fue dado de baja automáticamente.', 'info')
     return redirect(url_for('turnos.mis_turnos'))
 
 

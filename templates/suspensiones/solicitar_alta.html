@@ -3,41 +3,75 @@
 {% block title %}Solicitar Alta - Club 360{% endblock %}
 
 {% block content %}
-<h2>Regularizar Suspensión</h2>
+<section class="suspension-page">
+    <div class="suspension-page-header">
+        <div>
+            <span class="dashboard-eyebrow calendar-eyebrow">Suspensiones</span>
+            <h2>Regularizar suspensión</h2>
+            <p class="text-muted">Resolvé el pendiente para volver a operar tu cuenta con normalidad.</p>
+        </div>
+    </div>
 
-{% if suspension %}
-    <div class="suspension-info">
-        <h3>Estado de tu cuenta</h3>
-        <p><strong>Motivo:</strong> {{ suspension.motivo }}</p>
-        <p><strong>Fecha de Inicio:</strong> {{ suspension.fecha_inicio.strftime('%d/%m/%Y') }}</p>
-        {% if monto_total > 0 %}
-        <p><strong>Total a abonar:</strong> ${{ "%.2f"|format(monto_total) }}</p>
-        {% else %}
-        <p><strong>Deuda pendiente:</strong> No registrás deuda para abonar.</p>
-        {% endif %}
-        {% if recargo %}
-        <p><strong>Recargo de alta incluido:</strong> ${{ "%.2f"|format(recargo.monto) }}</p>
-        {% endif %}
-        {% if monto_total > 0 %}
-        <p>Al confirmar el pago con tarjeta de crédito, tu cuenta volverá a estar activa automáticamente. No interviene un administrador.</p>
-        {% else %}
-        <p>Podés reactivar tu cuenta ahora. Esta suspensión no tiene deuda pendiente asociada.</p>
-        {% endif %}
+    {% if suspension %}
+    <div class="suspension-card">
+        <div class="suspension-card-main">
+            <div class="suspension-status">
+                <span class="suspension-status-dot"></span>
+                <span>Cuenta suspendida</span>
+            </div>
+            <h3>Estado de tu cuenta</h3>
+            <p>
+                {% if monto_total > 0 %}
+                    Al confirmar el pago con tarjeta de crédito, tu cuenta volverá a estar activa automáticamente.
+                {% else %}
+                    Podés reactivar tu cuenta ahora. Esta suspensión no tiene deuda pendiente asociada.
+                {% endif %}
+            </p>
+
+            <div class="suspension-detail-grid">
+                <div class="suspension-detail-item">
+                    <span>Motivo</span>
+                    <strong>{{ suspension.motivo }}</strong>
+                </div>
+                <div class="suspension-detail-item">
+                    <span>Fecha de inicio</span>
+                    <strong>{{ suspension.fecha_inicio.strftime('%d/%m/%Y') }}</strong>
+                </div>
+                <div class="suspension-detail-item">
+                    <span>Recargo incluido</span>
+                    <strong>{{ "$%.2f"|format(recargo.monto) if recargo else "$0.00" }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <aside class="suspension-payment-summary">
+            <span>Total a abonar</span>
+            {% if monto_total > 0 %}
+                <strong>${{ "%.2f"|format(monto_total) }}</strong>
+            {% else %}
+                <strong>$0.00</strong>
+            {% endif %}
+            <small>{{ 'Incluye deuda pendiente y recargo de alta.' if monto_total > 0 else 'Sin deuda pendiente.' }}</small>
+        </aside>
 
         <form
             method="POST"
-            class="form"
+            class="suspension-actions"
             data-confirm="true"
             data-confirm-title="{{ 'Pagar y reactivar cuenta' if monto_total > 0 else 'Reactivar cuenta' }}"
             data-confirm-message="{{ 'Se cobrará el total pendiente con tarjeta de crédito y tu cuenta volverá a estar activa automáticamente.' if monto_total > 0 else 'Tu cuenta volverá a estar activa sin cobrar ningún importe.' }}"
             data-confirm-action="{{ 'Pagar ahora' if monto_total > 0 else 'Reactivar' }}"
         >
-            <button type="submit" class="btn btn-primary">{{ 'Pagar y Reactivar' if monto_total > 0 else 'Reactivar Cuenta' }}</button>
+            <button type="submit" class="btn btn-primary">{{ 'Pagar y reactivar' if monto_total > 0 else 'Reactivar cuenta' }}</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
         </form>
     </div>
-{% else %}
-    <p>No tienes suspensiones activas</p>
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
-{% endif %}
+    {% else %}
+    <div class="suspension-empty">
+        <h3>No tenés suspensiones activas</h3>
+        <p class="text-muted">Tu cuenta no registra bloqueos para regularizar.</p>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver</a>
+    </div>
+    {% endif %}
+</section>
 {% endblock %}
