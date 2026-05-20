@@ -1100,10 +1100,16 @@ def _items_deuda_pendientes(usuario_id):
         })
 
     if deudas_suspension_no_abonada:
+        deportes = []
+        for deuda in deudas_suspension_no_abonada:
+            turno = _obtener_turno_desde_pago(deuda)
+            if turno and turno.actividad.upper() not in deportes:
+                deportes.append(turno.actividad.upper())
+        deportes_texto = ', '.join(deportes) if deportes else 'varios deportes'
         items.append({
             'tipo': 'suspension_no_abonada',
             'id': 'no_abonada',
-            'concepto': 'Suspensión turnos no abonados',
+            'concepto': f"Suspensión - {deportes_texto}",
             'categoria': 'Suspensión',
             'fecha': min((p.fecha_pago for p in deudas_suspension_no_abonada if p.fecha_pago), default=None),
             'monto': round(sum(p.monto for p in deudas_suspension_no_abonada), 2),
@@ -1118,6 +1124,8 @@ def _items_deuda_pendientes(usuario_id):
         if abono:
             dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
             concepto = f"Abono {abono.actividad.upper()} - {dias[abono.dia_semana]} {abono.hora_inicio:02d}:00"
+            if abono.estado == EstadoAbono.SUSPENDIDO:
+                concepto = f"Suspensión - {abono.actividad.upper()} - {dias[abono.dia_semana]} {abono.hora_inicio:02d}:00"
         items.append({
             'tipo': 'abono',
             'abono': abono,
