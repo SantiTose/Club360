@@ -38,16 +38,26 @@
                 </tr>
             </thead>
             <tbody>
-                {% for deuda in deudas %}
+                {% for item in deudas %}
                 <tr>
-                    <td>{{ descripcion_deuda(deuda) }}</td>
-                    <td>{{ 'Abonada' if deuda.tipo_clase == 'abonada' else 'No abonada' }}</td>
-                    <td>{{ deuda.fecha_pago.strftime('%d/%m/%Y') if deuda.fecha_pago else '-' }}</td>
-                    <td>${{ '%.2f'|format(deuda.monto) }}</td>
+                    <td>{{ item.concepto }}</td>
+                    <td>{{ item.categoria }}</td>
+                    <td>{{ item.fecha.strftime('%d/%m/%Y') if item.fecha else '-' }}</td>
+                    <td>${{ '%.2f'|format(item.monto) }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('turnos.cobrar_deuda_cliente', usuario_id=cliente.id, pago_id=deuda.id) }}">
-                            <button type="submit" class="btn btn-success btn-sm">Cobrar</button>
+                        {% if item.tipo == 'abono' %}
+                        <form method="POST" action="{{ url_for('turnos.cobrar_deuda_abono_cliente', usuario_id=cliente.id, abono_id=item.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_empleado }}</button>
                         </form>
+                        {% elif item.tipo == 'suspension_no_abonada' %}
+                        <form method="POST" action="{{ url_for('turnos.cobrar_suspension_no_abonada_cliente', usuario_id=cliente.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_empleado }}</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('turnos.cobrar_deuda_cliente', usuario_id=cliente.id, pago_id=item.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_empleado }}</button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

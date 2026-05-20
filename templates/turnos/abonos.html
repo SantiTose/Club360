@@ -39,12 +39,8 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if abono.estado == 'pendiente' %}
-                            <form method="POST" action="{{ url_for('turnos.reintentar_pago_abono', abono_id=abono.id) }}" style="margin-bottom: .5rem;">
-                                <button type="submit" class="btn btn-warning">Reintentar cobro</button>
-                            </form>
-                        {% elif abono.estado == 'suspendido' %}
-                            <a href="{{ url_for('suspensiones.solicitar_alta_suspension') }}" class="btn btn-warning" style="margin-bottom: .5rem;">Abonar suspensión</a>
+                        {% if abono.estado in ['pendiente', 'suspendido'] %}
+                            <a href="{{ url_for('turnos.mis_deudas') }}" class="btn btn-warning" style="margin-bottom: .5rem;">Ver deuda</a>
                         {% endif %}
                         {% if abono.estado != 'suspendido' %}
                             <form method="POST" action="{{ url_for('turnos.cancelar_abono', abono_id=abono.id) }}" data-confirm="true" data-confirm-title="Cancelar abono" data-confirm-message="Vas a dar de baja este abono y liberar sus reservas futuras. Los créditos solo se generan al cancelar un turno abonado con más de 48 hs de anticipación." data-confirm-action="Cancelar abono" data-confirm-cancel="Volver">

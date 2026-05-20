@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from website.turnos import turnos_bp
 from website import db
@@ -134,6 +134,7 @@ def _buscar_pago_abono_completado(usuario_id, abono_id):
 
     patrones = [
         f"abono-{abono_id}-%-{usuario_id}-%",
+        f"abono-total-{abono_id}-{usuario_id}-%",
         f"abono-inmediato-{abono_id}-{usuario_id}-%",
     ]
     for patron in patrones:
@@ -431,6 +432,16 @@ def _tiene_suspension_abonada_activa(usuario_id):
     )
 
 
+def _tiene_suspension_no_abonada_activa(usuario_id):
+    return (
+        Suspension.query
+        .filter_by(usuario_id=usuario_id, estado='activa')
+        .filter(or_(Suspension.motivo.like('%no abonad%'), Suspension.motivo.like('%3 deudas%')))
+        .count()
+        > 0
+    )
+
+
 def _obtener_restricciones_suspension(cliente):
     deudas_no_abonadas_vencidas = len(_pagos_no_abonados_vencidos(cliente.id))
     abonos_pendientes_vencidos = len(_abonos_pendientes_vencidos(cliente.id))
@@ -438,7 +449,7 @@ def _obtener_restricciones_suspension(cliente):
 
     return {
         'suspendido_abonado': abonos_pendientes_vencidos > 0 or abonos_suspendidos > 0 or _tiene_suspension_abonada_activa(cliente.id),
-        'suspendido_no_abonado': deudas_no_abonadas_vencidas >= 3,
+        'suspendido_no_abonado': deudas_no_abonadas_vencidas >= 3 or _tiene_suspension_no_abonada_activa(cliente.id),
         'deudas_abonadas': abonos_pendientes_vencidos,
         'deudas_no_abonadas_vencidas': deudas_no_abonadas_vencidas,
     }
@@ -573,16 +584,13 @@ def _promover_siguiente_lista_espera(turno, tipo_clase=None):
     turno.cupos_disponibles -= 1
     db.session.delete(siguiente)
 
-    monto = _calcular_monto_reserva(turno.actividad, tipo_clase, usuario_promovido)
-    db.session.add(Pago(
-        usuario_id=usuario_id,
-        monto=monto,
+    _crear_pago_pendiente_reserva(
+        usuario_promovido,
+        turno,
+        tipo_clase,
+        f"espera-{turno.id}-{usuario_id}-{int(datetime.utcnow().timestamp())}",
         metodo_pago='tarjeta_credito',
-        estado='completado',
-        tipo_clase=tipo_clase,
-        fecha_pago=datetime.utcnow(),
-        referencia_transaccion=f"espera-{turno.id}-{usuario_id}-{int(datetime.utcnow().timestamp())}",
-    ))
+    )
 
     db.session.flush()
     _enviar_email_qr_reserva(reserva_promovida, asunto='Promoción desde lista de espera - Club 360')
@@ -817,6 +825,16 @@ def _crear_abono_mensual_para_turno(usuario, turno, credito=None, metodo_pago='t
         credito=credito,
         metodo_pago=metodo_pago,
     )
+    if creadas > 0:
+        turnos_cobrables = (
+            Turno.query
+            .join(Reserva, Reserva.turno_id == Turno.id)
+            .filter(Reserva.abono_id == abono.id)
+            .filter(Reserva.usuario_id == usuario.id)
+            .order_by(Turno.hora_inicio.asc())
+            .all()
+        )
+        _crear_pago_abono_mensual(usuario, abono, turnos_cobrables, metodo_pago=metodo_pago, credito=credito)
     return abono, True, conflictos, creadas, turnos_en_espera, False, False
 
 
@@ -833,24 +851,61 @@ def _crear_pago_pendiente_reserva(
     credito_aplicado = round(min(float(credito.monto), monto_base), 2) if credito else 0.0
     monto_final = round(max(monto_base - credito_aplicado, 0), 2)
     estado_pago = 'completado'
+    monto_senia = round(monto_final * 0.5, 2) if tipo_clase == TipoClase.NO_ABONADA else monto_final
+    monto_deuda = round(monto_final - monto_senia, 2) if tipo_clase == TipoClase.NO_ABONADA else 0.0
 
-    if metodo_pago == 'tarjeta_credito' and monto_final > 0:
+    if metodo_pago == 'tarjeta_credito' and monto_senia > 0:
         saldo = float(usuario.tarjeta_credito_saldo or 0.0)
-        if saldo >= monto_final:
-            usuario.tarjeta_credito_saldo = round(saldo - monto_final, 2)
+        if saldo >= monto_senia:
+            usuario.tarjeta_credito_saldo = round(saldo - monto_senia, 2)
         else:
             estado_pago = 'pendiente'
 
     db.session.add(Pago(
         usuario_id=usuario.id,
-        monto=monto_final,
+        monto=monto_senia,
         metodo_pago=metodo_pago,
         estado=estado_pago,
         tipo_clase=tipo_clase,
         fecha_pago=datetime.utcnow(),
-        referencia_transaccion=referencia,
+        referencia_transaccion=f"{referencia}-senia" if tipo_clase == TipoClase.NO_ABONADA else referencia,
     ))
-    return credito_aplicado, monto_final, estado_pago
+    if monto_deuda > 0:
+        db.session.add(Pago(
+            usuario_id=usuario.id,
+            monto=monto_deuda,
+            metodo_pago='tarjeta_credito',
+            estado='pendiente',
+            tipo_clase=tipo_clase,
+            fecha_pago=datetime.utcnow(),
+            referencia_transaccion=f"{referencia}-saldo",
+        ))
+    return credito_aplicado, monto_senia, estado_pago
+
+
+def _crear_pago_abono_mensual(usuario, abono, turnos, metodo_pago='tarjeta_credito', credito=None):
+    monto_base = round(sum(
+        _calcular_monto_reserva(
+            turno.actividad,
+            TipoClase.ABONADA,
+            usuario,
+            descuento_porcentaje=abono.descuento_porcentaje,
+        )
+        for turno in turnos
+    ), 2)
+    credito_aplicado = round(min(float(credito.monto), monto_base), 2) if credito else 0.0
+    monto_final = round(max(monto_base - credito_aplicado, 0), 2)
+
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=monto_final,
+        metodo_pago='tarjeta_credito',
+        estado='pendiente',
+        tipo_clase=TipoClase.ABONADA,
+        fecha_pago=datetime.utcnow(),
+        referencia_transaccion=f"abono-total-{abono.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
+    ))
+    return credito_aplicado, monto_final, 'pendiente'
 
 
 def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True, credito=None, metodo_pago='tarjeta_credito'):
@@ -875,20 +930,9 @@ def _asegurar_reserva_abono(turno, usuario, abono, crear_pago=True, credito=None
     db.session.add(reserva)
     turno.cupos_disponibles -= 1
 
-    if crear_pago:
-        if credito:
-            db.session.flush()
-            _marcar_credito_usado(credito, reserva)
-        referencia = f"abono-{abono.id}-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
-        _crear_pago_pendiente_reserva(
-            usuario,
-            turno,
-            TipoClase.ABONADA,
-            referencia,
-            descuento_porcentaje=abono.descuento_porcentaje,
-            credito=credito,
-            metodo_pago=metodo_pago,
-        )
+    if crear_pago and credito:
+        db.session.flush()
+        _marcar_credito_usado(credito, reserva)
     return True, None
 
 
@@ -933,7 +977,12 @@ def _abono_tiene_pagos_pendientes(abono):
     return (
         Pago.query
         .filter_by(usuario_id=abono.usuario_id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
-        .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-%-{abono.usuario_id}-%"))
+        .filter(
+            or_(
+                Pago.referencia_transaccion.like(f"abono-{abono.id}-%-{abono.usuario_id}-%"),
+                Pago.referencia_transaccion.like(f"abono-total-{abono.id}-{abono.usuario_id}-%"),
+            )
+        )
         .filter(Pago.monto > 0)
         .count()
         > 0
@@ -944,7 +993,12 @@ def _pagos_pendientes_de_abono(abono):
     return (
         Pago.query
         .filter_by(usuario_id=abono.usuario_id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
-        .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-%-{abono.usuario_id}-%"))
+        .filter(
+            or_(
+                Pago.referencia_transaccion.like(f"abono-{abono.id}-%-{abono.usuario_id}-%"),
+                Pago.referencia_transaccion.like(f"abono-total-{abono.id}-{abono.usuario_id}-%"),
+            )
+        )
         .filter(Pago.monto > 0)
         .order_by(Pago.fecha_pago.asc())
         .all()
@@ -1000,20 +1054,117 @@ def _descripcion_deuda(deuda):
     return 'Clase pendiente'
 
 
-def _reactivar_si_sin_deudas(usuario):
-    if _total_deudas_pendientes(usuario.id) > 0:
-        return 0, []
+def _abono_id_desde_pago(pago):
+    referencia = (pago.referencia_transaccion or '').strip()
+    partes = referencia.split('-')
+    if len(partes) >= 3 and partes[0] == 'abono' and partes[1] == 'total':
+        try:
+            return int(partes[2])
+        except ValueError:
+            return None
+    if len(partes) >= 2 and partes[0] == 'abono':
+        try:
+            return int(partes[1])
+        except ValueError:
+            return None
+    return None
 
+
+def _items_deuda_pendientes(usuario_id):
+    deudas = _obtener_deudas_pendientes(usuario_id)
+    items = []
+    grupos_abono = {}
+    deudas_suspension_no_abonada = []
+    tiene_suspension_no_abonada = _tiene_suspension_no_abonada_activa(usuario_id)
+
+    for deuda in deudas:
+        abono_id = _abono_id_desde_pago(deuda) if deuda.tipo_clase == TipoClase.ABONADA else None
+        if abono_id:
+            grupos_abono.setdefault(abono_id, []).append(deuda)
+            continue
+        if tiene_suspension_no_abonada and deuda.tipo_clase == TipoClase.NO_ABONADA:
+            deudas_suspension_no_abonada.append(deuda)
+            continue
+
+        items.append({
+            'tipo': 'pago',
+            'pago': deuda,
+            'id': deuda.id,
+            'concepto': _descripcion_deuda(deuda),
+            'categoria': 'No abonada' if deuda.tipo_clase == TipoClase.NO_ABONADA else 'Suspensión',
+            'fecha': deuda.fecha_pago,
+            'monto': round(deuda.monto, 2),
+            'pagable_individual': True,
+            'accion_cliente': 'Pagar',
+            'accion_empleado': 'Cobrar',
+        })
+
+    if deudas_suspension_no_abonada:
+        items.append({
+            'tipo': 'suspension_no_abonada',
+            'id': 'no_abonada',
+            'concepto': 'Suspensión turnos no abonados',
+            'categoria': 'Suspensión',
+            'fecha': min((p.fecha_pago for p in deudas_suspension_no_abonada if p.fecha_pago), default=None),
+            'monto': round(sum(p.monto for p in deudas_suspension_no_abonada), 2),
+            'pagable_individual': True,
+            'accion_cliente': 'Pagar suspensión',
+            'accion_empleado': 'Cobrar suspensión',
+        })
+
+    for abono_id, pagos in grupos_abono.items():
+        abono = AbonoCliente.query.get(abono_id)
+        concepto = 'Abono pendiente'
+        if abono:
+            dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+            concepto = f"Abono {abono.actividad.upper()} - {dias[abono.dia_semana]} {abono.hora_inicio:02d}:00"
+        items.append({
+            'tipo': 'abono',
+            'abono': abono,
+            'id': abono_id,
+            'concepto': concepto,
+            'categoria': 'Abonada',
+            'fecha': min((p.fecha_pago for p in pagos if p.fecha_pago), default=None),
+            'monto': round(sum(p.monto for p in pagos), 2),
+            'pagable_individual': True,
+            'accion_cliente': 'Pagar suspensión' if abono and abono.estado == EstadoAbono.SUSPENDIDO else 'Pagar abono',
+            'accion_empleado': 'Cobrar suspensión' if abono and abono.estado == EstadoAbono.SUSPENDIDO else 'Cobrar abono',
+        })
+
+    return sorted(items, key=lambda item: (item['fecha'] or datetime.utcnow(), item['concepto']))
+
+
+def _reactivar_si_sin_deudas(usuario):
+    deudas_no_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=usuario.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .filter(Pago.monto > 0)
+        .count()
+    )
+    deudas_abonadas = (
+        Pago.query
+        .filter_by(usuario_id=usuario.id, estado='pendiente', tipo_clase=TipoClase.ABONADA)
+        .filter(Pago.monto > 0)
+        .count()
+    )
     suspensiones = Suspension.query.filter_by(usuario_id=usuario.id, estado='activa').all()
     for suspension in suspensiones:
-        suspension.estado = 'resuelta'
-        suspension.fecha_resolucion = datetime.utcnow()
+        motivo = (suspension.motivo or '').lower()
+        resolver_no_abonada = ('no abonad' in motivo or '3 deudas' in motivo) and deudas_no_abonadas == 0
+        resolver_abonada = 'abono' in motivo and deudas_abonadas == 0
+        resolver_generica = 'mora' in motivo and deudas_no_abonadas == 0 and deudas_abonadas == 0
+        if resolver_no_abonada or resolver_abonada or resolver_generica:
+            suspension.estado = 'resuelta'
+            suspension.fecha_resolucion = datetime.utcnow()
 
-    if suspensiones:
+    if Suspension.query.filter_by(usuario_id=usuario.id, estado='activa').count() == 0:
         usuario.estado = EstadoUsuario.ACTIVO
 
     reservas_restauradas = 0
     conflictos = []
+    if deudas_abonadas > 0:
+        return reservas_restauradas, conflictos
+
     abonos_suspendidos = AbonoCliente.query.filter_by(
         usuario_id=usuario.id,
         estado=EstadoAbono.SUSPENDIDO,
@@ -1027,6 +1178,13 @@ def _reactivar_si_sin_deudas(usuario):
     return reservas_restauradas, conflictos
 
 
+def _activar_abonos_pendientes_sin_deuda(usuario):
+    abonos = AbonoCliente.query.filter_by(usuario_id=usuario.id, estado=EstadoAbono.PENDIENTE).all()
+    for abono in abonos:
+        if not _abono_tiene_pagos_pendientes(abono):
+            abono.estado = EstadoAbono.ACTIVO
+
+
 def _marcar_deudas_como_pagadas(usuario, metodo_pago):
     deudas = _obtener_deudas_pendientes(usuario.id)
     total = round(sum(deuda.monto for deuda in deudas), 2)
@@ -1037,6 +1195,7 @@ def _marcar_deudas_como_pagadas(usuario, metodo_pago):
         if not deuda.referencia_transaccion:
             deuda.referencia_transaccion = f"deuda-{metodo_pago}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
 
+    _activar_abonos_pendientes_sin_deuda(usuario)
     reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
     return total, reservas_restauradas, conflictos
 
@@ -1052,6 +1211,46 @@ def _marcar_deuda_como_pagada(usuario, deuda, metodo_pago):
     if not deuda.referencia_transaccion:
         deuda.referencia_transaccion = f"deuda-{metodo_pago}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
 
+    _activar_abonos_pendientes_sin_deuda(usuario)
+    reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
+    return total, reservas_restauradas, conflictos
+
+
+def _marcar_deuda_abono_como_pagada(usuario, abono, metodo_pago):
+    if not abono or abono.usuario_id != usuario.id:
+        return 0.0, 0, []
+
+    pagos = _pagos_pendientes_de_abono(abono)
+    total = round(sum(pago.monto for pago in pagos), 2)
+    for pago in pagos:
+        pago.estado = 'completado'
+        pago.metodo_pago = metodo_pago
+        pago.fecha_pago = datetime.utcnow()
+
+    if pagos and abono.estado == EstadoAbono.PENDIENTE:
+        abono.estado = EstadoAbono.ACTIVO
+
+    _activar_abonos_pendientes_sin_deuda(usuario)
+    reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
+    return total, reservas_restauradas, conflictos
+
+
+def _marcar_deudas_no_abonadas_como_pagadas(usuario, metodo_pago):
+    deudas = (
+        Pago.query
+        .filter_by(usuario_id=usuario.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .filter(Pago.monto > 0)
+        .all()
+    )
+    total = round(sum(deuda.monto for deuda in deudas), 2)
+    for deuda in deudas:
+        deuda.estado = 'completado'
+        deuda.metodo_pago = metodo_pago
+        deuda.fecha_pago = datetime.utcnow()
+        if not deuda.referencia_transaccion:
+            deuda.referencia_transaccion = f"suspension-no-abonada-{metodo_pago}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
+
+    _activar_abonos_pendientes_sin_deuda(usuario)
     reservas_restauradas, conflictos = _reactivar_si_sin_deudas(usuario)
     return total, reservas_restauradas, conflictos
 
@@ -1093,26 +1292,13 @@ def _cancelar_reservas_futuras_de_abono(abono, generar_creditos=False, eliminar_
     reservas_sin_credito_por_pago = 0
     reservas_sin_credito_por_tiempo = 0
     credito_de_abono_generado = False
+    if eliminar_pagos_pendientes:
+        for pago in _pagos_pendientes_de_abono(abono):
+            db.session.delete(pago)
+
     for reserva in reservas:
         turno = reserva.turno
-        pago_completado = (
-            Pago.query
-            .filter_by(usuario_id=reserva.usuario_id, estado='completado', tipo_clase=TipoClase.ABONADA)
-            .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-%"))
-            .filter(Pago.monto > 0)
-            .order_by(Pago.fecha_pago.desc())
-            .first()
-        )
-
-        if eliminar_pagos_pendientes:
-            pagos_pendientes = (
-                Pago.query
-                .filter_by(usuario_id=reserva.usuario_id, estado='pendiente')
-                .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{reserva.turno_id}-{reserva.usuario_id}-%"))
-                .all()
-            )
-            for pago in pagos_pendientes:
-                db.session.delete(pago)
+        pago_completado = _buscar_pago_abono_completado(reserva.usuario_id, abono.id)
 
         if generar_creditos and not credito_de_abono_generado:
             if _cancelacion_con_mas_de_48h(turno):
@@ -1541,10 +1727,6 @@ def reservar_turno(turno_id):
                 if creado_abono:
                     if _abono_tiene_pagos_pendientes(abono):
                         abono.estado = EstadoAbono.PENDIENTE
-                    if abono.estado == EstadoAbono.PENDIENTE and reserva_interna and metodo_pago_reserva == 'tarjeta_credito':
-                        db.session.rollback()
-                        flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
-                        return _resolver_redirect_reserva()
                     db.session.commit()
                     reservas_qr = (
                         Reserva.query
@@ -1555,17 +1737,12 @@ def reservar_turno(turno_id):
                         .all()
                     )
                     _enviar_emails_qr_reservas(reservas_qr)
-                    monto_cobrado = (
-                        Pago.query
-                        .filter_by(usuario_id=cliente_objetivo.id, estado='completado', tipo_clase=TipoClase.ABONADA)
-                        .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-%-{cliente_objetivo.id}-%"))
-                        .with_entities(func.coalesce(func.sum(Pago.monto), 0))
-                        .scalar()
-                    )
+                    pago_abono = _buscar_pago_abono_completado(cliente_objetivo.id, abono.id)
+                    monto_cobrado = pago_abono.monto if pago_abono else 0.0
                     if abono.estado == EstadoAbono.PENDIENTE:
                         mensaje = (
                             f'Se reservaron {reservas_creadas} clase(s) del abono para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
-                            'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.'
+                            'y se generó la deuda del abono para pagar desde Mis Deudas.'
                         )
                     elif metodo_pago_reserva == 'efectivo':
                         mensaje = (
@@ -1612,21 +1789,11 @@ def reservar_turno(turno_id):
                 .filter_by(turno_id=turno_id, usuario_id=cliente_objetivo.id)
                 .first()
             )
-            pago_generado = (
-                Pago.query
-                .filter_by(usuario_id=cliente_objetivo.id, tipo_clase=TipoClase.ABONADA)
-                .filter(Pago.referencia_transaccion.like(f"abono-{abono.id}-{turno_id}-{cliente_objetivo.id}-%"))
-                .order_by(Pago.fecha_pago.desc())
-                .first()
-            )
+            pago_generado = _buscar_pago_abono_completado(cliente_objetivo.id, abono.id)
             if _abono_tiene_pagos_pendientes(abono):
                 abono.estado = EstadoAbono.PENDIENTE
             monto_final = pago_generado.monto if pago_generado else 0.0
             estado_pago = pago_generado.estado if pago_generado else 'completado'
-            if reserva_interna and metodo_pago_reserva == 'tarjeta_credito' and estado_pago == 'pendiente':
-                db.session.rollback()
-                flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
-                return _resolver_redirect_reserva()
             if credito and credito.estado == EstadoCredito.USADO:
                 credito_aplicado = round(credito.monto, 2)
         else:
@@ -1649,9 +1816,9 @@ def reservar_turno(turno_id):
                 credito=credito,
                 metodo_pago=metodo_pago_reserva,
             )
-            if reserva_interna and metodo_pago_reserva == 'tarjeta_credito' and estado_pago == 'pendiente':
+            if metodo_pago_reserva == 'tarjeta_credito' and estado_pago == 'pendiente':
                 db.session.rollback()
-                flash('El usuario no tiene fondos suficientes en su tarjeta de crédito. No se pudo reservar el turno.', 'error')
+                flash('No se pudo cobrar la seña con tarjeta de crédito. No se pudo reservar el turno.', 'error')
                 return _resolver_redirect_reserva()
 
         db.session.commit()
@@ -1664,11 +1831,11 @@ def reservar_turno(turno_id):
         if tipo_clase == TipoClase.ABONADA:
             extra_credito = ' Se aplicó un crédito.' if credito_aplicado > 0 else ''
             if abono.estado == EstadoAbono.PENDIENTE:
-                flash('Reserva abonada pendiente de pago. Podés reintentar el cobro desde Mis Abonos.', 'warning')
+                flash('Reserva abonada pendiente de pago. Podés abonar la deuda desde Mis Deudas.', 'warning')
             elif metodo_pago_reserva == 'efectivo':
-                flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró pago en efectivo por ${monto_final:.2f}.{extra_credito}', 'success')
+                flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}.{extra_credito}', 'success')
             else:
-                flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.{extra_credito}', 'success')
+                flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}.{extra_credito}', 'success')
         else:
             if estado_pago == 'pendiente':
                 flash(
@@ -1677,9 +1844,9 @@ def reservar_turno(turno_id):
                     'warning',
                 )
             elif metodo_pago_reserva == 'efectivo':
-                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró pago en efectivo por ${monto_final:.2f}.', 'success')
+                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró una seña en efectivo por ${monto_final:.2f}.', 'success')
             else:
-                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró ${monto_final:.2f} con tarjeta de crédito.', 'success')
+                flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se cobró una seña de ${monto_final:.2f} con tarjeta de crédito.', 'success')
     else:
         existente_espera = ListaEspera.query.filter_by(
             turno_id=turno_id,
@@ -1718,7 +1885,7 @@ def cancelar_turno(turno_id):
     
     es_reserva_abonada = _es_reserva_abonada(reserva)
     credito_generado = None
-    pago_reserva = _buscar_pago_reserva(current_user.id, turno_id) if es_reserva_abonada else None
+    pago_reserva = _buscar_pago_abono_completado(current_user.id, reserva.abono_id) if es_reserva_abonada else None
     abono_id_cancelado = reserva.abono_id if es_reserva_abonada else None
     db.session.delete(reserva)
     turno.cupos_disponibles += 1
@@ -1776,18 +1943,15 @@ def cancelar_turno(turno_id):
             .delete(synchronize_session=False)
         )
 
-        # Cobra automaticamente la clase al usuario promovido desde lista de espera.
+        # Cobra automaticamente la seña al usuario promovido desde lista de espera.
         usuario_promovido = Usuario.query.get(siguiente.usuario_id)
-        monto = _calcular_monto_reserva(turno.actividad, siguiente.tipo_clase, usuario_promovido)
-        db.session.add(Pago(
-            usuario_id=siguiente.usuario_id,
-            monto=monto,
+        _crear_pago_pendiente_reserva(
+            usuario_promovido,
+            turno,
+            siguiente.tipo_clase,
+            f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}",
             metodo_pago='tarjeta_credito',
-            estado='completado',
-            tipo_clase=siguiente.tipo_clase,
-            fecha_pago=datetime.utcnow(),
-            referencia_transaccion=f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}"
-        ))
+        )
 
         # Recalcular posiciones restantes por cada tipo de lista.
         _recalcular_posiciones_lista(turno_id)
@@ -2029,13 +2193,12 @@ def mis_deudas():
         return redirect(url_for('dashboard'))
 
     _procesar_suspension_automatica(current_user)
-    deudas = _obtener_deudas_pendientes(current_user.id)
-    total = round(sum(deuda.monto for deuda in deudas), 2)
+    items_deuda = _items_deuda_pendientes(current_user.id)
+    total = round(sum(item['monto'] for item in items_deuda), 2)
     return render_template(
         'turnos/mis_deudas.html',
-        deudas=deudas,
+        items_deuda=items_deuda,
         total=total,
-        descripcion_deuda=_descripcion_deuda,
     )
 
 
@@ -2079,6 +2242,9 @@ def pagar_mi_deuda(pago_id):
     if deuda.usuario_id != current_user.id or deuda.estado != 'pendiente' or deuda.monto <= 0:
         flash('La deuda indicada no está disponible para pago.', 'error')
         return redirect(url_for('turnos.mis_deudas'))
+    if deuda.tipo_clase == TipoClase.ABONADA and _abono_id_desde_pago(deuda):
+        flash('Las deudas de abono se pagan completas, no clase por clase.', 'warning')
+        return redirect(url_for('turnos.mis_deudas'))
 
     monto = round(deuda.monto, 2)
     saldo = float(current_user.tarjeta_credito_saldo or 0.0)
@@ -2091,6 +2257,74 @@ def pagar_mi_deuda(pago_id):
     db.session.commit()
 
     flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.mis_deudas'))
+
+
+@turnos_bp.route('/mis-deudas/pagar-abono/<int:abono_id>', methods=['POST'])
+@login_required
+def pagar_mi_deuda_abono(abono_id):
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta sección está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    abono = AbonoCliente.query.get_or_404(abono_id)
+    if abono.usuario_id != current_user.id:
+        flash('No tienes permisos para pagar este abono', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    total = round(sum(pago.monto for pago in _pagos_pendientes_de_abono(abono)), 2)
+    if total <= 0:
+        flash('Este abono no tiene deuda pendiente.', 'info')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    saldo = float(current_user.tarjeta_credito_saldo or 0.0)
+    if saldo < total:
+        flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${total:.2f}.', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    current_user.tarjeta_credito_saldo = round(saldo - total, 2)
+    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_abono_como_pagada(current_user, abono, 'tarjeta_credito')
+    db.session.commit()
+
+    flash(f'Se abonó el abono pendiente completo por ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.mis_deudas'))
+
+
+@turnos_bp.route('/mis-deudas/pagar-suspension-no-abonada', methods=['POST'])
+@login_required
+def pagar_mi_suspension_no_abonada():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta sección está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    total = round(sum(
+        deuda.monto for deuda in Pago.query
+        .filter_by(usuario_id=current_user.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .filter(Pago.monto > 0)
+        .all()
+    ), 2)
+    if total <= 0:
+        flash('No tenés deuda de suspensión pendiente.', 'info')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    saldo = float(current_user.tarjeta_credito_saldo or 0.0)
+    if saldo < total:
+        flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${total:.2f}.', 'error')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    current_user.tarjeta_credito_saldo = round(saldo - total, 2)
+    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_no_abonadas_como_pagadas(current_user, 'tarjeta_credito')
+    db.session.commit()
+
+    flash(f'Se abonó la suspensión por ${total_pagado:.2f} con tarjeta de crédito.', 'success')
     if reservas_restauradas:
         flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
     for conflicto in conflictos:
@@ -2116,8 +2350,8 @@ def cobrar_deudas():
             cliente = None
         else:
             _procesar_suspension_automatica(cliente)
-            deudas = _obtener_deudas_pendientes(cliente.id)
-            total = round(sum(deuda.monto for deuda in deudas), 2)
+            deudas = _items_deuda_pendientes(cliente.id)
+            total = round(sum(item['monto'] for item in deudas), 2)
 
     return render_template(
         'turnos/cobrar_deudas.html',
@@ -2125,7 +2359,6 @@ def cobrar_deudas():
         cliente=cliente,
         deudas=deudas,
         total=total,
-        descripcion_deuda=_descripcion_deuda,
     )
 
 
@@ -2173,11 +2406,76 @@ def cobrar_deuda_cliente(usuario_id, pago_id):
     if deuda.usuario_id != cliente.id or deuda.estado != 'pendiente' or deuda.monto <= 0:
         flash('La deuda indicada no está disponible para cobro.', 'error')
         return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+    if deuda.tipo_clase == TipoClase.ABONADA and _abono_id_desde_pago(deuda):
+        flash('Las deudas de abono se cobran completas, no clase por clase.', 'warning')
+        return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
     total_pagado, reservas_restauradas, conflictos = _marcar_deuda_como_pagada(cliente, deuda, 'efectivo')
     db.session.commit()
 
     flash(f'Se cobró ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+
+@turnos_bp.route('/cobrar-deudas/<int:usuario_id>/abono/<int:abono_id>', methods=['POST'])
+@login_required
+def cobrar_deuda_abono_cliente(usuario_id, abono_id):
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para cobrar deudas', 'error')
+        return redirect(url_for('dashboard'))
+
+    cliente = Usuario.query.get_or_404(usuario_id)
+    abono = AbonoCliente.query.get_or_404(abono_id)
+    if cliente.tipo_usuario != TipoUsuario.CLIENTE or abono.usuario_id != cliente.id:
+        flash('La deuda indicada no está disponible para cobro.', 'error')
+        return redirect(url_for('turnos.cobrar_deudas'))
+
+    total = round(sum(pago.monto for pago in _pagos_pendientes_de_abono(abono)), 2)
+    if total <= 0:
+        flash('Este abono no tiene deuda pendiente.', 'info')
+        return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_abono_como_pagada(cliente, abono, 'efectivo')
+    db.session.commit()
+
+    flash(f'Se cobró el abono pendiente completo por ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
+    if reservas_restauradas:
+        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
+    for conflicto in conflictos:
+        flash(conflicto, 'warning')
+    return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+
+@turnos_bp.route('/cobrar-deudas/<int:usuario_id>/suspension-no-abonada', methods=['POST'])
+@login_required
+def cobrar_suspension_no_abonada_cliente(usuario_id):
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para cobrar deudas', 'error')
+        return redirect(url_for('dashboard'))
+
+    cliente = Usuario.query.get_or_404(usuario_id)
+    if cliente.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Solo se pueden cobrar deudas de clientes.', 'error')
+        return redirect(url_for('turnos.cobrar_deudas'))
+
+    total = round(sum(
+        deuda.monto for deuda in Pago.query
+        .filter_by(usuario_id=cliente.id, estado='pendiente', tipo_clase=TipoClase.NO_ABONADA)
+        .filter(Pago.monto > 0)
+        .all()
+    ), 2)
+    if total <= 0:
+        flash('El cliente no tiene deuda de suspensión pendiente.', 'info')
+        return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
+
+    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_no_abonadas_como_pagadas(cliente, 'efectivo')
+    db.session.commit()
+
+    flash(f'Se cobró la suspensión por ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
     if reservas_restauradas:
         flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
     for conflicto in conflictos:

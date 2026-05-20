@@ -12,7 +12,7 @@
     </div>
 
     <div class="calendar-toolbar-card">
-        {% if deudas %}
+        {% if items_deuda %}
         <table class="table">
             <thead>
                 <tr>
@@ -24,16 +24,26 @@
                 </tr>
             </thead>
             <tbody>
-                {% for deuda in deudas %}
+                {% for item in items_deuda %}
                 <tr>
-                    <td>{{ descripcion_deuda(deuda) }}</td>
-                    <td>{{ 'Abonada' if deuda.tipo_clase == 'abonada' else 'No abonada' }}</td>
-                    <td>{{ deuda.fecha_pago.strftime('%d/%m/%Y') if deuda.fecha_pago else '-' }}</td>
-                    <td>${{ '%.2f'|format(deuda.monto) }}</td>
+                    <td>{{ item.concepto }}</td>
+                    <td>{{ item.categoria }}</td>
+                    <td>{{ item.fecha.strftime('%d/%m/%Y') if item.fecha else '-' }}</td>
+                    <td>${{ '%.2f'|format(item.monto) }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('turnos.pagar_mi_deuda', pago_id=deuda.id) }}">
-                            <button type="submit" class="btn btn-success btn-sm">Pagar</button>
+                        {% if item.tipo == 'abono' %}
+                        <form method="POST" action="{{ url_for('turnos.pagar_mi_deuda_abono', abono_id=item.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_cliente }}</button>
                         </form>
+                        {% elif item.tipo == 'suspension_no_abonada' %}
+                        <form method="POST" action="{{ url_for('turnos.pagar_mi_suspension_no_abonada') }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_cliente }}</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('turnos.pagar_mi_deuda', pago_id=item.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">{{ item.accion_cliente }}</button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
