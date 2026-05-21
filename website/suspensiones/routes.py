@@ -71,6 +71,11 @@ def _monto_total_alta(usuario_id):
     return total, recargo
 
 
+def _tarjeta_credito_vencida(usuario):
+    vencimiento = getattr(usuario, 'tarjeta_credito_vencimiento', None)
+    return bool(vencimiento and vencimiento < datetime.utcnow().date())
+
+
 def _reactivar_cuenta_tras_pago(usuario):
     suspensiones = Suspension.query.filter_by(
         usuario_id=usuario.id,
@@ -134,6 +139,10 @@ def solicitar_alta_suspension():
             return redirect(url_for('dashboard'))
 
         saldo_disponible = float(current_user.tarjeta_credito_saldo or 0.0)
+        if _tarjeta_credito_vencida(current_user):
+            flash('No se pudo procesar el pago. La tarjeta de credito esta vencida.', 'error')
+            return redirect(url_for('suspensiones.solicitar_alta_suspension'))
+
         if saldo_disponible < monto_total:
             flash(
                 f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${monto_total:.2f}.',

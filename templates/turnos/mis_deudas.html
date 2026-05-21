@@ -57,7 +57,8 @@
         </div>
 
         <form method="POST" action="{{ url_for('turnos.pagar_mis_deudas') }}" style="margin-top: 1rem;">
-            <button type="submit" class="btn btn-success">Pagar el Total</button>
+            <p>Pagar el total de tus deudas</p>
+            <button type="submit" class="btn btn-success">Pagar</button>
         </form>
         {% else %}
         <div class="calendar-empty-state" style="margin-top: 0;">

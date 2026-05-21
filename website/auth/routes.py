@@ -6,6 +6,7 @@ from website.models import Usuario, TipoUsuario, EstadoUsuario
 from website.services import enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
+import calendar
 import os
 import secrets
 import re
@@ -63,6 +64,10 @@ def _marca_tarjeta(numero):
 
 
 def _vencimiento_tarjeta_es_valido(vencimiento_raw):
+    return _parsear_vencimiento_tarjeta(vencimiento_raw) is not None
+
+
+def _parsear_vencimiento_tarjeta(vencimiento_raw):
     vencimiento = (vencimiento_raw or '').strip()
 
     if re.match(r'^\d{4}-\d{2}$', vencimiento):
@@ -72,17 +77,21 @@ def _vencimiento_tarjeta_es_valido(vencimiento_raw):
     else:
         match = re.match(r'^(\d{1,2})\s*/\s*(\d{2}|\d{4})$', vencimiento)
         if not match:
-            return False
+            return None
         mes = int(match.group(1))
         anio = int(match.group(2))
         if anio < 100:
             anio += 2000
 
     if mes < 1 or mes > 12:
-        return False
+        return None
 
     hoy = date.today()
-    return (anio, mes) >= (hoy.year, hoy.month)
+    if (anio, mes) < (hoy.year, hoy.month):
+        return None
+
+    ultimo_dia = calendar.monthrange(anio, mes)[1]
+    return date(anio, mes, ultimo_dia)
 
 
 def _normalizar_tarjeta_credito(tarjeta_raw):
@@ -145,6 +154,7 @@ def register():
         )
         if error_tarjeta:
             field_errors['tarjeta_credito'] = error_tarjeta
+        tarjeta_vencimiento = _parsear_vencimiento_tarjeta(tarjeta_vencimiento_raw) if not error_tarjeta else None
         
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
@@ -179,6 +189,7 @@ def register():
                 autorizacion_menor=False,
                 tarjeta_credito_marca=tarjeta_marca,
                 tarjeta_credito_ultimos4=tarjeta_ultimos4,
+                tarjeta_credito_vencimiento=tarjeta_vencimiento,
                 tarjeta_credito_saldo=100000.0,
                 email=email,
                 password=generate_password_hash(password),

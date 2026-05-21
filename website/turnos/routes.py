@@ -1049,6 +1049,18 @@ def _total_deudas_pendientes(usuario_id):
     return round(sum(deuda.monto for deuda in _obtener_deudas_pendientes(usuario_id)), 2)
 
 
+def _tarjeta_credito_vencida(usuario):
+    vencimiento = getattr(usuario, 'tarjeta_credito_vencimiento', None)
+    return bool(vencimiento and vencimiento < datetime.utcnow().date())
+
+
+def _rechazar_pago_tarjeta_vencida(usuario):
+    if not _tarjeta_credito_vencida(usuario):
+        return False
+    flash('No se pudo procesar el pago. La tarjeta de credito esta vencida.', 'error')
+    return True
+
+
 def _descripcion_deuda(deuda):
     if deuda.referencia_transaccion and deuda.referencia_transaccion.startswith('recargo-alta-'):
         return 'Recargo de alta'
@@ -2156,6 +2168,9 @@ def pagar_mis_deudas():
         flash('No tenés deudas pendientes.', 'info')
         return redirect(url_for('turnos.mis_deudas'))
 
+    if _rechazar_pago_tarjeta_vencida(current_user):
+        return redirect(url_for('turnos.mis_deudas'))
+
     saldo = float(current_user.tarjeta_credito_saldo or 0.0)
     if saldo < total:
         flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${total:.2f}.', 'error')
@@ -2186,6 +2201,9 @@ def pagar_mi_deuda(pago_id):
         return redirect(url_for('turnos.mis_deudas'))
     if deuda.tipo_clase == TipoClase.ABONADA and _abono_id_desde_pago(deuda):
         flash('Las deudas de abono se pagan completas, no clase por clase.', 'warning')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    if _rechazar_pago_tarjeta_vencida(current_user):
         return redirect(url_for('turnos.mis_deudas'))
 
     monto = round(deuda.monto, 2)
@@ -2221,6 +2239,12 @@ def pagar_mi_deuda_abono(abono_id):
     total = round(sum(pago.monto for pago in _pagos_pendientes_de_abono(abono)), 2)
     if total <= 0:
         flash('Este abono no tiene deuda pendiente.', 'info')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    if _rechazar_pago_tarjeta_vencida(current_user):
+        return redirect(url_for('turnos.mis_deudas'))
+
+    if _rechazar_pago_tarjeta_vencida(current_user):
         return redirect(url_for('turnos.mis_deudas'))
 
     saldo = float(current_user.tarjeta_credito_saldo or 0.0)

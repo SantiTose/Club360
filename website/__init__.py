@@ -602,6 +602,8 @@ def _ensure_usuario_tarjeta_columns():
         updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_marca VARCHAR(20)")
     if 'tarjeta_credito_ultimos4' not in columnas:
         updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_ultimos4 VARCHAR(4)")
+    if 'tarjeta_credito_vencimiento' not in columnas:
+        updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_vencimiento DATE")
     agregar_saldo = 'tarjeta_credito_saldo' not in columnas
     if agregar_saldo:
         updates.append("ALTER TABLE usuarios ADD COLUMN tarjeta_credito_saldo FLOAT NOT NULL DEFAULT 100000")
@@ -645,6 +647,7 @@ def _drop_usuario_dni_unique_constraint():
         'autorizacion_menor',
         'tarjeta_credito_marca',
         'tarjeta_credito_ultimos4',
+        'tarjeta_credito_vencimiento',
         'tarjeta_credito_saldo',
         'email',
         'password',
@@ -679,6 +682,7 @@ def _drop_usuario_dni_unique_constraint():
                 autorizacion_menor BOOLEAN NOT NULL,
                 tarjeta_credito_marca VARCHAR(20),
                 tarjeta_credito_ultimos4 VARCHAR(4),
+                tarjeta_credito_vencimiento DATE,
                 tarjeta_credito_saldo FLOAT NOT NULL DEFAULT 100000,
                 email VARCHAR(120) NOT NULL UNIQUE,
                 password VARCHAR(255) NOT NULL,
