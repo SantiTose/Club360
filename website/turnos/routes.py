@@ -864,7 +864,9 @@ def _crear_pago_pendiente_reserva(
 
     if metodo_pago == 'tarjeta_credito' and monto_senia > 0:
         saldo = float(usuario.tarjeta_credito_saldo or 0.0)
-        if saldo >= monto_senia:
+        if _tarjeta_credito_vencida(usuario):
+            estado_pago = 'pendiente'
+        elif saldo >= monto_senia:
             usuario.tarjeta_credito_saldo = round(saldo - monto_senia, 2)
         else:
             estado_pago = 'pendiente'
@@ -1020,8 +1022,12 @@ def _intentar_cobrar_abono(abono):
         abono.estado = EstadoAbono.ACTIVO
         return 0.0, True
 
-    saldo = float(usuario.tarjeta_credito_saldo or 0.0)
     total = round(sum(pago.monto for pago in pagos), 2)
+    if _tarjeta_credito_vencida(usuario):
+        abono.estado = EstadoAbono.PENDIENTE
+        return total, False
+
+    saldo = float(usuario.tarjeta_credito_saldo or 0.0)
     if saldo < total:
         abono.estado = EstadoAbono.PENDIENTE
         return total, False
@@ -2244,9 +2250,6 @@ def pagar_mi_deuda_abono(abono_id):
     if _rechazar_pago_tarjeta_vencida(current_user):
         return redirect(url_for('turnos.mis_deudas'))
 
-    if _rechazar_pago_tarjeta_vencida(current_user):
-        return redirect(url_for('turnos.mis_deudas'))
-
     saldo = float(current_user.tarjeta_credito_saldo or 0.0)
     if saldo < total:
         flash(f'No se pudo procesar el pago. Saldo insuficiente. Total a abonar: ${total:.2f}.', 'error')
@@ -2279,6 +2282,9 @@ def pagar_mi_suspension_no_abonada():
     ), 2)
     if total <= 0:
         flash('No tenés deuda de suspensión pendiente.', 'info')
+        return redirect(url_for('turnos.mis_deudas'))
+
+    if _rechazar_pago_tarjeta_vencida(current_user):
         return redirect(url_for('turnos.mis_deudas'))
 
     saldo = float(current_user.tarjeta_credito_saldo or 0.0)
