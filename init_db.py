@@ -267,20 +267,6 @@ def init_database():
             tarjeta_credito_saldo=100000.0
         )
 
-        cliente_sin_fondos = Usuario(
-            nombre='Sin Fondos',
-            apellido='Prueba',
-            dni='67890123',
-            email='sinfondos@example.com',
-            password=generate_password_hash('cliente123'),
-            tipo_usuario='cliente',
-            estado='activo',
-            tarjeta_credito_marca='Visa',
-            tarjeta_credito_ultimos4='1111',
-            tarjeta_credito_vencimiento=date(2030, 12, 31),
-            tarjeta_credito_saldo=0.0
-        )
-
         pedro_sin_fondos = Usuario(
             nombre='Pedro',
             apellido='Sin Fondos',
@@ -309,21 +295,7 @@ def init_database():
             tarjeta_credito_saldo=100000.0
         )
 
-        cliente_suspendido = Usuario(
-            nombre='Suspendido',
-            apellido='Prueba',
-            dni='56789012',
-            email='suspendido@example.com',
-            password=generate_password_hash('suspendido123'),
-            tipo_usuario='cliente',
-            estado=EstadoUsuario.SUSPENDIDO,
-            tarjeta_credito_marca='Visa',
-            tarjeta_credito_ultimos4='1111',
-            tarjeta_credito_vencimiento=date(2030, 12, 31),
-            tarjeta_credito_saldo=0.0
-        )
-        
-        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, pedro_sin_fondos, paulina_suspendida, cliente_suspendido])
+        db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida])
         db.session.commit()
         _crear_deudas_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)
@@ -344,12 +316,10 @@ def init_database():
         print("\nCuentas de prueba:")
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")
-        print("- Cliente 1: carlos@example.com / cliente123")
-        print("- Cliente 2: maria@example.com / cliente123")
-        print("- Cliente sin fondos: sinfondos@example.com / cliente123")
-        print("- Pedro sin fondos: pedro@example.com / cliente123")
-        print("- Paulina suspendida: paulina@example.com / cliente123")
-        print("- Cliente suspendido: suspendido@example.com / suspendido123")
+        print("- Todo ok: maria@example.com / cliente123")
+        print("- suspendido/tarjeta vencida: carlos@example.com / cliente123")
+        print("- Suspendida con fondos: paulina@example.com / cliente123")
+        print("- Sin fondos: pedro@example.com / cliente123")
 
 
 if __name__ == '__main__':
