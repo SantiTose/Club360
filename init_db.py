@@ -139,6 +139,22 @@ def _crear_deudas_demo_carlos(cliente):
     ))
 
 
+def _crear_suspensiones_demo_paulina(cliente):
+    ahora = datetime.utcnow()
+    db.session.add(Suspension(
+        usuario_id=cliente.id,
+        motivo='Suspensión automática por abono pendiente',
+        estado='activa',
+        fecha_inicio=ahora - timedelta(days=3),
+    ))
+    db.session.add(Suspension(
+        usuario_id=cliente.id,
+        motivo='Suspensión automática por 3 deudas no abonadas',
+        estado='activa',
+        fecha_inicio=ahora - timedelta(days=2),
+    ))
+
+
 def _proxima_fecha_en_o_despues(fecha, dia_semana):
     dias_hasta_turno = (dia_semana - fecha.weekday()) % 7
     return fecha + timedelta(days=dias_hasta_turno)
@@ -279,6 +295,20 @@ def init_database():
             tarjeta_credito_saldo=0.0
         )
 
+        paulina_suspendida = Usuario(
+            nombre='Paulina',
+            apellido='Suspendida',
+            dni='89012345',
+            email='paulina@example.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado=EstadoUsuario.SUSPENDIDO,
+            tarjeta_credito_marca='Visa',
+            tarjeta_credito_ultimos4='1111',
+            tarjeta_credito_vencimiento=date(2030, 12, 31),
+            tarjeta_credito_saldo=100000.0
+        )
+
         cliente_suspendido = Usuario(
             nombre='Suspendido',
             apellido='Prueba',
@@ -293,9 +323,10 @@ def init_database():
             tarjeta_credito_saldo=0.0
         )
         
-        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, pedro_sin_fondos, cliente_suspendido])
+        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, pedro_sin_fondos, paulina_suspendida, cliente_suspendido])
         db.session.commit()
         _crear_deudas_demo_carlos(cliente1)
+        _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_desde_mes_siguiente()
         db.session.commit()
         print("✓ Clientes creados")
@@ -317,6 +348,7 @@ def init_database():
         print("- Cliente 2: maria@example.com / cliente123")
         print("- Cliente sin fondos: sinfondos@example.com / cliente123")
         print("- Pedro sin fondos: pedro@example.com / cliente123")
+        print("- Paulina suspendida: paulina@example.com / cliente123")
         print("- Cliente suspendido: suspendido@example.com / suspendido123")
 
 
