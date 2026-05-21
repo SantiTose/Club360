@@ -1155,7 +1155,7 @@ def _items_deuda_pendientes(usuario_id):
             'fecha': min((p.fecha_pago for p in pagos if p.fecha_pago), default=None),
             'monto': round(sum(p.monto for p in pagos), 2),
             'pagable_individual': True,
-            'accion_cliente': 'Pagar suspensión' if abono and abono.estado == EstadoAbono.SUSPENDIDO else 'Pagar abono',
+            'accion_cliente': 'Pagar',
             'accion_empleado': 'Cobrar suspensión' if abono and abono.estado == EstadoAbono.SUSPENDIDO else 'Cobrar abono',
         })
 
@@ -2256,7 +2256,7 @@ def pagar_mi_deuda_abono(abono_id):
     total_pagado, reservas_restauradas, conflictos = _marcar_deuda_abono_como_pagada(current_user, abono, 'tarjeta_credito')
     db.session.commit()
 
-    flash(f'Se abonó el abono pendiente completo por ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
     if reservas_restauradas:
         flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
     for conflicto in conflictos:
@@ -2290,7 +2290,7 @@ def pagar_mi_suspension_no_abonada():
     total_pagado, reservas_restauradas, conflictos = _marcar_deudas_no_abonadas_como_pagadas(current_user, 'tarjeta_credito')
     db.session.commit()
 
-    flash(f'Se abonó la suspensión por ${total_pagado:.2f} con tarjeta de crédito.', 'success')
+    flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
     if reservas_restauradas:
         flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
     for conflicto in conflictos:
