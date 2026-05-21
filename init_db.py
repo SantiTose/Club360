@@ -265,6 +265,20 @@ def init_database():
             tarjeta_credito_saldo=0.0
         )
 
+        pedro_sin_fondos = Usuario(
+            nombre='Pedro',
+            apellido='Sin Fondos',
+            dni='78901234',
+            email='pedro@example.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado='activo',
+            tarjeta_credito_marca='Visa',
+            tarjeta_credito_ultimos4='1111',
+            tarjeta_credito_vencimiento=date(2030, 12, 31),
+            tarjeta_credito_saldo=0.0
+        )
+
         cliente_suspendido = Usuario(
             nombre='Suspendido',
             apellido='Prueba',
@@ -279,7 +293,7 @@ def init_database():
             tarjeta_credito_saldo=0.0
         )
         
-        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, cliente_suspendido])
+        db.session.add_all([cliente1, cliente2, cliente_sin_fondos, pedro_sin_fondos, cliente_suspendido])
         db.session.commit()
         _crear_deudas_demo_carlos(cliente1)
         clases_demo = _crear_clases_demo_recurrentes_desde_mes_siguiente()
@@ -302,6 +316,7 @@ def init_database():
         print("- Cliente 1: carlos@example.com / cliente123")
         print("- Cliente 2: maria@example.com / cliente123")
         print("- Cliente sin fondos: sinfondos@example.com / cliente123")
+        print("- Pedro sin fondos: pedro@example.com / cliente123")
         print("- Cliente suspendido: suspendido@example.com / suspendido123")
 
 
