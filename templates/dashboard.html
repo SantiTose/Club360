@@ -45,44 +45,6 @@
             </article>
             {% endfor %}
         </div>
-
-        <section class="dashboard-panel dashboard-credits-panel">
-            <div class="dashboard-section-heading">
-                <div>
-                    <h2>Mis Créditos</h2>
-                    {% if creditos %}
-                    <p>Tenés créditos disponibles por deporte para reservar clases sueltas.</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            {% if creditos %}
-            <div class="dashboard-credits-grid">
-                {% for credito in creditos %}
-                <article class="dashboard-credit-card dashboard-credit-{{ credito.actividad }}">
-                    <div class="dashboard-credit-main">
-                        <div class="dashboard-credit-icon">{{ credito.actividad[:1]|upper }}</div>
-                        <div>
-                            <h3>{{ credito.actividad|capitalize }}</h3>
-                            <p>Créditos disponibles</p>
-                            <strong>{{ credito.cantidad }} clase{{ '' if credito.cantidad == 1 else 's' }}</strong>
-                            <small>Vence: {{ credito.vence_primero.strftime('%d/%m/%Y') }}</small>
-                        </div>
-                    </div>
-                    <a class="dashboard-credit-link" href="{{ url_for('turnos.ver_turnos_disponibles', credito=credito.actividad) }}">
-                        Solicitar clase con crédito
-                        <span>›</span>
-                    </a>
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="dashboard-empty-credit">
-                <strong>No tenés créditos disponibles.</strong>
-                <span>Cuando canceles una clase abonada con más de 48 hs y ya esté paga, va a aparecer acá.</span>
-            </div>
-            {% endif %}
-        </section>
         {% endif %}
 
         <div class="dashboard-main-grid{% if current_user.tipo_usuario == 'cliente' %} dashboard-main-grid-single{% else %} dashboard-main-grid-internal{% endif %}">
@@ -99,7 +61,7 @@
             {% endif %}
             <aside class="dashboard-panel dashboard-activity-panel">
                 <div class="dashboard-section-heading">
-                <div>
+                    <div>
                         <h2>{{ dashboard_context.activity_heading }}</h2>
                     </div>
                 </div>
@@ -126,7 +88,7 @@
 {% else %}
     <div class="alert alert-info" style="text-align: center; padding: 2rem;">
         <h3>Acceso restringido</h3>
-        <p>Por favor <a href="{{ url_for('auth.login') }}">inicia sesión</a> para ver tu dashboard</p>
+        <p>Por favor <a href="{{ url_for('auth.login') }}">inicia sesion</a> para ver tu dashboard</p>
     </div>
 {% endif %}
 

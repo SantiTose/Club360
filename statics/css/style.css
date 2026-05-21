@@ -56,6 +56,7 @@ body {
 }
 
 body {
+    min-height: 100vh;
     font-family: 'Montserrat', sans-serif;
     color: var(--text);
     background:
@@ -2358,6 +2359,21 @@ textarea:focus {
     gap: 0.95rem;
 }
 
+.credits-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 326px));
+    gap: 1.1rem;
+    align-items: stretch;
+}
+
+.credits-page .calendar-page-header {
+    margin-bottom: 1.8rem;
+}
+
+.credits-page .dashboard-credit-card {
+    min-height: 220px;
+}
+
 .dashboard-credit-card {
     display: grid;
     gap: 1rem;
@@ -2533,7 +2549,7 @@ tbody tr:hover {
 .text-warning { color: #a56920; }
 
 .footer {
-    margin-top: 2rem;
+    margin-top: auto;
     background: linear-gradient(130deg, #243a33, #1d3944);
     color: #fff;
     border-top: 1px solid rgba(255, 255, 255, 0.15);

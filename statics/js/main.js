@@ -97,6 +97,19 @@ window.Club360CalendarUI = {
             return addDays(date, amount * 7);
         }
 
+        function configuredMaxWeekStart(fallbackWeekStart) {
+            if (!config.maxWeekDate) {
+                return fallbackWeekStart;
+            }
+
+            const maxDate = new Date(`${config.maxWeekDate}T12:00:00`);
+            if (Number.isNaN(maxDate.getTime())) {
+                return fallbackWeekStart;
+            }
+
+            return startOfWeek(maxDate);
+        }
+
         function isSameMonth(a, b) {
             return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
         }
@@ -305,7 +318,8 @@ window.Club360CalendarUI = {
             const currentWeekStart = startOfWeek(new Date());
             const eventDates = state.events.map(event => new Date(event.start)).sort((a, b) => a - b);
             const lastEventWeek = eventDates.length ? startOfWeek(eventDates[eventDates.length - 1]) : currentWeekStart;
-            const maxWeekStart = lastEventWeek > currentWeekStart ? lastEventWeek : addWeeks(currentWeekStart, 8);
+            const fallbackMaxWeekStart = lastEventWeek > currentWeekStart ? lastEventWeek : addWeeks(currentWeekStart, 8);
+            const maxWeekStart = configuredMaxWeekStart(fallbackMaxWeekStart);
             const weekEnd = addDays(weekStart, 5);
             const weekDays = Array.from({ length: 6 }, (_, index) => addDays(weekStart, index));
             const hasAnyEvent = state.events.length > 0;

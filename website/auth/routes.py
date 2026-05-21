@@ -62,6 +62,29 @@ def _marca_tarjeta(numero):
     return 'Tarjeta'
 
 
+def _vencimiento_tarjeta_es_valido(vencimiento_raw):
+    vencimiento = (vencimiento_raw or '').strip()
+
+    if re.match(r'^\d{4}-\d{2}$', vencimiento):
+        anio_raw, mes_raw = vencimiento.split('-')
+        anio = int(anio_raw)
+        mes = int(mes_raw)
+    else:
+        match = re.match(r'^(\d{1,2})\s*/\s*(\d{2}|\d{4})$', vencimiento)
+        if not match:
+            return False
+        mes = int(match.group(1))
+        anio = int(match.group(2))
+        if anio < 100:
+            anio += 2000
+
+    if mes < 1 or mes > 12:
+        return False
+
+    hoy = date.today()
+    return (anio, mes) >= (hoy.year, hoy.month)
+
+
 def _normalizar_tarjeta_credito(tarjeta_raw):
     numero = re.sub(r'\D', '', tarjeta_raw or '')
     if not numero:
@@ -70,6 +93,21 @@ def _normalizar_tarjeta_credito(tarjeta_raw):
         return None, None, 'La tarjeta debe tener entre 13 y 19 dígitos'
     if not _tarjeta_es_valida(numero):
         return None, None, 'El número de tarjeta no es válido'
+    return _marca_tarjeta(numero), numero[-4:], None
+
+
+def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw):
+    numero = re.sub(r'\D', '', tarjeta_raw or '')
+
+    datos_validos = (
+        13 <= len(numero) <= 19
+        and _tarjeta_es_valida(numero)
+        and _vencimiento_tarjeta_es_valido(vencimiento_raw)
+    )
+
+    if not datos_validos:
+        return None, None, 'Datos de la tarjeta invalidos'
+
     return _marca_tarjeta(numero), numero[-4:], None
 
 
@@ -82,6 +120,7 @@ def register():
         dni = request.form.get('dni', '').strip()
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
         tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
+        tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         
@@ -89,23 +128,21 @@ def register():
         field_errors = {}
         
         # Validaciones
-        if not nombre or len(nombre) < 2:
-            field_errors['nombre'] = 'El nombre debe tener al menos 2 caracteres'
-        
-        if not apellido or len(apellido) < 2:
-            field_errors['apellido'] = 'El apellido debe tener al menos 2 caracteres'
         
         if not dni or not re.match(r'^\d{8}$', dni):
-            field_errors['dni'] = 'El DNI debe tener 8 dígitos'
+            field_errors['dni'] = 'El número de documento debe contener 8 caracteres numéricos.'
 
         fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
         if not fecha_nacimiento:
             field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
         else:
             if _edad(fecha_nacimiento) < 18:
-                field_errors['fecha_nacimiento'] = 'Solo pueden registrarse mayores de edad'
+                field_errors['fecha_nacimiento'] = 'Solo podran registrarse personas de 18 años o mas'
 
-        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_tarjeta_credito(tarjeta_credito_raw)
+        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
+            tarjeta_credito_raw,
+            tarjeta_vencimiento_raw,
+        )
         if error_tarjeta:
             field_errors['tarjeta_credito'] = error_tarjeta
         
@@ -119,9 +156,6 @@ def register():
         if not field_errors.get('email') and Usuario.query.filter_by(email=email).first():
             field_errors['email'] = 'El email ya está registrado'
         
-        if not field_errors.get('dni') and Usuario.query.filter_by(dni=dni).first():
-            field_errors['dni'] = 'El DNI ya está registrado'
-        
         # Si hay errores, devolver el formulario con los datos
         if field_errors:
             return render_template('auth/register.html', 
@@ -132,6 +166,7 @@ def register():
                                      'dni': dni,
                                      'fecha_nacimiento': fecha_nacimiento_raw,
                                      'tarjeta_credito': tarjeta_credito_raw,
+                                     'tarjeta_vencimiento': tarjeta_vencimiento_raw,
                                      'email': email
                                  })
         
@@ -160,13 +195,15 @@ def register():
         except Exception as e:
             db.session.rollback()
             flash('❌ Error al registrar usuario. Por favor, intenta de nuevo.', 'error')
-            return render_template('auth/register.html', 
+            return render_template('auth/register.html',
+                                 field_errors={},
                                  form_data={
                                      'nombre': nombre,
                                      'apellido': apellido,
                                      'dni': dni,
                                      'fecha_nacimiento': fecha_nacimiento_raw,
                                      'tarjeta_credito': tarjeta_credito_raw,
+                                     'tarjeta_vencimiento': tarjeta_vencimiento_raw,
                                      'email': email
                                  })
     
@@ -300,9 +337,6 @@ def crear_usuario():
 
         if Usuario.query.filter_by(email=email).first():
             field_errors['email'] = 'El email ya está registrado'
-        if Usuario.query.filter_by(dni=dni).first():
-            field_errors['dni'] = 'El DNI ya está registrado'
-
         if field_errors:
             return render_template(
                 'auth/crear_usuario.html',

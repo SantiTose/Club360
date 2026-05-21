@@ -12,7 +12,6 @@
         </div>
 
         <form method="POST" class="auth-form">
-            <div class="register-step" data-register-step="1">
             <!-- Nombre y Apellido en una fila -->
             <div class="form-group-row">
                 <div class="form-group">
@@ -129,12 +128,7 @@
                 {% endif %}
             </div>
 
-            <button type="button" class="btn btn-primary btn-block" id="register-next-step">
-                Continuar
-            </button>
-            </div>
-
-            <div class="register-step" data-register-step="2" style="display: none;">
+            <div class="card-fields">
                 <div class="form-group">
                     <label for="tarjeta_credito" class="form-label">Tarjeta de crédito</label>
                     <input
@@ -146,7 +140,6 @@
                         value="{{ form_data.get('tarjeta_credito', '') }}"
                         inputmode="numeric"
                         autocomplete="cc-number"
-                        required
                     >
                     {% if field_errors.get('tarjeta_credito') %}
                         <small class="form-text error">{{ field_errors['tarjeta_credito'] }}</small>
@@ -155,14 +148,36 @@
                     {% endif %}
                 </div>
 
-                <div class="button-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;">
-                    <button type="button" class="btn btn-secondary btn-block" id="register-prev-step">
-                        Volver
-                    </button>
-                    <button type="submit" class="btn btn-primary btn-block">
-                        Crear Cuenta
-                    </button>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="tarjeta_vencimiento" class="form-label">Fecha de vencimiento</label>
+                        <input
+                            type="month"
+                            id="tarjeta_vencimiento"
+                            name="tarjeta_vencimiento"
+                            class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                            value="{{ form_data.get('tarjeta_vencimiento', '') }}"
+                            autocomplete="cc-exp"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tarjeta_cvv" class="form-label">CVV</label>
+                        <input
+                            type="password"
+                            id="tarjeta_cvv"
+                            name="tarjeta_cvv"
+                            class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                            placeholder="123"
+                            inputmode="numeric"
+                            autocomplete="cc-csc"
+                        >
+                    </div>
                 </div>
+
+                <button type="submit" class="btn btn-primary btn-block">
+                    Registrar
+                </button>
             </div>
         </form>
 
@@ -189,64 +204,12 @@ function togglePassword(fieldId, button) {
     }
 }
 
-function setRegisterStep(step) {
-    document.querySelectorAll('[data-register-step]').forEach((section) => {
-        section.style.display = section.dataset.registerStep === String(step) ? 'block' : 'none';
-    });
-}
-
-function validateRegisterStepOne() {
-    const firstStep = document.querySelector('[data-register-step="1"]');
-    const fields = firstStep.querySelectorAll('input[required]');
-
-    for (const field of fields) {
-        if (!field.checkValidity()) {
-            field.reportValidity();
-            return false;
-        }
-    }
-
-    return true;
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.password-toggle').forEach((button) => {
         const input = button.parentElement.querySelector('input');
         const slash = button.querySelector('.eye-slash');
         if (slash) {
             slash.style.display = input && input.type === 'password' ? 'block' : 'none';
-        }
-    });
-
-    const form = document.querySelector('.auth-form');
-    const nextStepButton = document.getElementById('register-next-step');
-    const prevStepButton = document.getElementById('register-prev-step');
-    let currentStep = {% if field_errors.get('tarjeta_credito') and field_errors|length == 1 %}2{% else %}1{% endif %};
-    setRegisterStep(currentStep);
-
-    nextStepButton.addEventListener('click', function() {
-        if (validateRegisterStepOne()) {
-            currentStep = 2;
-            setRegisterStep(currentStep);
-            document.getElementById('tarjeta_credito').focus();
-        }
-    });
-
-    prevStepButton.addEventListener('click', function() {
-        currentStep = 1;
-        setRegisterStep(currentStep);
-        document.getElementById('nombre').focus();
-    });
-
-    form.addEventListener('submit', function(e) {
-        if (currentStep === 1) {
-            e.preventDefault();
-            if (validateRegisterStepOne()) {
-                currentStep = 2;
-                setRegisterStep(currentStep);
-                document.getElementById('tarjeta_credito').focus();
-            }
-            return false;
         }
     });
 });

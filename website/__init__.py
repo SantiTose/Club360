@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_required, current_user
 from flask_migrate import Migrate
@@ -93,22 +93,6 @@ def create_app(config_name='development'):
             db.session.commit()
 
             turnos_reservados = Reserva.query.filter_by(usuario_id=current_user.id).count()
-            creditos = (
-                db.session.query(
-                    CreditoCliente.actividad,
-                    func.count(CreditoCliente.id).label('cantidad'),
-                    func.coalesce(func.sum(CreditoCliente.monto), 0).label('monto_total'),
-                    func.min(CreditoCliente.fecha_vencimiento).label('vence_primero'),
-                )
-                .filter(
-                    CreditoCliente.usuario_id == current_user.id,
-                    CreditoCliente.estado == EstadoCredito.DISPONIBLE,
-                )
-                .filter(CreditoCliente.fecha_vencimiento >= hoy)
-                .group_by(CreditoCliente.actividad)
-                .order_by(CreditoCliente.actividad.asc())
-                .all()
-            )
 
             proximo_turno = (
                 Turno.query
@@ -216,8 +200,42 @@ def create_app(config_name='development'):
             turnos_reservados=turnos_reservados,
             actividad_reciente=actividad_reciente,
             dashboard_context=dashboard_context,
-            creditos=creditos if current_user.tipo_usuario == TipoUsuario.CLIENTE else [],
         )
+
+    @app.route('/mis-creditos')
+    @login_required
+    def mis_creditos():
+        from website.models import TipoUsuario, CreditoCliente, EstadoCredito
+
+        if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+            return redirect(url_for('dashboard'))
+
+        hoy = datetime.utcnow().date()
+        CreditoCliente.query.filter(
+            CreditoCliente.usuario_id == current_user.id,
+            CreditoCliente.estado == EstadoCredito.DISPONIBLE,
+            CreditoCliente.fecha_vencimiento < hoy,
+        ).update({'estado': EstadoCredito.VENCIDO}, synchronize_session=False)
+        db.session.commit()
+
+        creditos = (
+            db.session.query(
+                CreditoCliente.actividad,
+                func.count(CreditoCliente.id).label('cantidad'),
+                func.coalesce(func.sum(CreditoCliente.monto), 0).label('monto_total'),
+                func.min(CreditoCliente.fecha_vencimiento).label('vence_primero'),
+            )
+            .filter(
+                CreditoCliente.usuario_id == current_user.id,
+                CreditoCliente.estado == EstadoCredito.DISPONIBLE,
+            )
+            .filter(CreditoCliente.fecha_vencimiento >= hoy)
+            .group_by(CreditoCliente.actividad)
+            .order_by(CreditoCliente.actividad.asc())
+            .all()
+        )
+
+        return render_template('mis_creditos.html', creditos=creditos)
 
     @app.before_request
     def _run_daily_automatic_suspension_audit():
@@ -253,6 +271,7 @@ def create_app(config_name='development'):
         _ensure_usuario_reset_password_columns()
         _ensure_usuario_edad_columns()
         _ensure_usuario_tarjeta_columns()
+        _drop_usuario_dni_unique_constraint()
         _ensure_reserva_qr_columns()
         _ensure_reserva_tipo_clase_column()
         _ensure_reserva_abono_column()
@@ -595,6 +614,105 @@ def _ensure_usuario_tarjeta_columns():
         if agregar_saldo:
             db.session.execute(text("UPDATE usuarios SET tarjeta_credito_saldo = 100000 WHERE tipo_usuario = 'cliente'"))
             db.session.commit()
+
+
+def _drop_usuario_dni_unique_constraint():
+    inspector = inspect(db.engine)
+    if 'usuarios' not in inspector.get_table_names():
+        return
+
+    unique_dni_index = False
+    for index in db.session.execute(text("PRAGMA index_list('usuarios')")).mappings():
+        if not index['unique']:
+            continue
+        columns = [
+            row['name']
+            for row in db.session.execute(text(f"PRAGMA index_info('{index['name']}')")).mappings()
+        ]
+        if columns == ['dni']:
+            unique_dni_index = True
+            break
+
+    if not unique_dni_index:
+        return
+
+    columns = [
+        'id',
+        'nombre',
+        'apellido',
+        'dni',
+        'fecha_nacimiento',
+        'autorizacion_menor',
+        'tarjeta_credito_marca',
+        'tarjeta_credito_ultimos4',
+        'tarjeta_credito_saldo',
+        'email',
+        'password',
+        'tipo_usuario',
+        'estado',
+        'credito_abonado',
+        'cancelaciones_abonado',
+        'beneficio_abonado_activo',
+        'cupon_abono_mes',
+        'cupon_abono_actividad',
+        'cupon_abono_dia_semana',
+        'cupon_abono_hora_inicio',
+        'cupon_abono_porcentaje',
+        'requiere_cambio_password',
+        'reset_password_token',
+        'reset_password_expira',
+        'ultimo_recordatorio_mora',
+        'fecha_creacion',
+        'fecha_actualizacion',
+    ]
+    column_sql = ', '.join(columns)
+
+    try:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        db.session.execute(text("""
+            CREATE TABLE usuarios_new (
+                id INTEGER NOT NULL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                apellido VARCHAR(100) NOT NULL,
+                dni VARCHAR(20) NOT NULL,
+                fecha_nacimiento DATE,
+                autorizacion_menor BOOLEAN NOT NULL,
+                tarjeta_credito_marca VARCHAR(20),
+                tarjeta_credito_ultimos4 VARCHAR(4),
+                tarjeta_credito_saldo FLOAT NOT NULL DEFAULT 100000,
+                email VARCHAR(120) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                tipo_usuario VARCHAR(20) NOT NULL,
+                estado VARCHAR(20) NOT NULL,
+                credito_abonado FLOAT NOT NULL DEFAULT 0,
+                cancelaciones_abonado INTEGER NOT NULL DEFAULT 0,
+                beneficio_abonado_activo BOOLEAN NOT NULL DEFAULT 1,
+                cupon_abono_mes VARCHAR(7),
+                cupon_abono_actividad VARCHAR(20),
+                cupon_abono_dia_semana INTEGER,
+                cupon_abono_hora_inicio INTEGER,
+                cupon_abono_porcentaje FLOAT NOT NULL DEFAULT 0,
+                requiere_cambio_password BOOLEAN NOT NULL DEFAULT 0,
+                reset_password_token VARCHAR(120) UNIQUE,
+                reset_password_expira DATETIME,
+                ultimo_recordatorio_mora DATETIME,
+                fecha_creacion DATETIME,
+                fecha_actualizacion DATETIME
+            )
+        """))
+        db.session.execute(text(f"""
+            INSERT INTO usuarios_new ({column_sql})
+            SELECT {column_sql}
+            FROM usuarios
+        """))
+        db.session.execute(text("DROP TABLE usuarios"))
+        db.session.execute(text("ALTER TABLE usuarios_new RENAME TO usuarios"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=ON"))
 
 
 def _ensure_reserva_qr_columns():

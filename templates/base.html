@@ -22,6 +22,7 @@
                     <li><a href="{{ url_for('dashboard') }}" class="nav-link-pill">Mi Perfil</a></li>
                     {% if current_user.tipo_usuario == 'cliente' %}
                     <li><a href="{{ url_for('turnos.mis_turnos') }}" class="nav-link-pill">Mis Turnos</a></li>
+                    <li><a href="{{ url_for('mis_creditos') }}" class="nav-link-pill">Mis Creditos</a></li>
                     <li><a href="{{ url_for('turnos.mis_deudas') }}" class="nav-link-pill">Mis Deudas</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario in ['cliente', 'empleado'] %}

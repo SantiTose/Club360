@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Creditos - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page credits-page">
+    <div class="calendar-page-header">
+        <div>
+            <h2>Mis Creditos</h2>
+            <p class="text-muted">Los creditos sirven para reservar una clase suelta sin costo.</p>
+        </div>
+    </div>
+
+    {% if creditos %}
+    <div class="credits-list-grid">
+        {% for credito in creditos %}
+        <article class="dashboard-credit-card dashboard-credit-{{ credito.actividad }}">
+            <div class="dashboard-credit-main">
+                <div class="dashboard-credit-icon">{{ credito.actividad[:1]|upper }}</div>
+                <div>
+                    <h3>{{ credito.actividad|capitalize }}</h3>
+                    <p>Creditos disponibles</p>
+                    <strong>{{ credito.cantidad }} clase{{ '' if credito.cantidad == 1 else 's' }}</strong>
+                    <small>Vence: {{ credito.vence_primero.strftime('%d/%m/%Y') }}</small>
+                </div>
+            </div>
+            <a class="dashboard-credit-link" href="{{ url_for('turnos.ver_turnos_disponibles', credito=credito.actividad) }}">
+                Solicitar clase con credito
+                <span>&rsaquo;</span>
+            </a>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="calendar-empty-state">
+        <p>No tenes creditos disponibles.</p>
+        
+        <span>Cuando canceles una clase abonada con mas de 48 hs y ya este paga, va a aparecer aca.</span>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

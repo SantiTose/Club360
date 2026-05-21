@@ -33,7 +33,7 @@ class Usuario(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     apellido = db.Column(db.String(100), nullable=False)
-    dni = db.Column(db.String(20), unique=True, nullable=False)
+    dni = db.Column(db.String(20), nullable=False)
     fecha_nacimiento = db.Column(db.Date, nullable=True)
     autorizacion_menor = db.Column(db.Boolean, nullable=False, default=False)
     tarjeta_credito_marca = db.Column(db.String(20))

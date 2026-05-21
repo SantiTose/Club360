@@ -1,7 +1,7 @@
 import os
 import secrets
 import calendar
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
 from flask_login import login_required, current_user
@@ -619,6 +619,14 @@ def _mes_siguiente(fecha):
     if fecha.month == 12:
         return fecha.replace(year=fecha.year + 1, month=1, day=1)
     return fecha.replace(month=fecha.month + 1, day=1)
+
+
+def _fecha_limite_busqueda_turnos():
+    return _fin_de_mes(_mes_siguiente(datetime.utcnow().date()))
+
+
+def _datetime_limite_busqueda_turnos():
+    return datetime.combine(_fecha_limite_busqueda_turnos(), time.max)
 
 
 def _clave_mes(fecha):
@@ -1492,7 +1500,12 @@ def ver_turnos_disponibles():
             usuario_id=current_user.id,
         )
     
-    query = Turno.query.filter_by(cancelado=False).filter(Turno.hora_fin >= datetime.utcnow())
+    query = (
+        Turno.query
+        .filter_by(cancelado=False)
+        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio <= _datetime_limite_busqueda_turnos())
+    )
     credito_actividad = request.args.get('credito', '').strip().lower()
     credito_disponible = None
     if current_user.tipo_usuario == TipoUsuario.CLIENTE and credito_actividad:
@@ -1515,6 +1528,7 @@ def ver_turnos_disponibles():
         turnos=turnos,
         reservas_usuario=reservas_usuario,
         permite_asignar_cliente=_es_empleado_o_admin(current_user),
+        fecha_limite_busqueda=_fecha_limite_busqueda_turnos().isoformat(),
     )
 
 
@@ -1583,7 +1597,12 @@ def eventos_turnos():
         ]
         return jsonify(eventos)
 
-    query = Turno.query.filter_by(cancelado=False).filter(Turno.hora_fin >= datetime.utcnow())
+    query = (
+        Turno.query
+        .filter_by(cancelado=False)
+        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio <= _datetime_limite_busqueda_turnos())
+    )
     credito_actividad = request.args.get('credito', '').strip().lower()
     credito_disponible = None
     if current_user.tipo_usuario == TipoUsuario.CLIENTE and credito_actividad:
@@ -1661,6 +1680,10 @@ def reservar_turno(turno_id):
 
     if turno.cancelado:
         flash('Este turno ya no está disponible', 'error')
+        return _resolver_redirect_reserva()
+
+    if current_user.tipo_usuario in {TipoUsuario.CLIENTE, TipoUsuario.EMPLEADO} and turno.hora_inicio > _datetime_limite_busqueda_turnos():
+        flash('Solo se pueden reservar turnos del mes actual y el proximo.', 'error')
         return _resolver_redirect_reserva()
 
     if _es_feriado_nacional(turno.hora_inicio):
