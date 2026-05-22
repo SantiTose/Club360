@@ -11,7 +11,7 @@
             <p class="form-subtitle">Crea tu cuenta y comienza a reservar turnos</p>
         </div>
 
-        <form method="POST" class="auth-form">
+        <form method="POST" class="auth-form" novalidate>
             <!-- Nombre y Apellido en una fila -->
             <div class="form-group-row">
                 <div class="form-group">
@@ -23,10 +23,14 @@
                         class="form-control {% if field_errors.get('nombre') %}is-invalid{% endif %}" 
                         placeholder="Juan"
                         value="{{ form_data.get('nombre', '') }}"
+                        data-validation-message="Debes ingresar tu nombre"
+                        data-helper-message=""
                         required
                     >
                     {% if field_errors.get('nombre') %}
-                        <small class="form-text error">{{ field_errors['nombre'] }}</small>
+                        <small class="form-text error" data-validation-for="nombre">{{ field_errors['nombre'] }}</small>
+                    {% else %}
+                        <small class="form-text" data-validation-for="nombre" hidden>Debes ingresar tu nombre</small>
                     {% endif %}
                 </div>
 
@@ -39,10 +43,14 @@
                         class="form-control {% if field_errors.get('apellido') %}is-invalid{% endif %}" 
                         placeholder="Pérez"
                         value="{{ form_data.get('apellido', '') }}"
+                        data-validation-message="Debes ingresar tu apellido"
+                        data-helper-message=""
                         required
                     >
                     {% if field_errors.get('apellido') %}
-                        <small class="form-text error">{{ field_errors['apellido'] }}</small>
+                        <small class="form-text error" data-validation-for="apellido">{{ field_errors['apellido'] }}</small>
+                    {% else %}
+                        <small class="form-text" data-validation-for="apellido" hidden>Debes ingresar tu apellido</small>
                     {% endif %}
                 </div>
             </div>
@@ -58,12 +66,14 @@
                     placeholder="12345678"
                     pattern="[0-9]{8}"
                     value="{{ form_data.get('dni', '') }}"
+                    data-validation-message="El DNI debe tener 8 dígitos sin puntos"
+                    data-helper-message="8 dígitos sin puntos"
                     required
                 >
                 {% if field_errors.get('dni') %}
-                    <small class="form-text error">{{ field_errors['dni'] }}</small>
+                    <small class="form-text error" data-validation-for="dni">{{ field_errors['dni'] }}</small>
                 {% else %}
-                    <small class="form-text">8 dígitos sin puntos</small>
+                    <small class="form-text" data-validation-for="dni">8 dígitos sin puntos</small>
                 {% endif %}
             </div>
 
@@ -75,10 +85,14 @@
                     name="fecha_nacimiento"
                     class="form-control {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}"
                     value="{{ form_data.get('fecha_nacimiento', '') }}"
+                    data-validation-message="Debes ingresar una fecha de nacimiento válida"
+                    data-helper-message=""
                     required
                 >
                 {% if field_errors.get('fecha_nacimiento') %}
-                    <small class="form-text error">{{ field_errors['fecha_nacimiento'] }}</small>
+                    <small class="form-text error" data-validation-for="fecha_nacimiento">{{ field_errors['fecha_nacimiento'] }}</small>
+                {% else %}
+                    <small class="form-text" data-validation-for="fecha_nacimiento" hidden>Debes ingresar una fecha de nacimiento válida</small>
                 {% endif %}
             </div>
 
@@ -93,11 +107,13 @@
                     value="{{ form_data.get('email', '') }}"
                     required
                     autocomplete="email"
+                    data-validation-message="El email no es válido"
+                    data-helper-message="Te enviaremos un correo de confirmación"
                 >
                 {% if field_errors.get('email') %}
-                    <small class="form-text error">{{ field_errors['email'] }}</small>
+                    <small class="form-text error" data-validation-for="email">{{ field_errors['email'] }}</small>
                 {% else %}
-                    <small class="form-text">Te enviaremos un correo de confirmación</small>
+                    <small class="form-text" data-validation-for="email">Te enviaremos un correo de confirmación</small>
                 {% endif %}
             </div>
 
@@ -111,6 +127,8 @@
                         class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}" 
                         placeholder="••••••••"
                         minlength="6"
+                        data-validation-message="La contraseña debe tener al menos 6 caracteres"
+                        data-helper-message="Mínimo 6 caracteres"
                         required
                     >
                     <button type="button" class="password-toggle" onclick="togglePassword('password', this)">
@@ -122,9 +140,9 @@
                     </button>
                 </div>
                 {% if field_errors.get('password') %}
-                    <small class="form-text error">{{ field_errors['password'] }}</small>
+                    <small class="form-text error" data-validation-for="password">{{ field_errors['password'] }}</small>
                 {% else %}
-                    <small class="form-text">Mínimo 6 caracteres</small>
+                    <small class="form-text" data-validation-for="password">Mínimo 6 caracteres</small>
                 {% endif %}
             </div>
 
@@ -139,7 +157,7 @@
                         placeholder="4111 1111 1111 1111"
                         value="{{ form_data.get('tarjeta_credito', '') }}"
                         inputmode="numeric"
-                        autocomplete="cc-number"
+                        autocomplete="off"
                     >
                     {% if field_errors.get('tarjeta_credito') %}
                         <small class="form-text error">{{ field_errors['tarjeta_credito'] }}</small>
@@ -157,7 +175,7 @@
                             name="tarjeta_vencimiento"
                             class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
                             value="{{ form_data.get('tarjeta_vencimiento', '') }}"
-                            autocomplete="cc-exp"
+                            autocomplete="off"
                         >
                     </div>
 
@@ -170,7 +188,7 @@
                             class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
                             placeholder="123"
                             inputmode="numeric"
-                            autocomplete="cc-csc"
+                            autocomplete="off"
                         >
                     </div>
                 </div>
@@ -210,6 +228,73 @@ document.addEventListener('DOMContentLoaded', function() {
         const slash = button.querySelector('.eye-slash');
         if (slash) {
             slash.style.display = input && input.type === 'password' ? 'block' : 'none';
+        }
+    });
+
+    const form = document.querySelector('.auth-form');
+    if (!form) return;
+
+    const fields = Array.from(form.querySelectorAll('[data-validation-message]'));
+
+    function getMessageElement(field) {
+        return form.querySelector(`[data-validation-for="${field.id}"]`);
+    }
+
+    fields.forEach((field) => {
+        const messageElement = getMessageElement(field);
+        if (!messageElement) return;
+
+        messageElement.dataset.defaultText = field.dataset.helperMessage || '';
+        messageElement.dataset.defaultHidden = field.dataset.helperMessage ? 'false' : 'true';
+    });
+
+    function setFieldError(field) {
+        const messageElement = getMessageElement(field);
+        if (!messageElement) return;
+
+        field.classList.add('is-invalid');
+        messageElement.textContent = field.dataset.validationMessage;
+        messageElement.hidden = false;
+        messageElement.classList.add('error');
+    }
+
+    function clearFieldError(field) {
+        const messageElement = getMessageElement(field);
+        if (!messageElement) return;
+
+        field.classList.remove('is-invalid');
+        messageElement.textContent = messageElement.dataset.defaultText || '';
+        messageElement.hidden = messageElement.dataset.defaultHidden === 'true';
+        messageElement.classList.remove('error');
+    }
+
+    function validateField(field) {
+        if (field.validity.valid) {
+            clearFieldError(field);
+            return true;
+        }
+
+        setFieldError(field);
+        return false;
+    }
+
+    fields.forEach((field) => {
+        field.addEventListener('input', () => validateField(field));
+        field.addEventListener('blur', () => validateField(field));
+    });
+
+    form.addEventListener('submit', function(event) {
+        let isValid = true;
+
+        fields.forEach((field) => {
+            if (!validateField(field)) {
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            event.preventDefault();
+            fields.find((field) => !field.validity.valid)?.focus();
         }
     });
 });

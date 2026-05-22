@@ -409,7 +409,32 @@ def _pagos_no_abonados_vencidos(usuario_id):
 
 
 def _fecha_limite_pago_abono(abono):
-    return abono.fecha_desde.replace(day=11)
+    limite_mensual = abono.fecha_desde.replace(day=11)
+    fecha_creacion = (abono.fecha_creacion or datetime.utcnow()).date()
+    limite_desde_alta = fecha_creacion + timedelta(days=7)
+    return max(limite_mensual, limite_desde_alta)
+
+
+def _cantidad_reservas_de_abono(abono):
+    return Reserva.query.filter_by(abono_id=abono.id).count()
+
+
+def _abono_pendiente_puede_suspender(abono):
+    return _cantidad_reservas_de_abono(abono) > 1
+
+
+def _monto_pendiente_de_abono(abono):
+    return round(sum(pago.monto for pago in _pagos_pendientes_de_abono(abono)), 2)
+
+
+def _abono_suspendido_debe_bloquear(abono):
+    monto_una_clase = _calcular_monto_reserva(
+        abono.actividad,
+        TipoClase.ABONADA,
+        abono.usuario,
+        descuento_porcentaje=abono.descuento_porcentaje,
+    )
+    return _monto_pendiente_de_abono(abono) > monto_una_clase
 
 
 def _abonos_pendientes_vencidos(usuario_id):
@@ -419,7 +444,11 @@ def _abonos_pendientes_vencidos(usuario_id):
         .filter_by(usuario_id=usuario_id, estado=EstadoAbono.PENDIENTE)
         .all()
     )
-    return [abono for abono in abonos if hoy >= _fecha_limite_pago_abono(abono)]
+    return [
+        abono
+        for abono in abonos
+        if _abono_pendiente_puede_suspender(abono) and hoy >= _fecha_limite_pago_abono(abono)
+    ]
 
 
 def _tiene_suspension_abonada_activa(usuario_id):
@@ -445,10 +474,25 @@ def _tiene_suspension_no_abonada_activa(usuario_id):
 def _obtener_restricciones_suspension(cliente):
     deudas_no_abonadas_vencidas = len(_pagos_no_abonados_vencidos(cliente.id))
     abonos_pendientes_vencidos = len(_abonos_pendientes_vencidos(cliente.id))
-    abonos_suspendidos = AbonoCliente.query.filter_by(usuario_id=cliente.id, estado=EstadoAbono.SUSPENDIDO).count()
+    abonos_suspendidos_bloqueantes = [
+        abono
+        for abono in AbonoCliente.query.filter_by(
+            usuario_id=cliente.id,
+            estado=EstadoAbono.SUSPENDIDO,
+        ).all()
+        if _abono_suspendido_debe_bloquear(abono)
+    ]
+    suspension_abonada_activa = (
+        _tiene_suspension_abonada_activa(cliente.id)
+        and (abonos_pendientes_vencidos > 0 or bool(abonos_suspendidos_bloqueantes))
+    )
 
     return {
-        'suspendido_abonado': abonos_pendientes_vencidos > 0 or abonos_suspendidos > 0 or _tiene_suspension_abonada_activa(cliente.id),
+        'suspendido_abonado': (
+            abonos_pendientes_vencidos > 0
+            or bool(abonos_suspendidos_bloqueantes)
+            or suspension_abonada_activa
+        ),
         'suspendido_no_abonado': deudas_no_abonadas_vencidas >= 3 or _tiene_suspension_no_abonada_activa(cliente.id),
         'deudas_abonadas': abonos_pendientes_vencidos,
         'deudas_no_abonadas_vencidas': deudas_no_abonadas_vencidas,

@@ -1,5 +1,5 @@
 """
-Script para inicializar la base de datos sin turnos precargados.
+Script para inicializar la base de datos con datos y clases demo.
 Ejecutar: python init_db.py
 """
 
@@ -25,12 +25,6 @@ import secrets
 
 def _fin_de_mes(fecha):
     return fecha.replace(day=calendar.monthrange(fecha.year, fecha.month)[1])
-
-
-def _inicio_mes_siguiente(fecha):
-    if fecha.month == 12:
-        return fecha.replace(year=fecha.year + 1, month=1, day=1)
-    return fecha.replace(month=fecha.month + 1, day=1)
 
 
 def _crear_turno_demo(actividad, inicio, capacidad=8):
@@ -160,15 +154,16 @@ def _proxima_fecha_en_o_despues(fecha, dia_semana):
     return fecha + timedelta(days=dias_hasta_turno)
 
 
-def _crear_clases_demo_recurrentes_desde_mes_siguiente():
-    primer_dia = _inicio_mes_siguiente(datetime.utcnow().date().replace(day=1))
+def _crear_clases_demo_recurrentes_desde_semana_actual():
+    hoy = date.today()
+    primer_dia = hoy - timedelta(days=hoy.weekday())
     fin_anio = primer_dia.replace(month=12, day=31)
     clases = [
         # actividad, dia_semana(lunes=0), hora, capacidad, cupos_disponibles
-        ('futbol', 1, 14, 10, 10),
-        ('basquet', 3, 16, 10, 10),
-        ('voley', 2, 20, 10, 0),
-        ('padel', 4, 18, 10, 0),
+        ('voley', 1, 20, 10, 0),
+        ('basquet', 2, 16, 10, 10),
+        ('padel', 3, 18, 10, 0),
+        ('futbol', 4, 14, 10, 10),
     ]
     creados_por_actividad = {}
 
@@ -191,8 +186,9 @@ def _crear_clases_demo_recurrentes_desde_mes_siguiente():
 
     return creados_por_actividad
 
+
 def init_database():
-    """Inicializa la base de datos sin turnos de ejemplo."""
+    """Inicializa la base de datos con usuarios, deudas y clases de ejemplo."""
     app = create_app('development')
     
     with app.app_context():
@@ -299,17 +295,17 @@ def init_database():
         db.session.commit()
         _crear_deudas_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)
-        clases_demo = _crear_clases_demo_recurrentes_desde_mes_siguiente()
+        clases_demo = _crear_clases_demo_recurrentes_desde_semana_actual()
         db.session.commit()
         print("✓ Clientes creados")
         
         print("✓ Deudas demo creadas para carlos@example.com")
         print("✓ Carlos queda suspendido, con tarjeta vencida y sin fondos")
-        print("✓ Clases demo recurrentes creadas desde el mes siguiente hasta fin de año:")
-        print("  - Fútbol: martes 14:00 con cupos")
-        print("  - Básquet: jueves 16:00 con cupos")
-        print("  - Vóley: miércoles 20:00 sin cupos")
-        print("  - Pádel: viernes 18:00 sin cupos")
+        print("✓ Clases demo recurrentes creadas desde la semana actual hasta fin de año:")
+        print("  - Vóley: martes 20:00 sin cupos")
+        print("  - Básquet: miércoles 16:00 con cupos")
+        print("  - Pádel: jueves 18:00 sin cupos")
+        print("  - Fútbol: viernes 14:00 con cupos")
         print(f"  Total por deporte: {clases_demo}")
         
         print("\n✅ Base de datos inicializada correctamente!")

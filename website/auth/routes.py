@@ -137,6 +137,11 @@ def register():
         field_errors = {}
         
         # Validaciones
+        if not nombre:
+            field_errors['nombre'] = 'Debes ingresar tu nombre'
+
+        if not apellido:
+            field_errors['apellido'] = 'Debes ingresar tu apellido'
         
         if not dni or not re.match(r'^\d{8}$', dni):
             field_errors['dni'] = 'El número de documento debe contener 8 caracteres numéricos.'
