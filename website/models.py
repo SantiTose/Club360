@@ -84,6 +84,7 @@ class Turno(db.Model):
     cupos_disponibles = db.Column(db.Integer, nullable=False)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     cancelado = db.Column(db.Boolean, default=False)
+    motivo_cancelacion = db.Column(db.String(255))
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     reservas = db.relationship('Reserva', backref='turno', lazy=True, cascade='all, delete-orphan')
 
