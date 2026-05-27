@@ -7,7 +7,9 @@
     <section class="dashboard-shell">
         <div class="dashboard-hero">
             <div class="dashboard-hero-copy">
+                {% if dashboard_context.eyebrow %}
                 <span class="dashboard-eyebrow">{{ dashboard_context.eyebrow }}</span>
+                {% endif %}
                 <h1>{{ dashboard_context.hero_title }}</h1>
                 <p>{{ dashboard_context.hero_text }}</p>
             </div>

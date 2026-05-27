@@ -2183,7 +2183,7 @@ textarea:focus {
 }
 
 .dashboard-stats-grid-compact {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
 .dashboard-stats-grid-compact .dashboard-stat-card:only-child {
