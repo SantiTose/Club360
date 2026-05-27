@@ -137,6 +137,7 @@ def _crear_clases_demo_recurrentes_hasta_fin_anio():
         ('voley', 1, 14),
         ('padel', 2, 10),
         ('futbol', 3, 15),
+        ('futbol', 4, 18),
     ]
     creados_por_actividad = {}
 
@@ -304,6 +305,7 @@ def init_database():
         print("  - Voley: martes 14:00 con 10 cupos")
         print("  - Padel: miercoles 10:00 con 10 cupos")
         print("  - Futbol: jueves 15:00 con 10 cupos")
+        print("  - Futbol: viernes 18:00 con 10 cupos")
         print(f"  Total por deporte: {clases_demo}")
         
         print("\n✅ Base de datos inicializada correctamente!")
