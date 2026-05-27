@@ -274,6 +274,12 @@ window.Club360CalendarUI = {
                 return;
             }
 
+            if (config.disableInitialWeekSelection) {
+                state.selectedEventId = null;
+                state.activityFilter = 'all';
+                return;
+            }
+
             const todayKey = club360ToDateKey(new Date());
             const futureEvents = state.events
                 .filter(event => eventDateKey(event) >= todayKey)
@@ -292,6 +298,13 @@ window.Club360CalendarUI = {
         }
 
         function selectDefaultDateForWeek(weekStart) {
+            if (config.disableInitialWeekSelection) {
+                state.selectedDate = null;
+                state.selectedEventId = null;
+                state.activityFilter = 'all';
+                return;
+            }
+
             const eventsByDate = groupedEvents();
             const weekDays = Array.from({ length: 6 }, (_, index) => addDays(weekStart, index));
             const firstDayWithEvents = weekDays.find(date => (eventsByDate[club360ToDateKey(date)] || []).length > 0);
