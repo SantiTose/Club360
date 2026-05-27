@@ -1,4 +1,4 @@
-"""
+﻿"""
 Script para inicializar la base de datos con datos y clases demo.
 Ejecutar: python init_db.py
 """
@@ -121,13 +121,13 @@ def _crear_deudas_demo_carlos(cliente):
 
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='Suspensión automática por abono pendiente',
+        motivo='SuspensiÃ³n automÃ¡tica por abono pendiente',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=3),
     ))
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='Suspensión automática por 3 deudas no abonadas',
+        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=2),
     ))
@@ -137,13 +137,13 @@ def _crear_suspensiones_demo_paulina(cliente):
     ahora = datetime.utcnow()
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='Suspensión automática por abono pendiente',
+        motivo='SuspensiÃ³n automÃ¡tica por abono pendiente',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=3),
     ))
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='Suspensión automática por 3 deudas no abonadas',
+        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=2),
     ))
@@ -154,21 +154,20 @@ def _proxima_fecha_en_o_despues(fecha, dia_semana):
     return fecha + timedelta(days=dias_hasta_turno)
 
 
-def _crear_clases_demo_recurrentes_desde_semana_actual():
+def _crear_clases_demo_recurrentes_hasta_fin_anio():
     hoy = date.today()
-    primer_dia = hoy - timedelta(days=hoy.weekday())
-    fin_anio = primer_dia.replace(month=12, day=31)
+    fin_anio = hoy.replace(month=12, day=31)
     clases = [
-        # actividad, dia_semana(lunes=0), hora, capacidad, cupos_disponibles
-        ('voley', 1, 20, 10, 0),
-        ('basquet', 2, 16, 10, 10),
-        ('padel', 3, 18, 10, 0),
-        ('futbol', 4, 14, 10, 10),
+        # actividad, dia_semana(lunes=0), hora
+        ('basquet', 4, 19),
+        ('voley', 1, 14),
+        ('padel', 2, 10),
+        ('futbol', 3, 15),
     ]
     creados_por_actividad = {}
 
-    for actividad, dia_semana, hora, capacidad, cupos in clases:
-        fecha = _proxima_fecha_en_o_despues(primer_dia, dia_semana)
+    for actividad, dia_semana, hora in clases:
+        fecha = _proxima_fecha_en_o_despues(hoy, dia_semana)
         creados_por_actividad[actividad] = 0
         while fecha <= fin_anio:
             inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora)
@@ -176,8 +175,8 @@ def _crear_clases_demo_recurrentes_desde_semana_actual():
                 actividad=actividad,
                 hora_inicio=inicio,
                 hora_fin=inicio + timedelta(hours=1),
-                capacidad_maxima=capacidad,
-                cupos_disponibles=cupos,
+                capacidad_maxima=10,
+                cupos_disponibles=10,
                 cancelado=False,
             )
             db.session.add(turno)
@@ -206,7 +205,7 @@ def init_database():
         db.session.query(Usuario).delete()
         db.session.commit()
         
-        print("✓ Base de datos limpiada")
+        print("âœ“ Base de datos limpiada")
         
         # Crear administrador
         admin = Usuario(
@@ -219,12 +218,12 @@ def init_database():
             estado='activo'
         )
         db.session.add(admin)
-        print("✓ Administrador creado: admin@club360.com")
+        print("âœ“ Administrador creado: admin@club360.com")
         
         # Crear empleados
         empleado1 = Usuario(
             nombre='Juan',
-            apellido='Pérez',
+            apellido='PÃ©rez',
             dni='23456789',
             email='juan@club360.com',
             password=generate_password_hash('empleado123'),
@@ -232,12 +231,12 @@ def init_database():
             estado='activo'
         )
         db.session.add(empleado1)
-        print("✓ Empleado creado: juan@club360.com")
+        print("âœ“ Empleado creado: juan@club360.com")
         
         # Crear clientes de prueba
         cliente1 = Usuario(
             nombre='Carlos',
-            apellido='García',
+            apellido='GarcÃ­a',
             dni='34567890',
             email='carlos@example.com',
             password=generate_password_hash('cliente123'),
@@ -250,8 +249,8 @@ def init_database():
         )
         
         cliente2 = Usuario(
-            nombre='María',
-            apellido='López',
+            nombre='MarÃ­a',
+            apellido='LÃ³pez',
             dni='45678901',
             email='maria@example.com',
             password=generate_password_hash('cliente123'),
@@ -293,22 +292,19 @@ def init_database():
 
         db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida])
         db.session.commit()
-        _crear_deudas_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)
-        clases_demo = _crear_clases_demo_recurrentes_desde_semana_actual()
+        clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
         db.session.commit()
-        print("✓ Clientes creados")
+        print("âœ“ Clientes creados")
         
-        print("✓ Deudas demo creadas para carlos@example.com")
-        print("✓ Carlos queda suspendido, con tarjeta vencida y sin fondos")
-        print("✓ Clases demo recurrentes creadas desde la semana actual hasta fin de año:")
-        print("  - Vóley: martes 20:00 sin cupos")
-        print("  - Básquet: miércoles 16:00 con cupos")
-        print("  - Pádel: jueves 18:00 sin cupos")
-        print("  - Fútbol: viernes 14:00 con cupos")
+        print("Clases demo recurrentes creadas hasta fin de anio:")
+        print("  - Basquet: viernes 19:00 con 10 cupos")
+        print("  - Voley: martes 14:00 con 10 cupos")
+        print("  - Padel: miercoles 10:00 con 10 cupos")
+        print("  - Futbol: jueves 15:00 con 10 cupos")
         print(f"  Total por deporte: {clases_demo}")
         
-        print("\n✅ Base de datos inicializada correctamente!")
+        print("\nâœ… Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")

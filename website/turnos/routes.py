@@ -56,12 +56,12 @@ def _es_admin(user):
 
 def _calcular_monto_reserva(actividad, tipo_clase, usuario=None, descuento_porcentaje=0.0):
     base_por_actividad = {
-        'futbol': 300.0,
-        'basquet': 250.0,
-        'voley': 220.0,
-        'padel': 280.0,
+        'futbol': 8000.0,
+        'basquet': 8000.0,
+        'voley': 8000.0,
+        'padel': 8000.0,
     }
-    base = base_por_actividad.get(actividad, 250.0)
+    base = base_por_actividad.get(actividad, 8000.0)
     if tipo_clase == TipoClase.ABONADA:
         descuento = max(0.0, min(float(descuento_porcentaje or 0.0), 100.0))
         return round(base * (1 - descuento / 100), 2)
@@ -770,7 +770,7 @@ def _obtener_turnos_para_abono(abono):
         .filter_by(actividad=abono.actividad, cancelado=False)
         .filter(func.date(Turno.hora_inicio) >= abono.fecha_desde.isoformat())
         .filter(func.date(Turno.hora_inicio) <= abono.fecha_hasta.isoformat())
-        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio > _ahora_local())
         .order_by(Turno.hora_inicio.asc())
         .all()
     )
@@ -1458,7 +1458,7 @@ def _obtener_turnos_recurrentes_para_cancelacion_admin(turno):
     turnos_misma_actividad = (
         Turno.query
         .filter_by(actividad=turno.actividad, cancelado=False)
-        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio > _ahora_local())
         .order_by(Turno.hora_inicio.asc())
         .all()
     )
@@ -1600,7 +1600,7 @@ def ver_turnos_disponibles():
     query = (
         Turno.query
         .filter_by(cancelado=False)
-        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio > _ahora_local())
         .filter(Turno.hora_inicio <= _datetime_limite_busqueda_turnos())
     )
     credito_actividad = request.args.get('credito', '').strip().lower()
@@ -1699,7 +1699,7 @@ def eventos_turnos():
     query = (
         Turno.query
         .filter_by(cancelado=False)
-        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_inicio > _ahora_local())
         .filter(Turno.hora_inicio <= _datetime_limite_busqueda_turnos())
     )
     credito_actividad = request.args.get('credito', '').strip().lower()
@@ -1779,6 +1779,10 @@ def reservar_turno(turno_id):
 
     if turno.cancelado:
         flash('Este turno ya no está disponible', 'error')
+        return _resolver_redirect_reserva()
+
+    if turno.hora_inicio <= _ahora_local():
+        flash('Este turno ya comenzo y no se puede reservar', 'error')
         return _resolver_redirect_reserva()
 
     if current_user.tipo_usuario in {TipoUsuario.CLIENTE, TipoUsuario.EMPLEADO} and turno.hora_inicio > _datetime_limite_busqueda_turnos():
