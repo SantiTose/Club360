@@ -70,9 +70,9 @@ def create_app(config_name='development'):
         actividad_reciente = []
         dashboard_context = {
             'mode': 'cliente',
-            'eyebrow': 'Panel personal',
+            'eyebrow': '',
             'hero_title': f'Hola, {current_user.nombre}',
-            'hero_text': 'Gestioná tus turnos con cobro automático al confirmar cada reserva.',
+            'hero_text': '',
             'hero_tags': [
                 current_user.tipo_usuario.capitalize(),
                 current_user.estado.capitalize() if current_user.estado else 'Sin estado',
@@ -107,29 +107,12 @@ def create_app(config_name='development'):
                     f"Próximo turno: {proximo_turno.actividad.upper()} el {proximo_turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}"
                 )
 
-            ultimo_pago = (
-                Pago.query
-                .filter_by(usuario_id=current_user.id, estado='completado')
-                .order_by(Pago.fecha_pago.desc())
-                .first()
-            )
-            if ultimo_pago:
-                actividad_reciente.append(
-                    f"Último pago: ${ultimo_pago.monto:.2f}"
-                )
-
             dashboard_context['stats'] = [
                 {
                     'label': 'Turnos reservados',
                     'value': turnos_reservados,
                     'description': 'Reservas activas listas para asistir o gestionar.',
                     'accent': False,
-                },
-                {
-                    'label': 'Cobro automático',
-                    'value': 'Activo',
-                    'description': 'Las reservas se cobran al confirmar con tarjeta de crédito.',
-                    'accent': True,
                 },
             ]
         else:
