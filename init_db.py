@@ -41,83 +41,32 @@ def _crear_turno_demo(actividad, inicio, capacidad=8):
     return turno
 
 
-def _crear_deudas_demo_carlos(cliente):
+def _crear_suspensiones_demo_carlos(cliente):
     ahora = datetime.utcnow()
     inicio_mes = ahora.date().replace(day=1)
     fin_mes = _fin_de_mes(inicio_mes)
 
-    abonos_demo = [
-        ('basquet', 0, 19, 24000.0),
-        ('voley', 2, 20, 21000.0),
-    ]
+    abono = AbonoCliente(
+        usuario_id=cliente.id,
+        actividad='futbol',
+        dia_semana=3,
+        hora_inicio=15,
+        fecha_desde=inicio_mes,
+        fecha_hasta=fin_mes,
+        estado=EstadoAbono.SUSPENDIDO,
+    )
+    db.session.add(abono)
+    db.session.flush()
 
-    for actividad, dia_semana, hora, monto in abonos_demo:
-        abono = AbonoCliente(
-            usuario_id=cliente.id,
-            actividad=actividad,
-            dia_semana=dia_semana,
-            hora_inicio=hora,
-            fecha_desde=inicio_mes,
-            fecha_hasta=fin_mes,
-            estado=EstadoAbono.SUSPENDIDO,
-        )
-        db.session.add(abono)
-        db.session.flush()
-
-        fecha_turno = inicio_mes
-        while fecha_turno.weekday() != dia_semana:
-            fecha_turno += timedelta(days=1)
-
-        for _ in range(4):
-            inicio = datetime.combine(fecha_turno, datetime.min.time()).replace(hour=hora)
-            turno = _crear_turno_demo(actividad, inicio)
-            db.session.add(Reserva(
-                usuario_id=cliente.id,
-                turno_id=turno.id,
-                abono_id=abono.id,
-                tipo_clase=TipoClase.ABONADA,
-                qr_token=secrets.token_urlsafe(24),
-            ))
-            fecha_turno += timedelta(days=7)
-            if fecha_turno > fin_mes:
-                break
-
-        db.session.add(Pago(
-            usuario_id=cliente.id,
-            monto=monto,
-            metodo_pago='tarjeta_credito',
-            estado='pendiente',
-            tipo_clase=TipoClase.ABONADA,
-            fecha_pago=ahora - timedelta(days=18),
-            referencia_transaccion=f"abono-total-{abono.id}-{cliente.id}-{int(ahora.timestamp())}",
-        ))
-
-    deudas_no_abonadas = [
-        ('futbol', 12, 5000.0),
-        ('padel', 10, 6000.0),
-        ('basquet', 8, 4500.0),
-        ('voley', 6, 4000.0),
-        ('futbol', 4, 5000.0),
-    ]
-
-    for actividad, dias_atras, monto in deudas_no_abonadas:
-        inicio = (ahora - timedelta(days=dias_atras)).replace(hour=18, minute=0, second=0, microsecond=0)
-        turno = _crear_turno_demo(actividad, inicio)
-        db.session.add(Reserva(
-            usuario_id=cliente.id,
-            turno_id=turno.id,
-            tipo_clase=TipoClase.NO_ABONADA,
-            qr_token=secrets.token_urlsafe(24),
-        ))
-        db.session.add(Pago(
-            usuario_id=cliente.id,
-            monto=monto,
-            metodo_pago='tarjeta_credito',
-            estado='pendiente',
-            tipo_clase=TipoClase.NO_ABONADA,
-            fecha_pago=inicio,
-            referencia_transaccion=f"reserva-{turno.id}-{cliente.id}-{int(inicio.timestamp())}-saldo",
-        ))
+    db.session.add(Pago(
+        usuario_id=cliente.id,
+        monto=16000.0,
+        metodo_pago='tarjeta_credito',
+        estado='pendiente',
+        tipo_clase=TipoClase.ABONADA,
+        fecha_pago=ahora - timedelta(days=18),
+        referencia_transaccion=f"abono-total-{abono.id}-{cliente.id}-{int(ahora.timestamp())}",
+    ))
 
     db.session.add(Suspension(
         usuario_id=cliente.id,
@@ -127,7 +76,7 @@ def _crear_deudas_demo_carlos(cliente):
     ))
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas',
+        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas - futbol jueves 15:00',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=2),
     ))
@@ -135,6 +84,31 @@ def _crear_deudas_demo_carlos(cliente):
 
 def _crear_suspensiones_demo_paulina(cliente):
     ahora = datetime.utcnow()
+    inicio_mes = ahora.date().replace(day=1)
+    fin_mes = _fin_de_mes(inicio_mes)
+
+    abono = AbonoCliente(
+        usuario_id=cliente.id,
+        actividad='padel',
+        dia_semana=2,
+        hora_inicio=10,
+        fecha_desde=inicio_mes,
+        fecha_hasta=fin_mes,
+        estado=EstadoAbono.SUSPENDIDO,
+    )
+    db.session.add(abono)
+    db.session.flush()
+
+    db.session.add(Pago(
+        usuario_id=cliente.id,
+        monto=16000.0,
+        metodo_pago='tarjeta_credito',
+        estado='pendiente',
+        tipo_clase=TipoClase.ABONADA,
+        fecha_pago=ahora - timedelta(days=18),
+        referencia_transaccion=f"abono-total-{abono.id}-{cliente.id}-{int(ahora.timestamp())}",
+    ))
+
     db.session.add(Suspension(
         usuario_id=cliente.id,
         motivo='SuspensiÃ³n automÃ¡tica por abono pendiente',
@@ -184,6 +158,29 @@ def _crear_clases_demo_recurrentes_hasta_fin_anio():
             fecha += timedelta(days=7)
 
     return creados_por_actividad
+
+
+def _crear_reserva_demo(usuario, actividad, tipo_clase=TipoClase.NO_ABONADA):
+    turno = (
+        Turno.query
+        .filter_by(actividad=actividad, cancelado=False)
+        .filter(Turno.hora_inicio > datetime.now())
+        .filter(Turno.cupos_disponibles > 0)
+        .order_by(Turno.hora_inicio.asc())
+        .first()
+    )
+    if not turno:
+        return None
+
+    reserva = Reserva(
+        usuario_id=usuario.id,
+        turno_id=turno.id,
+        tipo_clase=tipo_clase,
+        qr_token=secrets.token_urlsafe(24),
+    )
+    turno.cupos_disponibles -= 1
+    db.session.add(reserva)
+    return reserva
 
 
 def init_database():
@@ -244,7 +241,7 @@ def init_database():
             estado=EstadoUsuario.SUSPENDIDO,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
-            tarjeta_credito_vencimiento=date(2024, 12, 31),
+            tarjeta_credito_vencimiento=date(2030, 12, 31),
             tarjeta_credito_saldo=0.0
         )
         
@@ -272,7 +269,7 @@ def init_database():
             estado='activo',
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
-            tarjeta_credito_vencimiento=date(2030, 12, 31),
+            tarjeta_credito_vencimiento=date(2024, 12, 31),
             tarjeta_credito_saldo=0.0
         )
 
@@ -287,13 +284,18 @@ def init_database():
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
-            tarjeta_credito_saldo=100000.0
+            tarjeta_credito_saldo=999999999.0
         )
 
         db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida])
         db.session.commit()
+        _crear_suspensiones_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
+        db.session.flush()
+        _crear_reserva_demo(cliente1, 'futbol')
+        _crear_reserva_demo(paulina_suspendida, 'padel')
+        _crear_reserva_demo(pedro_sin_fondos, 'basquet')
         db.session.commit()
         print("âœ“ Clientes creados")
         
@@ -309,9 +311,9 @@ def init_database():
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")
         print("- Todo ok: maria@example.com / cliente123")
-        print("- suspendido/tarjeta vencida: carlos@example.com / cliente123")
-        print("- Suspendida con fondos: paulina@example.com / cliente123")
-        print("- Sin fondos: pedro@example.com / cliente123")
+        print("- Suspendido abonada/no abonada sin saldo: carlos@example.com / cliente123")
+        print("- Suspendida abonada/no abonada con fondos infinitos: paulina@example.com / cliente123")
+        print("- Tarjeta vencida y sin fondos: pedro@example.com / cliente123")
 
 
 if __name__ == '__main__':
