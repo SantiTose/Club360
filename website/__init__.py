@@ -263,8 +263,41 @@ def create_app(config_name='development'):
         _ensure_pago_tipo_clase_column()
         _ensure_creditos_clientes_table()
         _backfill_reserva_qr_tokens()
+        _repair_mojibake_text_values()
 
     return app
+
+
+def _decode_mojibake(value):
+    if not isinstance(value, str) or not value:
+        return value
+    try:
+        return value.encode('cp1252').decode('utf-8')
+    except UnicodeError:
+        return value
+
+
+def _repair_mojibake_text_values():
+    """Corrige textos guardados con UTF-8 interpretado como Windows-1252."""
+    from website.models import Suspension, Usuario
+
+    changed = False
+    for usuario in Usuario.query.all():
+        for field in ('nombre', 'apellido'):
+            current = getattr(usuario, field)
+            fixed = _decode_mojibake(current)
+            if fixed != current:
+                setattr(usuario, field, fixed)
+                changed = True
+
+    for suspension in Suspension.query.all():
+        fixed = _decode_mojibake(suspension.motivo)
+        if fixed != suspension.motivo:
+            suspension.motivo = fixed
+            changed = True
+
+    if changed:
+        db.session.commit()
 
 
 def _drop_legacy_turno_tipo_clase_column():

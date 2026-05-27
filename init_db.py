@@ -70,13 +70,13 @@ def _crear_suspensiones_demo_carlos(cliente):
 
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='SuspensiÃ³n automÃ¡tica por abono pendiente',
+        motivo='Suspensión automática por abono pendiente',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=3),
     ))
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas - futbol jueves 15:00',
+        motivo='Suspensión automática por 3 deudas no abonadas - futbol jueves 15:00',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=2),
     ))
@@ -111,13 +111,13 @@ def _crear_suspensiones_demo_paulina(cliente):
 
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='SuspensiÃ³n automÃ¡tica por abono pendiente',
+        motivo='Suspensión automática por abono pendiente',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=3),
     ))
     db.session.add(Suspension(
         usuario_id=cliente.id,
-        motivo='SuspensiÃ³n automÃ¡tica por 3 deudas no abonadas',
+        motivo='Suspensión automática por 3 deudas no abonadas',
         estado='activa',
         fecha_inicio=ahora - timedelta(days=2),
     ))
@@ -202,7 +202,7 @@ def init_database():
         db.session.query(Usuario).delete()
         db.session.commit()
         
-        print("âœ“ Base de datos limpiada")
+        print("✓ Base de datos limpiada")
         
         # Crear administrador
         admin = Usuario(
@@ -215,12 +215,12 @@ def init_database():
             estado='activo'
         )
         db.session.add(admin)
-        print("âœ“ Administrador creado: admin@club360.com")
+        print("✓ Administrador creado: admin@club360.com")
         
         # Crear empleados
         empleado1 = Usuario(
             nombre='Juan',
-            apellido='PÃ©rez',
+            apellido='Pérez',
             dni='23456789',
             email='juan@club360.com',
             password=generate_password_hash('empleado123'),
@@ -228,12 +228,12 @@ def init_database():
             estado='activo'
         )
         db.session.add(empleado1)
-        print("âœ“ Empleado creado: juan@club360.com")
+        print("✓ Empleado creado: juan@club360.com")
         
         # Crear clientes de prueba
         cliente1 = Usuario(
             nombre='Carlos',
-            apellido='GarcÃ­a',
+            apellido='García',
             dni='34567890',
             email='carlos@example.com',
             password=generate_password_hash('cliente123'),
@@ -246,8 +246,8 @@ def init_database():
         )
         
         cliente2 = Usuario(
-            nombre='MarÃ­a',
-            apellido='LÃ³pez',
+            nombre='María',
+            apellido='López',
             dni='45678901',
             email='maria@example.com',
             password=generate_password_hash('cliente123'),
@@ -297,7 +297,7 @@ def init_database():
         _crear_reserva_demo(paulina_suspendida, 'padel')
         _crear_reserva_demo(pedro_sin_fondos, 'basquet')
         db.session.commit()
-        print("âœ“ Clientes creados")
+        print("✓ Clientes creados")
         
         print("Clases demo recurrentes creadas hasta fin de anio:")
         print("  - Basquet: viernes 19:00 con 10 cupos")
@@ -306,7 +306,7 @@ def init_database():
         print("  - Futbol: jueves 15:00 con 10 cupos")
         print(f"  Total por deporte: {clases_demo}")
         
-        print("\nâœ… Base de datos inicializada correctamente!")
+        print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")
