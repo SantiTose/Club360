@@ -263,6 +263,7 @@ def create_app(config_name='development'):
         db.create_all()
         _drop_legacy_turno_tipo_clase_column()
         _repair_legacy_turno_foreign_keys()
+        _ensure_turno_motivo_cancelacion_column()
         _drop_legacy_usuario_tipo_cliente_column()
         _ensure_usuario_recordatorio_column()
         _ensure_usuario_cancelaciones_credito_columns()
@@ -355,6 +356,17 @@ def _repair_legacy_turno_foreign_keys():
 
     _rebuild_reservas_if_needed()
     _rebuild_lista_espera_if_needed()
+
+
+def _ensure_turno_motivo_cancelacion_column():
+    inspector = inspect(db.engine)
+    if 'turnos' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('turnos')}
+    if 'motivo_cancelacion' not in columnas:
+        db.session.execute(text("ALTER TABLE turnos ADD COLUMN motivo_cancelacion VARCHAR(255)"))
+        db.session.commit()
 
 
 def _rebuild_reservas_if_needed():

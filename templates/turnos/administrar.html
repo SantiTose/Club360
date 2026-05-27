@@ -102,8 +102,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 : !p.cancelado
                 ? '<p class="text-warning" style="margin-top:1rem;">Sin cupos disponibles para asignar.</p>'
                 : '';
+            const motivoCancelacion = p.motivo_cancelacion
+                ? helpers.escapeHtml(p.motivo_cancelacion)
+                : 'No se registró un motivo.';
             const cancelForm = p.cancelado
-                ? '<p class="text-warning">Este turno ya está cancelado.</p>'
+                ? `<div style="margin-top: .75rem;">
+                        <p class="text-warning"><strong>Este turno ya está cancelado.</strong></p>
+                        <p><strong>Motivo:</strong> ${motivoCancelacion}</p>
+                        <form method="POST" action="${p.reanudar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Reanudar turno" data-confirm-message="Vas a reanudar este turno de ${helpers.escapeHtml(event.title)}." data-confirm-action="Sí" data-confirm-cancel="No">
+                            <button type="submit" class="btn btn-success btn-block">Reanudar turno</button>
+                        </form>
+                   </div>`
                 : `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar el turno de ${helpers.escapeHtml(event.title)}. Esta acción impactará en los usuarios reservados." data-confirm-action="Sí" data-confirm-cancel="No">
                         <div class="form-group" style="margin-bottom: .75rem;">
                             <label for="motivo_cancelacion"><strong>Motivo de cancelación</strong></label>

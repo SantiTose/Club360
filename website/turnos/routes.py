@@ -409,7 +409,32 @@ def _pagos_no_abonados_vencidos(usuario_id):
 
 
 def _fecha_limite_pago_abono(abono):
-    return abono.fecha_desde.replace(day=11)
+    limite_mensual = abono.fecha_desde.replace(day=11)
+    fecha_creacion = (abono.fecha_creacion or datetime.utcnow()).date()
+    limite_desde_alta = fecha_creacion + timedelta(days=7)
+    return max(limite_mensual, limite_desde_alta)
+
+
+def _cantidad_reservas_de_abono(abono):
+    return Reserva.query.filter_by(abono_id=abono.id).count()
+
+
+def _abono_pendiente_puede_suspender(abono):
+    return _cantidad_reservas_de_abono(abono) > 1
+
+
+def _monto_pendiente_de_abono(abono):
+    return round(sum(pago.monto for pago in _pagos_pendientes_de_abono(abono)), 2)
+
+
+def _abono_suspendido_debe_bloquear(abono):
+    monto_una_clase = _calcular_monto_reserva(
+        abono.actividad,
+        TipoClase.ABONADA,
+        abono.usuario,
+        descuento_porcentaje=abono.descuento_porcentaje,
+    )
+    return _monto_pendiente_de_abono(abono) > monto_una_clase
 
 
 def _abonos_pendientes_vencidos(usuario_id):
@@ -419,7 +444,11 @@ def _abonos_pendientes_vencidos(usuario_id):
         .filter_by(usuario_id=usuario_id, estado=EstadoAbono.PENDIENTE)
         .all()
     )
-    return [abono for abono in abonos if hoy >= _fecha_limite_pago_abono(abono)]
+    return [
+        abono
+        for abono in abonos
+        if _abono_pendiente_puede_suspender(abono) and hoy >= _fecha_limite_pago_abono(abono)
+    ]
 
 
 def _tiene_suspension_abonada_activa(usuario_id):
@@ -445,10 +474,25 @@ def _tiene_suspension_no_abonada_activa(usuario_id):
 def _obtener_restricciones_suspension(cliente):
     deudas_no_abonadas_vencidas = len(_pagos_no_abonados_vencidos(cliente.id))
     abonos_pendientes_vencidos = len(_abonos_pendientes_vencidos(cliente.id))
-    abonos_suspendidos = AbonoCliente.query.filter_by(usuario_id=cliente.id, estado=EstadoAbono.SUSPENDIDO).count()
+    abonos_suspendidos_bloqueantes = [
+        abono
+        for abono in AbonoCliente.query.filter_by(
+            usuario_id=cliente.id,
+            estado=EstadoAbono.SUSPENDIDO,
+        ).all()
+        if _abono_suspendido_debe_bloquear(abono)
+    ]
+    suspension_abonada_activa = (
+        _tiene_suspension_abonada_activa(cliente.id)
+        and (abonos_pendientes_vencidos > 0 or bool(abonos_suspendidos_bloqueantes))
+    )
 
     return {
-        'suspendido_abonado': abonos_pendientes_vencidos > 0 or abonos_suspendidos > 0 or _tiene_suspension_abonada_activa(cliente.id),
+        'suspendido_abonado': (
+            abonos_pendientes_vencidos > 0
+            or bool(abonos_suspendidos_bloqueantes)
+            or suspension_abonada_activa
+        ),
         'suspendido_no_abonado': deudas_no_abonadas_vencidas >= 3 or _tiene_suspension_no_abonada_activa(cliente.id),
         'deudas_abonadas': abonos_pendientes_vencidos,
         'deudas_no_abonadas_vencidas': deudas_no_abonadas_vencidas,
@@ -1411,6 +1455,46 @@ def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
     ListaEspera.query.filter_by(turno_id=turno.id).delete(synchronize_session=False)
 
 
+def _obtener_turnos_recurrentes_para_cancelacion_admin(turno):
+    inicio = turno.hora_inicio.time()
+    fin = turno.hora_fin.time()
+    dia_semana = turno.hora_inicio.weekday()
+
+    turnos_misma_actividad = (
+        Turno.query
+        .filter_by(actividad=turno.actividad, cancelado=False)
+        .filter(Turno.hora_fin >= datetime.utcnow())
+        .order_by(Turno.hora_inicio.asc())
+        .all()
+    )
+    return [
+        turno_recurrente for turno_recurrente in turnos_misma_actividad
+        if turno_recurrente.hora_inicio.weekday() == dia_semana
+        and turno_recurrente.hora_inicio.time() == inicio
+        and turno_recurrente.hora_fin.time() == fin
+    ]
+
+
+def _obtener_turnos_recurrentes_cancelados_para_reanudacion_admin(turno):
+    inicio = turno.hora_inicio.time()
+    fin = turno.hora_fin.time()
+    dia_semana = turno.hora_inicio.weekday()
+
+    turnos_misma_actividad = (
+        Turno.query
+        .filter_by(actividad=turno.actividad, cancelado=True)
+        .filter(Turno.hora_fin >= datetime.utcnow())
+        .order_by(Turno.hora_inicio.asc())
+        .all()
+    )
+    return [
+        turno_recurrente for turno_recurrente in turnos_misma_actividad
+        if turno_recurrente.hora_inicio.weekday() == dia_semana
+        and turno_recurrente.hora_inicio.time() == inicio
+        and turno_recurrente.hora_fin.time() == fin
+    ]
+
+
 def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
     admins = Usuario.query.filter_by(tipo_usuario=TipoUsuario.ADMINISTRADOR).all()
     if not admins:
@@ -1604,9 +1688,11 @@ def eventos_turnos():
                 'borderColor': '#263238' if turno.cancelado else '#0d47a1',
                 'extendedProps': {
                     'cancelado': turno.cancelado,
+                    'motivo_cancelacion': turno.motivo_cancelacion or '',
                     'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                     'editar_url': url_for('turnos.editar_turno', turno_id=turno.id),
                     'cancelar_url': url_for('turnos.cancelar_turno_admin', turno_id=turno.id),
+                    'reanudar_url': url_for('turnos.reanudar_turno_admin', turno_id=turno.id),
                     'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                     'sin_cupos': turno.cupos_disponibles <= 0,
                 }
@@ -2650,8 +2736,53 @@ def cancelar_turno_admin(turno_id):
         flash('Debes indicar el motivo de la cancelación', 'error')
         return redirect(url_for('turnos.administrar_turnos'))
 
-    _procesar_cancelacion_admin_con_reintegros(turno, motivo)
-    turno.cancelado = True
+    turnos_a_cancelar = _obtener_turnos_recurrentes_para_cancelacion_admin(turno)
+    if not turnos_a_cancelar:
+        flash('No hay turnos futuros activos para cancelar en esa franja semanal', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    for turno_recurrente in turnos_a_cancelar:
+        _procesar_cancelacion_admin_con_reintegros(turno_recurrente, motivo)
+        turno_recurrente.cancelado = True
+        turno_recurrente.motivo_cancelacion = motivo
+
     db.session.commit()
-    flash('Turno cancelado por administrador, con notificaciones y devoluciones procesadas', 'success')
+    dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
+    flash(
+        f'Se cancelaron {len(turnos_a_cancelar)} turnos de {turno.actividad.upper()} '
+        f'los {dia_semana} de {turno.hora_inicio.strftime("%H:%M")} a {turno.hora_fin.strftime("%H:%M")}, '
+        'con notificaciones y devoluciones procesadas.',
+        'success',
+    )
+    return redirect(url_for('turnos.administrar_turnos'))
+
+
+@turnos_bp.route('/reanudar-admin/<int:turno_id>', methods=['POST'])
+@login_required
+def reanudar_turno_admin(turno_id):
+    if not _es_admin(current_user):
+        flash('Solo administradores pueden reanudar turnos', 'error')
+        return redirect(url_for('index'))
+
+    turno = Turno.query.get_or_404(turno_id)
+    if not turno.cancelado:
+        flash('El turno ya estaba activo', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    turnos_a_reanudar = _obtener_turnos_recurrentes_cancelados_para_reanudacion_admin(turno)
+    if not turnos_a_reanudar:
+        flash('No hay turnos futuros cancelados para reanudar en esa franja semanal', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    for turno_recurrente in turnos_a_reanudar:
+        turno_recurrente.cancelado = False
+        turno_recurrente.motivo_cancelacion = None
+
+    db.session.commit()
+    dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
+    flash(
+        f'Se reanudaron {len(turnos_a_reanudar)} turnos de {turno.actividad.upper()} '
+        f'los {dia_semana} de {turno.hora_inicio.strftime("%H:%M")} a {turno.hora_fin.strftime("%H:%M")}.',
+        'success',
+    )
     return redirect(url_for('turnos.administrar_turnos'))
