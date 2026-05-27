@@ -56,10 +56,6 @@
             <small>Se cobra con la tarjeta guardada en tu cuenta.</small>
         </div>
 
-        <form method="POST" action="{{ url_for('turnos.pagar_mis_deudas') }}" style="margin-top: 1rem;">
-            <p>Pagar el total de tus deudas</p>
-            <button type="submit" class="btn btn-success">Pagar</button>
-        </form>
         {% else %}
         <div class="calendar-empty-state" style="margin-top: 0;">
             <h3>No tenés deudas pendientes.</h3>
