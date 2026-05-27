@@ -1238,10 +1238,8 @@ def _reactivar_si_sin_deudas(usuario):
     if Suspension.query.filter_by(usuario_id=usuario.id, estado='activa').count() == 0:
         usuario.estado = EstadoUsuario.ACTIVO
 
-    reservas_restauradas = 0
-    conflictos = []
     if deudas_abonadas > 0:
-        return reservas_restauradas, conflictos
+        return 0, []
 
     abonos_suspendidos = AbonoCliente.query.filter_by(
         usuario_id=usuario.id,
@@ -1249,11 +1247,8 @@ def _reactivar_si_sin_deudas(usuario):
     ).all()
     for abono in abonos_suspendidos:
         abono.estado = EstadoAbono.ACTIVO
-        creadas, errores, _ = _generar_reservas_para_abono(abono, crear_pagos=False)
-        reservas_restauradas += creadas
-        conflictos.extend(errores)
 
-    return reservas_restauradas, conflictos
+    return 0, []
 
 
 def _activar_abonos_pendientes_sin_deuda(usuario):
@@ -2269,14 +2264,10 @@ def pagar_mis_deudas():
         return redirect(url_for('turnos.mis_deudas'))
 
     current_user.tarjeta_credito_saldo = round(saldo - total, 2)
-    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_como_pagadas(current_user, 'tarjeta_credito')
+    total_pagado, _, _ = _marcar_deudas_como_pagadas(current_user, 'tarjeta_credito')
     db.session.commit()
 
     flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.mis_deudas'))
 
 
@@ -2305,14 +2296,10 @@ def pagar_mi_deuda(pago_id):
         return redirect(url_for('turnos.mis_deudas'))
 
     current_user.tarjeta_credito_saldo = round(saldo - monto, 2)
-    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_como_pagada(current_user, deuda, 'tarjeta_credito')
+    total_pagado, _, _ = _marcar_deuda_como_pagada(current_user, deuda, 'tarjeta_credito')
     db.session.commit()
 
     flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.mis_deudas'))
 
 
@@ -2342,14 +2329,10 @@ def pagar_mi_deuda_abono(abono_id):
         return redirect(url_for('turnos.mis_deudas'))
 
     current_user.tarjeta_credito_saldo = round(saldo - total, 2)
-    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_abono_como_pagada(current_user, abono, 'tarjeta_credito')
+    total_pagado, _, _ = _marcar_deuda_abono_como_pagada(current_user, abono, 'tarjeta_credito')
     db.session.commit()
 
     flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.mis_deudas'))
 
 
@@ -2379,14 +2362,10 @@ def pagar_mi_suspension_no_abonada():
         return redirect(url_for('turnos.mis_deudas'))
 
     current_user.tarjeta_credito_saldo = round(saldo - total, 2)
-    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_no_abonadas_como_pagadas(current_user, 'tarjeta_credito')
+    total_pagado, _, _ = _marcar_deudas_no_abonadas_como_pagadas(current_user, 'tarjeta_credito')
     db.session.commit()
 
     flash(f'Se abonó ${total_pagado:.2f} con tarjeta de crédito.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.mis_deudas'))
 
 
@@ -2437,14 +2416,10 @@ def cobrar_deudas_cliente(usuario_id):
         flash('El cliente no tiene deudas pendientes.', 'info')
         return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
-    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_como_pagadas(cliente, 'efectivo')
+    total_pagado, _, _ = _marcar_deudas_como_pagadas(cliente, 'efectivo')
     db.session.commit()
 
     flash(f'Se cobró ${total_pagado:.2f} en efectivo y se saldó la deuda de {cliente.nombre} {cliente.apellido}.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
 
@@ -2468,14 +2443,10 @@ def cobrar_deuda_cliente(usuario_id, pago_id):
         flash('Las deudas de abono se cobran completas, no clase por clase.', 'warning')
         return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
-    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_como_pagada(cliente, deuda, 'efectivo')
+    total_pagado, _, _ = _marcar_deuda_como_pagada(cliente, deuda, 'efectivo')
     db.session.commit()
 
     flash(f'Se cobró ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
 
@@ -2497,14 +2468,10 @@ def cobrar_deuda_abono_cliente(usuario_id, abono_id):
         flash('Este abono no tiene deuda pendiente.', 'info')
         return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
-    total_pagado, reservas_restauradas, conflictos = _marcar_deuda_abono_como_pagada(cliente, abono, 'efectivo')
+    total_pagado, _, _ = _marcar_deuda_abono_como_pagada(cliente, abono, 'efectivo')
     db.session.commit()
 
     flash(f'Se cobró el abono pendiente completo por ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
 
@@ -2530,14 +2497,10 @@ def cobrar_suspension_no_abonada_cliente(usuario_id):
         flash('El cliente no tiene deuda de suspensión pendiente.', 'info')
         return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
-    total_pagado, reservas_restauradas, conflictos = _marcar_deudas_no_abonadas_como_pagadas(cliente, 'efectivo')
+    total_pagado, _, _ = _marcar_deudas_no_abonadas_como_pagadas(cliente, 'efectivo')
     db.session.commit()
 
     flash(f'Se cobró la suspensión por ${total_pagado:.2f} en efectivo a {cliente.nombre} {cliente.apellido}.', 'success')
-    if reservas_restauradas:
-        flash(f'Se restauraron {reservas_restauradas} reservas futuras de sus abonos.', 'info')
-    for conflicto in conflictos:
-        flash(conflicto, 'warning')
     return redirect(url_for('turnos.cobrar_deudas', email=cliente.email))
 
 

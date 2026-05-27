@@ -91,20 +91,10 @@ def _reactivar_cuenta_tras_pago(usuario):
         usuario_id=usuario.id,
         estado=EstadoAbono.SUSPENDIDO,
     ).all()
-    if not abonos_suspendidos:
-        return 0, []
-
-    from website.turnos.routes import _generar_reservas_para_abono
-
-    reservas_restauradas = 0
-    conflictos = []
     for abono in abonos_suspendidos:
         abono.estado = EstadoAbono.ACTIVO
-        creadas, errores, _ = _generar_reservas_para_abono(abono, crear_pagos=False)
-        reservas_restauradas += creadas
-        conflictos.extend(errores)
 
-    return reservas_restauradas, conflictos
+    return 0, []
 
 
 @suspensiones_bp.route('/solicitar-alta', methods=['GET', 'POST'])
@@ -128,14 +118,10 @@ def solicitar_alta_suspension():
 
     if request.method == 'POST':
         if monto_total <= 0:
-            reservas_restauradas, conflictos_abonos = _reactivar_cuenta_tras_pago(current_user)
+            _reactivar_cuenta_tras_pago(current_user)
             db.session.commit()
 
             flash('Tu cuenta fue reactivada. No había deuda pendiente para abonar.', 'success')
-            if reservas_restauradas:
-                flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-            for conflicto in conflictos_abonos:
-                flash(conflicto, 'warning')
             return redirect(url_for('dashboard'))
 
         saldo_disponible = float(current_user.tarjeta_credito_saldo or 0.0)
@@ -158,17 +144,13 @@ def solicitar_alta_suspension():
             if not deuda.referencia_transaccion:
                 deuda.referencia_transaccion = f"alta-online-{current_user.id}-{int(datetime.utcnow().timestamp())}"
 
-        reservas_restauradas, conflictos_abonos = _reactivar_cuenta_tras_pago(current_user)
+        _reactivar_cuenta_tras_pago(current_user)
         db.session.commit()
 
         flash(
             f'Alta procesada correctamente. Se abonó ${monto_total:.2f} con tarjeta de crédito y tu cuenta volvió a estar activa.',
             'success'
         )
-        if reservas_restauradas:
-            flash(f'Se restauraron {reservas_restauradas} reservas futuras de tus abonos.', 'info')
-        for conflicto in conflictos_abonos:
-            flash(conflicto, 'warning')
         return redirect(url_for('dashboard'))
     
     return render_template(
