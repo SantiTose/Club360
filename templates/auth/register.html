@@ -158,11 +158,15 @@
                         value="{{ form_data.get('tarjeta_credito', '') }}"
                         inputmode="numeric"
                         autocomplete="off"
+                        pattern="[0-9 ]{13,23}"
+                        data-validation-message="Debes ingresar un numero de tarjeta valido"
+                        data-helper-message="Solo se guardan marca y ultimos 4 digitos."
+                        required
                     >
                     {% if field_errors.get('tarjeta_credito') %}
-                        <small class="form-text error">{{ field_errors['tarjeta_credito'] }}</small>
+                        <small class="form-text error" data-validation-for="tarjeta_credito">{{ field_errors['tarjeta_credito'] }}</small>
                     {% else %}
-                        <small class="form-text">Solo se guardan marca y últimos 4 dígitos.</small>
+                        <small class="form-text" data-validation-for="tarjeta_credito">Solo se guardan marca y ultimos 4 digitos.</small>
                     {% endif %}
                 </div>
 
@@ -176,7 +180,11 @@
                             class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
                             value="{{ form_data.get('tarjeta_vencimiento', '') }}"
                             autocomplete="off"
+                            data-validation-message="Debes ingresar una fecha de vencimiento valida"
+                            data-helper-message=""
+                            required
                         >
+                        <small class="form-text" data-validation-for="tarjeta_vencimiento" hidden>Debes ingresar una fecha de vencimiento valida</small>
                     </div>
 
                     <div class="form-group">
@@ -189,7 +197,12 @@
                             placeholder="123"
                             inputmode="numeric"
                             autocomplete="off"
+                            pattern="[0-9]{3,4}"
+                            data-validation-message="El CVV debe tener 3 o 4 digitos"
+                            data-helper-message=""
+                            required
                         >
+                        <small class="form-text" data-validation-for="tarjeta_cvv" hidden>El CVV debe tener 3 o 4 digitos</small>
                     </div>
                 </div>
 
