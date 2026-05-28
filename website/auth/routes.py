@@ -107,12 +107,7 @@ def _normalizar_tarjeta_credito(tarjeta_raw):
     return _marca_tarjeta(numero), numero[-4:], None
 
 
-def _cvv_tarjeta_es_valido(cvv_raw):
-    cvv = (cvv_raw or '').strip()
-    return bool(re.match(r'^\d{3,4}$', cvv))
-
-
-def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw, cvv_raw):
+def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw):
     numero = re.sub(r'\D', '', tarjeta_raw or '')
 
     if not numero:
@@ -123,8 +118,6 @@ def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw, cvv_raw):
         return None, None, 'El numero de tarjeta no es valido'
     if not _vencimiento_tarjeta_es_valido(vencimiento_raw):
         return None, None, 'La fecha de vencimiento no es valida'
-    if not _cvv_tarjeta_es_valido(cvv_raw):
-        return None, None, 'El CVV debe tener 3 o 4 digitos'
 
     return _marca_tarjeta(numero), numero[-4:], None
 
@@ -139,7 +132,6 @@ def register():
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
         tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
         tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
-        tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         
@@ -166,7 +158,6 @@ def register():
         tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
             tarjeta_credito_raw,
             tarjeta_vencimiento_raw,
-            tarjeta_cvv_raw,
         )
         if error_tarjeta:
             field_errors['tarjeta_credito'] = error_tarjeta

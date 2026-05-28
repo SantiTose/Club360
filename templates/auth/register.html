@@ -170,40 +170,20 @@
                     {% endif %}
                 </div>
 
-                <div class="form-group-row">
-                    <div class="form-group">
-                        <label for="tarjeta_vencimiento" class="form-label">Fecha de vencimiento</label>
-                        <input
-                            type="month"
-                            id="tarjeta_vencimiento"
-                            name="tarjeta_vencimiento"
-                            class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
-                            value="{{ form_data.get('tarjeta_vencimiento', '') }}"
-                            autocomplete="off"
-                            data-validation-message="Debes ingresar una fecha de vencimiento valida"
-                            data-helper-message=""
-                            required
-                        >
-                        <small class="form-text" data-validation-for="tarjeta_vencimiento" hidden>Debes ingresar una fecha de vencimiento valida</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="tarjeta_cvv" class="form-label">CVV</label>
-                        <input
-                            type="password"
-                            id="tarjeta_cvv"
-                            name="tarjeta_cvv"
-                            class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
-                            placeholder="123"
-                            inputmode="numeric"
-                            autocomplete="off"
-                            pattern="[0-9]{3,4}"
-                            data-validation-message="El CVV debe tener 3 o 4 digitos"
-                            data-helper-message=""
-                            required
-                        >
-                        <small class="form-text" data-validation-for="tarjeta_cvv" hidden>El CVV debe tener 3 o 4 digitos</small>
-                    </div>
+                <div class="form-group">
+                    <label for="tarjeta_vencimiento" class="form-label">Fecha de vencimiento</label>
+                    <input
+                        type="month"
+                        id="tarjeta_vencimiento"
+                        name="tarjeta_vencimiento"
+                        class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                        value="{{ form_data.get('tarjeta_vencimiento', '') }}"
+                        autocomplete="off"
+                        data-validation-message="Debes ingresar una fecha de vencimiento valida"
+                        data-helper-message=""
+                        required
+                    >
+                    <small class="form-text" data-validation-for="tarjeta_vencimiento" hidden>Debes ingresar una fecha de vencimiento valida</small>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">
