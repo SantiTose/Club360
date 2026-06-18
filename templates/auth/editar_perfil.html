@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Perfil - Club 360{% endblock %}
+
+{% block content %}
+<section class="profile-edit-page">
+    <div class="profile-edit-header">
+        <div>
+            <span class="dashboard-eyebrow">Mi perfil</span>
+            <h1>Editar datos</h1>
+        </div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+    </div>
+
+    <div class="profile-edit-grid">
+        <form method="POST" class="profile-edit-panel auth-form" novalidate>
+            <input type="hidden" name="action" value="perfil">
+            <h2>Datos personales</h2>
+
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="nombre" class="form-label">Nombre</label>
+                    <input
+                        type="text"
+                        id="nombre"
+                        name="nombre"
+                        minlength="2"
+                        maxlength="20"
+                        class="form-control {% if field_errors.get('nombre') %}is-invalid{% endif %}"
+                        value="{{ form_data.get('nombre', '') }}"
+                        required
+                    >
+                    {% if field_errors.get('nombre') %}
+                        <small class="form-text error">{{ field_errors['nombre'] }}</small>
+                    {% else %}
+                        <small class="form-text">Entre 2 y 20 caracteres.</small>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="apellido" class="form-label">Apellido</label>
+                    <input
+                        type="text"
+                        id="apellido"
+                        name="apellido"
+                        minlength="2"
+                        maxlength="20"
+                        class="form-control {% if field_errors.get('apellido') %}is-invalid{% endif %}"
+                        value="{{ form_data.get('apellido', '') }}"
+                        required
+                    >
+                    {% if field_errors.get('apellido') %}
+                        <small class="form-text error">{{ field_errors['apellido'] }}</small>
+                    {% else %}
+                        <small class="form-text">Entre 2 y 20 caracteres.</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        class="form-control {% if field_errors.get('email') %}is-invalid{% endif %}"
+                        value="{{ form_data.get('email', '') }}"
+                        autocomplete="email"
+                        required
+                    >
+                    {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="fecha_nacimiento" class="form-label">Fecha de nacimiento</label>
+                    <input
+                        type="date"
+                        id="fecha_nacimiento"
+                        name="fecha_nacimiento"
+                        class="form-control {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}"
+                        value="{{ form_data.get('fecha_nacimiento', '') }}"
+                        required
+                    >
+                    {% if field_errors.get('fecha_nacimiento') %}
+                        <small class="form-text error">{{ field_errors['fecha_nacimiento'] }}</small>
+                    {% else %}
+                        <small class="form-text">Debe corresponder a una persona mayor de edad.</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+
+        <div class="profile-edit-panel">
+            <h2>Tarjetas de crédito</h2>
+
+            <div class="profile-card-list">
+                {% for tarjeta in tarjetas %}
+                <article class="profile-card-item">
+                    <div class="profile-card-summary">
+                        <strong>{{ tarjeta.marca }} terminada en {{ tarjeta.ultimos4 }}</strong>
+                        <span>Vence {{ tarjeta.vencimiento.strftime('%m/%Y') }}{% if tarjeta.es_principal %} · Principal{% endif %}</span>
+                    </div>
+
+                    <form method="POST" class="profile-card-inline-form">
+                        <input type="hidden" name="action" value="editar_tarjeta">
+                        <input type="hidden" name="tarjeta_id" value="{{ tarjeta.id }}">
+                        <div class="profile-card-field-grid">
+                            <div class="form-group">
+                                <label for="tarjeta_credito_{{ tarjeta.id }}" class="form-label">Nueva numeración</label>
+                                <input type="text" id="tarjeta_credito_{{ tarjeta.id }}" name="tarjeta_credito" inputmode="numeric" autocomplete="off" class="form-control" placeholder="4111 1111 1111 1111" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="tarjeta_vencimiento_{{ tarjeta.id }}" class="form-label">Vencimiento</label>
+                                <input type="month" id="tarjeta_vencimiento_{{ tarjeta.id }}" name="tarjeta_vencimiento" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="tarjeta_cvv_{{ tarjeta.id }}" class="form-label">CVV</label>
+                                <input type="text" id="tarjeta_cvv_{{ tarjeta.id }}" name="tarjeta_cvv" inputmode="numeric" autocomplete="off" pattern="[0-9]{3}" maxlength="3" class="form-control" placeholder="123" required>
+                            </div>
+                        </div>
+                        <div class="profile-card-actions">
+                            <button type="submit" class="btn btn-secondary btn-sm">Actualizar</button>
+                        </div>
+                    </form>
+
+                    <form method="POST" class="profile-card-remove-form">
+                        <input type="hidden" name="action" value="quitar_tarjeta">
+                        <input type="hidden" name="tarjeta_id" value="{{ tarjeta.id }}">
+                        <button
+                            type="submit"
+                            class="btn btn-danger btn-sm"
+                            data-confirm="true"
+                            data-confirm-title="Quitar tarjeta"
+                            data-confirm-message="Solo se puede quitar si queda otra tarjeta registrada."
+                            data-confirm-action="Quitar"
+                        >Quitar</button>
+                    </form>
+                </article>
+                {% else %}
+                <div class="profile-empty-state">
+                    <strong>Sin tarjetas registradas</strong>
+                    <span>Agregá una tarjeta para pagar reservas y deudas con crédito.</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <form method="POST" class="profile-add-card-form">
+                <input type="hidden" name="action" value="agregar_tarjeta">
+                <h3>Agregar tarjeta</h3>
+                <div class="profile-card-field-grid">
+                    <div class="form-group">
+                        <label for="nueva_tarjeta_credito" class="form-label">Número</label>
+                        <input type="text" id="nueva_tarjeta_credito" name="tarjeta_credito" inputmode="numeric" autocomplete="off" class="form-control" placeholder="4111 1111 1111 1111" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="nueva_tarjeta_vencimiento" class="form-label">Vencimiento</label>
+                        <input type="month" id="nueva_tarjeta_vencimiento" name="tarjeta_vencimiento" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="nueva_tarjeta_cvv" class="form-label">CVV</label>
+                        <input type="text" id="nueva_tarjeta_cvv" name="tarjeta_cvv" inputmode="numeric" autocomplete="off" pattern="[0-9]{3}" maxlength="3" class="form-control" placeholder="123" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Agregar tarjeta</button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}

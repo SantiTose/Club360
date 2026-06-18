@@ -68,9 +68,27 @@ class Usuario(UserMixin, db.Model):
     pagos = db.relationship('Pago', backref='usuario', lazy=True)
     listas_espera = db.relationship('ListaEspera', backref='usuario', lazy=True)
     suspensiones = db.relationship('Suspension', backref='usuario', lazy=True)
+    tarjetas_credito = db.relationship('TarjetaCredito', backref='usuario', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Usuario {self.email}>'
+
+
+class TarjetaCredito(db.Model):
+    __tablename__ = 'tarjetas_credito'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    marca = db.Column(db.String(20), nullable=False)
+    ultimos4 = db.Column(db.String(4), nullable=False)
+    vencimiento = db.Column(db.Date, nullable=False)
+    saldo = db.Column(db.Float, nullable=False, default=100000.0)
+    es_principal = db.Column(db.Boolean, nullable=False, default=False)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TarjetaCredito usuario={self.usuario_id} {self.marca} ****{self.ultimos4}>'
 
 
 class Turno(db.Model):

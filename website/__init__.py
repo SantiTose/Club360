@@ -255,6 +255,7 @@ def create_app(config_name='development'):
         _ensure_usuario_reset_password_columns()
         _ensure_usuario_edad_columns()
         _ensure_usuario_tarjeta_columns()
+        _ensure_tarjetas_credito_table()
         _drop_usuario_dni_unique_constraint()
         _ensure_reserva_qr_columns()
         _ensure_reserva_tipo_clase_column()
@@ -644,6 +645,59 @@ def _ensure_usuario_tarjeta_columns():
         if agregar_saldo:
             db.session.execute(text("UPDATE usuarios SET tarjeta_credito_saldo = 100000 WHERE tipo_usuario = 'cliente'"))
             db.session.commit()
+
+
+def _ensure_tarjetas_credito_table():
+    inspector = inspect(db.engine)
+    if 'tarjetas_credito' not in inspector.get_table_names():
+        db.session.execute(text("""
+            CREATE TABLE tarjetas_credito (
+                id INTEGER NOT NULL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                marca VARCHAR(20) NOT NULL,
+                ultimos4 VARCHAR(4) NOT NULL,
+                vencimiento DATE NOT NULL,
+                saldo FLOAT NOT NULL DEFAULT 100000,
+                es_principal BOOLEAN NOT NULL DEFAULT 0,
+                fecha_creacion DATETIME NOT NULL,
+                fecha_actualizacion DATETIME,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios (id)
+            )
+        """))
+        db.session.commit()
+
+    db.session.execute(text("""
+        INSERT INTO tarjetas_credito (
+            usuario_id,
+            marca,
+            ultimos4,
+            vencimiento,
+            saldo,
+            es_principal,
+            fecha_creacion,
+            fecha_actualizacion
+        )
+        SELECT
+            usuarios.id,
+            usuarios.tarjeta_credito_marca,
+            usuarios.tarjeta_credito_ultimos4,
+            usuarios.tarjeta_credito_vencimiento,
+            usuarios.tarjeta_credito_saldo,
+            1,
+            COALESCE(usuarios.fecha_creacion, CURRENT_TIMESTAMP),
+            COALESCE(usuarios.fecha_actualizacion, CURRENT_TIMESTAMP)
+        FROM usuarios
+        WHERE usuarios.tipo_usuario = 'cliente'
+            AND usuarios.tarjeta_credito_marca IS NOT NULL
+            AND usuarios.tarjeta_credito_ultimos4 IS NOT NULL
+            AND usuarios.tarjeta_credito_vencimiento IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM tarjetas_credito
+                WHERE tarjetas_credito.usuario_id = usuarios.id
+            )
+    """))
+    db.session.commit()
 
 
 def _drop_usuario_dni_unique_constraint():

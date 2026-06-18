@@ -16,6 +16,7 @@ from website.models import (
     ListaEspera,
     Suspension,
     CreditoCliente,
+    TarjetaCredito,
 )
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta, date
@@ -194,6 +195,7 @@ def init_database():
         
         # Limpiar datos existentes
         db.session.query(CreditoCliente).delete()
+        db.session.query(TarjetaCredito).delete()
         db.session.query(ListaEspera).delete()
         db.session.query(Suspension).delete()
         db.session.query(Reserva).delete()
@@ -289,6 +291,16 @@ def init_database():
         )
 
         db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida])
+        db.session.commit()
+        for cliente in [cliente1, cliente2, pedro_sin_fondos, paulina_suspendida]:
+            db.session.add(TarjetaCredito(
+                usuario_id=cliente.id,
+                marca=cliente.tarjeta_credito_marca,
+                ultimos4=cliente.tarjeta_credito_ultimos4,
+                vencimiento=cliente.tarjeta_credito_vencimiento,
+                saldo=cliente.tarjeta_credito_saldo,
+                es_principal=True,
+            ))
         db.session.commit()
         _crear_suspensiones_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)

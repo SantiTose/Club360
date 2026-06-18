@@ -186,6 +186,24 @@
                     <small class="form-text" data-validation-for="tarjeta_vencimiento" hidden>Debes ingresar una fecha de vencimiento valida</small>
                 </div>
 
+                <div class="form-group">
+                    <label for="tarjeta_cvv" class="form-label">CVV</label>
+                    <input
+                        type="text"
+                        id="tarjeta_cvv"
+                        name="tarjeta_cvv"
+                        class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-9]{3}"
+                        maxlength="3"
+                        data-validation-message="El codigo de seguridad debe tener 3 digitos"
+                        data-helper-message="3 digitos"
+                        required
+                    >
+                    <small class="form-text" data-validation-for="tarjeta_cvv">3 digitos</small>
+                </div>
+
                 <button type="submit" class="btn btn-primary btn-block">
                     Registrar
                 </button>

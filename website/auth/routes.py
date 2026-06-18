@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from website.auth import auth_bp
 from website import db
-from website.models import Usuario, TipoUsuario, EstadoUsuario
+from website.models import Usuario, TipoUsuario, EstadoUsuario, TarjetaCredito
 from website.services import enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
@@ -38,6 +38,12 @@ def _parsear_fecha_nacimiento(fecha_raw):
 def _edad(fecha_nacimiento):
     hoy = date.today()
     return hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
+
+
+def _validar_nombre_o_apellido(valor, etiqueta):
+    if len(valor) < 2 or len(valor) > 20:
+        return f'El {etiqueta} debe tener entre 2 y 20 caracteres'
+    return None
 
 
 def _tarjeta_es_valida(numero):
@@ -107,8 +113,9 @@ def _normalizar_tarjeta_credito(tarjeta_raw):
     return _marca_tarjeta(numero), numero[-4:], None
 
 
-def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw):
+def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw, cvv_raw):
     numero = re.sub(r'\D', '', tarjeta_raw or '')
+    cvv = (cvv_raw or '').strip()
 
     if not numero:
         return None, None, 'Debes ingresar una tarjeta de credito'
@@ -118,8 +125,66 @@ def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw):
         return None, None, 'El numero de tarjeta no es valido'
     if not _vencimiento_tarjeta_es_valido(vencimiento_raw):
         return None, None, 'La fecha de vencimiento no es valida'
+    if not re.match(r'^\d{3}$', cvv):
+        return None, None, 'El codigo de seguridad debe tener 3 digitos'
 
     return _marca_tarjeta(numero), numero[-4:], None
+
+
+def _tarjetas_del_cliente(usuario):
+    return (
+        TarjetaCredito.query
+        .filter_by(usuario_id=usuario.id)
+        .order_by(TarjetaCredito.es_principal.desc(), TarjetaCredito.fecha_creacion.asc(), TarjetaCredito.id.asc())
+        .all()
+    )
+
+
+def _sincronizar_tarjeta_principal(usuario):
+    principal = (
+        TarjetaCredito.query
+        .filter_by(usuario_id=usuario.id, es_principal=True)
+        .order_by(TarjetaCredito.fecha_creacion.asc(), TarjetaCredito.id.asc())
+        .first()
+    )
+    if not principal:
+        principal = (
+            TarjetaCredito.query
+            .filter_by(usuario_id=usuario.id)
+            .order_by(TarjetaCredito.fecha_creacion.asc(), TarjetaCredito.id.asc())
+            .first()
+        )
+
+    if not principal:
+        usuario.tarjeta_credito_marca = None
+        usuario.tarjeta_credito_ultimos4 = None
+        usuario.tarjeta_credito_vencimiento = None
+        return
+
+    TarjetaCredito.query.filter_by(usuario_id=usuario.id).update({'es_principal': False})
+    principal.es_principal = True
+    usuario.tarjeta_credito_marca = principal.marca
+    usuario.tarjeta_credito_ultimos4 = principal.ultimos4
+    usuario.tarjeta_credito_vencimiento = principal.vencimiento
+    usuario.tarjeta_credito_saldo = principal.saldo
+
+
+def _asegurar_tarjeta_legacy(usuario):
+    if _tarjetas_del_cliente(usuario):
+        return
+
+    if not usuario.tarjeta_credito_marca or not usuario.tarjeta_credito_ultimos4 or not usuario.tarjeta_credito_vencimiento:
+        return
+
+    db.session.add(TarjetaCredito(
+        usuario_id=usuario.id,
+        marca=usuario.tarjeta_credito_marca,
+        ultimos4=usuario.tarjeta_credito_ultimos4,
+        vencimiento=usuario.tarjeta_credito_vencimiento,
+        saldo=usuario.tarjeta_credito_saldo or 100000.0,
+        es_principal=True,
+    ))
+    db.session.commit()
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -132,6 +197,7 @@ def register():
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
         tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
         tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
+        tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         
@@ -139,11 +205,13 @@ def register():
         field_errors = {}
         
         # Validaciones
-        if not nombre:
-            field_errors['nombre'] = 'Debes ingresar tu nombre'
+        error_nombre = _validar_nombre_o_apellido(nombre, 'nombre')
+        if error_nombre:
+            field_errors['nombre'] = error_nombre
 
-        if not apellido:
-            field_errors['apellido'] = 'Debes ingresar tu apellido'
+        error_apellido = _validar_nombre_o_apellido(apellido, 'apellido')
+        if error_apellido:
+            field_errors['apellido'] = error_apellido
         
         if not dni or not re.match(r'^\d{8}$', dni):
             field_errors['dni'] = 'El número de documento debe contener 8 caracteres numéricos.'
@@ -158,6 +226,7 @@ def register():
         tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
             tarjeta_credito_raw,
             tarjeta_vencimiento_raw,
+            tarjeta_cvv_raw,
         )
         if error_tarjeta:
             field_errors['tarjeta_credito'] = error_tarjeta
@@ -205,6 +274,15 @@ def register():
             )
             
             db.session.add(nuevo_usuario)
+            db.session.flush()
+            db.session.add(TarjetaCredito(
+                usuario_id=nuevo_usuario.id,
+                marca=tarjeta_marca,
+                ultimos4=tarjeta_ultimos4,
+                vencimiento=tarjeta_vencimiento,
+                saldo=100000.0,
+                es_principal=True,
+            ))
             db.session.commit()
             
             flash('Tu cuenta se creo exitosamente', 'success')
@@ -278,6 +356,142 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@auth_bp.route('/perfil/editar', methods=['GET', 'POST'])
+@login_required
+def editar_perfil():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Solo los clientes pueden editar su perfil desde esta pantalla', 'error')
+        return redirect(url_for('dashboard'))
+
+    _asegurar_tarjeta_legacy(current_user)
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'perfil')
+
+        if action == 'perfil':
+            nombre = request.form.get('nombre', '').strip()
+            apellido = request.form.get('apellido', '').strip()
+            email = request.form.get('email', '').strip().lower()
+            fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
+            field_errors = {}
+
+            error_nombre = _validar_nombre_o_apellido(nombre, 'nombre')
+            if error_nombre:
+                field_errors['nombre'] = error_nombre
+
+            error_apellido = _validar_nombre_o_apellido(apellido, 'apellido')
+            if error_apellido:
+                field_errors['apellido'] = error_apellido
+
+            fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
+            if not fecha_nacimiento:
+                field_errors['fecha_nacimiento'] = 'Debes ingresar una fecha de nacimiento válida'
+            elif _edad(fecha_nacimiento) < 18:
+                field_errors['fecha_nacimiento'] = 'La fecha de nacimiento debe corresponder a una persona mayor de edad'
+
+            if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+                field_errors['email'] = 'El email no es válido'
+            elif Usuario.query.filter(Usuario.email == email, Usuario.id != current_user.id).first():
+                field_errors['email'] = 'El email ya está registrado'
+
+            if field_errors:
+                return render_template(
+                    'auth/editar_perfil.html',
+                    field_errors=field_errors,
+                    form_data={
+                        'nombre': nombre,
+                        'apellido': apellido,
+                        'email': email,
+                        'fecha_nacimiento': fecha_nacimiento_raw,
+                    },
+                    tarjetas=_tarjetas_del_cliente(current_user),
+                )
+
+            current_user.nombre = nombre
+            current_user.apellido = apellido
+            current_user.email = email
+            current_user.fecha_nacimiento = fecha_nacimiento
+            current_user.autorizacion_menor = False
+            db.session.commit()
+            flash('Perfil actualizado correctamente', 'success')
+            return redirect(url_for('dashboard'))
+
+        if action in {'agregar_tarjeta', 'editar_tarjeta'}:
+            tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
+            tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
+            tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
+            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
+                tarjeta_credito_raw,
+                tarjeta_vencimiento_raw,
+                tarjeta_cvv_raw,
+            )
+            tarjeta_vencimiento = _parsear_vencimiento_tarjeta(tarjeta_vencimiento_raw) if not error_tarjeta else None
+
+            if error_tarjeta:
+                flash(error_tarjeta, 'error')
+                return redirect(url_for('auth.editar_perfil'))
+
+            if action == 'editar_tarjeta':
+                tarjeta = TarjetaCredito.query.filter_by(
+                    id=request.form.get('tarjeta_id'),
+                    usuario_id=current_user.id,
+                ).first_or_404()
+                tarjeta.marca = tarjeta_marca
+                tarjeta.ultimos4 = tarjeta_ultimos4
+                tarjeta.vencimiento = tarjeta_vencimiento
+                flash('Tarjeta actualizada correctamente', 'success')
+            else:
+                es_primera_tarjeta = not TarjetaCredito.query.filter_by(usuario_id=current_user.id).first()
+                tarjeta = TarjetaCredito(
+                    usuario_id=current_user.id,
+                    marca=tarjeta_marca,
+                    ultimos4=tarjeta_ultimos4,
+                    vencimiento=tarjeta_vencimiento,
+                    saldo=100000.0,
+                    es_principal=es_primera_tarjeta,
+                )
+                db.session.add(tarjeta)
+                flash('Tarjeta agregada correctamente', 'success')
+
+            db.session.flush()
+            _sincronizar_tarjeta_principal(current_user)
+            db.session.commit()
+            return redirect(url_for('auth.editar_perfil'))
+
+        if action == 'quitar_tarjeta':
+            tarjetas = _tarjetas_del_cliente(current_user)
+            if len(tarjetas) <= 1:
+                flash('Para quitar una tarjeta debe existir otra registrada', 'error')
+                return redirect(url_for('auth.editar_perfil'))
+
+            tarjeta = TarjetaCredito.query.filter_by(
+                id=request.form.get('tarjeta_id'),
+                usuario_id=current_user.id,
+            ).first_or_404()
+            db.session.delete(tarjeta)
+            db.session.flush()
+            _sincronizar_tarjeta_principal(current_user)
+            db.session.commit()
+            flash('Tarjeta quitada correctamente', 'success')
+            return redirect(url_for('auth.editar_perfil'))
+
+        flash('Acción no válida', 'error')
+        return redirect(url_for('auth.editar_perfil'))
+
+    fecha_formateada = current_user.fecha_nacimiento.isoformat() if current_user.fecha_nacimiento else ''
+    return render_template(
+        'auth/editar_perfil.html',
+        field_errors={},
+        form_data={
+            'nombre': current_user.nombre,
+            'apellido': current_user.apellido,
+            'email': current_user.email,
+            'fecha_nacimiento': fecha_formateada,
+        },
+        tarjetas=_tarjetas_del_cliente(current_user),
+    )
+
+
 @auth_bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
     """Restablecer contraseña."""
@@ -323,14 +537,18 @@ def crear_usuario():
         dni = request.form.get('dni', '').strip()
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
         tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
+        tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
+        tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
         email = request.form.get('email', '').strip().lower()
         tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
 
         field_errors = {}
-        if not nombre or len(nombre) < 2:
-            field_errors['nombre'] = 'El nombre debe tener al menos 2 caracteres'
-        if not apellido or len(apellido) < 2:
-            field_errors['apellido'] = 'El apellido debe tener al menos 2 caracteres'
+        error_nombre = _validar_nombre_o_apellido(nombre, 'nombre')
+        if error_nombre:
+            field_errors['nombre'] = error_nombre
+        error_apellido = _validar_nombre_o_apellido(apellido, 'apellido')
+        if error_apellido:
+            field_errors['apellido'] = error_apellido
         if not dni or not re.match(r'^\d{8}$', dni):
             field_errors['dni'] = 'El DNI debe tener 8 dígitos'
         fecha_nacimiento = _parsear_fecha_nacimiento(fecha_nacimiento_raw)
@@ -342,10 +560,17 @@ def crear_usuario():
             field_errors['email'] = 'El email no es válido'
 
         tarjeta_marca, tarjeta_ultimos4, error_tarjeta = (None, None, None)
+        tarjeta_vencimiento = None
         if tipo_usuario == TipoUsuario.CLIENTE:
-            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_tarjeta_credito(tarjeta_credito_raw)
+            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
+                tarjeta_credito_raw,
+                tarjeta_vencimiento_raw,
+                tarjeta_cvv_raw,
+            )
             if error_tarjeta:
                 field_errors['tarjeta_credito'] = error_tarjeta
+            else:
+                tarjeta_vencimiento = _parsear_vencimiento_tarjeta(tarjeta_vencimiento_raw)
 
         tipos_permitidos = {TipoUsuario.CLIENTE}
         if _es_admin(current_user):
@@ -365,6 +590,7 @@ def crear_usuario():
                     'dni': dni,
                     'fecha_nacimiento': fecha_nacimiento_raw,
                     'tarjeta_credito': tarjeta_credito_raw,
+                    'tarjeta_vencimiento': tarjeta_vencimiento_raw,
                     'email': email,
                     'tipo_usuario': tipo_usuario,
                 },
@@ -381,6 +607,7 @@ def crear_usuario():
             autorizacion_menor=False,
             tarjeta_credito_marca=tarjeta_marca,
             tarjeta_credito_ultimos4=tarjeta_ultimos4,
+            tarjeta_credito_vencimiento=tarjeta_vencimiento,
             tarjeta_credito_saldo=100000.0 if tipo_usuario == TipoUsuario.CLIENTE else 0.0,
             email=email,
             password=generate_password_hash(password_temporal),
@@ -389,6 +616,16 @@ def crear_usuario():
             requiere_cambio_password=True,
         )
         db.session.add(nuevo_usuario)
+        db.session.flush()
+        if tipo_usuario == TipoUsuario.CLIENTE:
+            db.session.add(TarjetaCredito(
+                usuario_id=nuevo_usuario.id,
+                marca=tarjeta_marca,
+                ultimos4=tarjeta_ultimos4,
+                vencimiento=tarjeta_vencimiento,
+                saldo=100000.0,
+                es_principal=True,
+            ))
         db.session.commit()
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))

@@ -2105,6 +2105,27 @@ textarea:focus {
     padding: 1.5rem;
 }
 
+.dashboard-edit-profile {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(31, 79, 95, 0.12);
+    color: var(--petrol-dark);
+    box-shadow: var(--shadow-sm);
+}
+
+.dashboard-edit-profile:hover {
+    background: var(--petrol-soft);
+    color: var(--petrol-dark);
+}
+
 .dashboard-profile-card::before,
 .dashboard-stat-card::before,
 .dashboard-panel::before {
@@ -2180,6 +2201,127 @@ textarea:focus {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
+}
+
+.profile-edit-page {
+    display: grid;
+    gap: 1.1rem;
+    padding: 1rem 0 2rem;
+}
+
+.profile-edit-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.profile-edit-header h1 {
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+    margin: 0;
+}
+
+.profile-edit-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.profile-edit-panel {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(1.1rem, 2vw, 1.5rem);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(14px);
+}
+
+.profile-edit-panel h2 {
+    margin-bottom: 1rem;
+}
+
+.profile-card-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.profile-card-item,
+.profile-empty-state,
+.profile-add-card-form {
+    position: relative;
+    z-index: 1;
+    padding: 1rem;
+    border: 1px solid rgba(31, 79, 95, 0.1);
+    border-radius: 16px;
+    background: rgba(247, 250, 249, 0.82);
+}
+
+.profile-card-summary {
+    display: grid;
+    gap: 0.18rem;
+    margin-bottom: 0.85rem;
+}
+
+.profile-card-summary strong,
+.profile-empty-state strong {
+    color: var(--charcoal);
+}
+
+.profile-card-summary span,
+.profile-empty-state span {
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.profile-card-inline-form {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.profile-card-field-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.55fr) minmax(90px, 0.35fr);
+    gap: 0.7rem;
+}
+
+.profile-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.profile-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--petrol);
+}
+
+.profile-card-actions,
+.profile-card-remove-form {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 0.65rem;
+}
+
+.profile-card-remove-form {
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(31, 79, 95, 0.08);
+}
+
+.profile-add-card-form {
+    margin-top: 1rem;
+}
+
+.profile-add-card-form h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.9rem;
 }
 
 .dashboard-stats-grid-compact {
@@ -2575,6 +2717,7 @@ tbody tr:hover {
     .dashboard-hero,
     .dashboard-stats-grid,
     .dashboard-main-grid,
+    .profile-edit-grid,
     .suspension-card,
     .suspension-detail-grid {
         grid-template-columns: 1fr;
@@ -2685,8 +2828,18 @@ tbody tr:hover {
     .dashboard-hero-copy,
     .dashboard-profile-card,
     .dashboard-panel,
-    .dashboard-stat-card {
+    .dashboard-stat-card,
+    .profile-edit-panel {
         border-radius: 18px;
+    }
+
+    .profile-edit-header {
+        align-items: start;
+        flex-direction: column;
+    }
+
+    .profile-card-field-grid {
+        grid-template-columns: 1fr;
     }
 
     .dashboard-actions-grid {
