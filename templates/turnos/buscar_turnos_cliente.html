@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Buscar Turnos de Cliente - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <h2>Buscar Turnos</h2>
+            <p class="text-muted">Ingresá el DNI del cliente para ver sus turnos reservados y registrar pagos en efectivo.</p>
+        </div>
+    </div>
+
+    <div class="calendar-toolbar-card">
+        <form method="GET" action="{{ url_for('turnos.buscar_turnos_cliente_empleado') }}" class="form" style="max-width: 520px;">
+            <div class="form-group">
+                <label for="dni">DNI del cliente</label>
+                <input
+                    id="dni"
+                    name="dni"
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]{8}"
+                    maxlength="8"
+                    class="form-control"
+                    value="{{ dni }}"
+                    placeholder="12345678"
+                    required
+                >
+                <small class="form-text">8 dígitos sin puntos.</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Buscar turnos</button>
+        </form>
+    </div>
+
+    {% if cliente %}
+    <div class="calendar-toolbar-card">
+        <h3>{{ cliente.nombre }} {{ cliente.apellido }}</h3>
+        <p class="text-muted">DNI {{ cliente.dni }} · {{ cliente.email }}</p>
+
+        {% if reservas_info %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Actividad</th>
+                    <th>Fecha y horario</th>
+                    <th>Modalidad</th>
+                    <th>Estado de pago</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in reservas_info %}
+                {% set reserva = item.reserva %}
+                <tr>
+                    <td>{{ reserva.turno.actividad|capitalize }}</td>
+                    <td>
+                        {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}
+                        -
+                        {{ reserva.turno.hora_fin.strftime('%H:%M') }}
+                    </td>
+                    <td>{{ 'Abonada' if reserva.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                    <td>
+                        {% if item.deuda > 0 %}
+                            Debe ${{ '%.2f'|format(item.deuda) }}
+                        {% else %}
+                            Pago completo
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.deuda > 0 %}
+                        <form
+                            method="POST"
+                            action="{{ url_for('turnos.registrar_pago_efectivo_turno_cliente', usuario_id=cliente.id, reserva_id=reserva.id) }}"
+                            data-confirm="true"
+                            data-confirm-title="Registrar pago en efectivo"
+                            data-confirm-message="Vas a registrar el pago presencial de ${{ '%.2f'|format(item.deuda) }} para este turno."
+                            data-confirm-action="Registrar"
+                        >
+                            <button type="submit" class="btn btn-success btn-sm">Pago con efectivo</button>
+                        </form>
+                        {% else %}
+                        <span class="badge badge-success">Confirmado</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="calendar-empty-state" style="margin-top: 0;">
+            <h3>Este cliente no tiene turnos reservados vigentes.</h3>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

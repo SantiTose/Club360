@@ -25,8 +25,10 @@
                     <li><a href="{{ url_for('mis_creditos') }}" class="nav-link-pill">Mis Creditos</a></li>
                     <li><a href="{{ url_for('turnos.mis_deudas') }}" class="nav-link-pill">Mis Deudas</a></li>
                     {% endif %}
-                    {% if current_user.tipo_usuario in ['cliente', 'empleado'] %}
+                    {% if current_user.tipo_usuario == 'cliente' %}
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Buscar Turnos</a></li>
+                    {% elif current_user.tipo_usuario == 'empleado' %}
+                    <li><a href="{{ url_for('turnos.buscar_turnos_cliente_empleado') }}" class="nav-link-pill">Buscar Turnos</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
                     <li><a href="{{ url_for('turnos.cobrar_deudas') }}" class="nav-link-pill nav-link-pill-alt">Cobrar Deudas</a></li>

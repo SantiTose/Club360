@@ -1,6 +1,7 @@
 import os
 import secrets
 import calendar
+import re
 from datetime import datetime, timedelta, time
 
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
@@ -722,6 +723,104 @@ def _crear_credito_por_cancelacion_abonada(reserva, turno, pago):
     return credito
 
 
+def _crear_credito_por_cancelacion_admin(reserva, turno, monto, fecha_vencimiento=None):
+    monto = round(float(monto or 0), 2)
+    if monto <= 0:
+        return None
+
+    credito = CreditoCliente(
+        usuario_id=reserva.usuario_id,
+        actividad=turno.actividad,
+        monto=monto,
+        estado=EstadoCredito.DISPONIBLE,
+        fecha_vencimiento=fecha_vencimiento or _vencimiento_credito(datetime.utcnow().date()),
+    )
+    db.session.add(credito)
+    return credito
+
+
+def _restaurar_credito_usado_por_reserva(reserva):
+    credito = (
+        CreditoCliente.query
+        .filter_by(reserva_uso_id=reserva.id, estado=EstadoCredito.USADO)
+        .first()
+    )
+    if not credito:
+        return None
+
+    credito.estado = EstadoCredito.DISPONIBLE
+    credito.reserva_uso_id = None
+    credito.fecha_uso = None
+    return credito
+
+
+def _pagos_de_reserva_por_estado(usuario_id, turno_id, tipo_clase, estados=None):
+    patrones = [
+        f"reserva-{turno_id}-{usuario_id}-%",
+        f"espera-{turno_id}-{usuario_id}-%",
+    ]
+    if tipo_clase == TipoClase.ABONADA:
+        patrones.append(f"abono-%-{turno_id}-{usuario_id}-%")
+
+    query = Pago.query.filter_by(usuario_id=usuario_id, tipo_clase=tipo_clase)
+    if estados:
+        query = query.filter(Pago.estado.in_(estados))
+
+    filtros = [Pago.referencia_transaccion.like(patron) for patron in patrones]
+    return (
+        query
+        .filter(or_(*filtros))
+        .order_by(Pago.fecha_pago.asc(), Pago.id.asc())
+        .all()
+    )
+
+
+def _pagos_pendientes_de_reserva(reserva):
+    return _pagos_de_reserva_por_estado(
+        reserva.usuario_id,
+        reserva.turno_id,
+        reserva.tipo_clase,
+        estados=['pendiente'],
+    )
+
+
+def _registrar_reintegro_admin(usuario, reserva, turno, monto, metodo_pago):
+    monto = round(float(monto or 0), 2)
+    if monto <= 0:
+        return None
+
+    reintegro = Pago(
+        usuario_id=usuario.id,
+        monto=-monto,
+        metodo_pago=metodo_pago,
+        estado='completado',
+        tipo_clase=reserva.tipo_clase,
+        fecha_pago=datetime.utcnow(),
+        referencia_transaccion=f"reintegro-admin-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
+    )
+    db.session.add(reintegro)
+    return reintegro
+
+
+def _descontar_monto_de_pagos_pendientes(pagos, monto):
+    restante = round(float(monto or 0), 2)
+    descontado = 0.0
+
+    for pago in pagos:
+        if restante <= 0:
+            break
+
+        monto_pago = round(float(pago.monto or 0), 2)
+        descuento = min(monto_pago, restante)
+        pago.monto = round(monto_pago - descuento, 2)
+        restante = round(restante - descuento, 2)
+        descontado = round(descontado + descuento, 2)
+        if pago.monto <= 0:
+            db.session.delete(pago)
+
+    return descontado
+
+
 def _obtener_descuento_cupon_abono(usuario, turno):
     fecha_turno = turno.hora_inicio.date()
     if (
@@ -1419,22 +1518,78 @@ def _aplicar_abonos_a_turno(turno):
 
 
 def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
-    """Cancela administrativamente un turno, devuelve pagos y notifica por email."""
+    """Cancela administrativamente un turno puntual, ajusta pagos/créditos y notifica."""
     reservas = Reserva.query.filter_by(turno_id=turno.id).all()
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    resumen = {
+        'reservas_canceladas': len(reservas),
+        'creditos_generados': 0,
+        'creditos_restaurados': 0,
+        'reintegros_generados': 0,
+        'monto_reintegrado': 0.0,
+        'monto_descontado_pendiente': 0.0,
+        'abonos_cancelados': 0,
+    }
+    abonos_afectados = set()
 
     for reserva in reservas:
         usuario = reserva.usuario
-        pago_reserva = _buscar_pago_reserva(reserva.usuario_id, turno.id)
-        if pago_reserva:
-            db.session.add(Pago(
-                usuario_id=usuario.id,
-                monto=-round(abs(pago_reserva.monto), 2),
-                metodo_pago=pago_reserva.metodo_pago,
-                estado='completado',
-                tipo_clase=reserva.tipo_clase,
-                referencia_transaccion=f"reintegro-admin-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}",
-            ))
+        credito_restaurado = _restaurar_credito_usado_por_reserva(reserva)
+        if credito_restaurado:
+            resumen['creditos_restaurados'] += 1
+
+        if _es_reserva_abonada(reserva):
+            abono = reserva.abono
+            if abono:
+                abonos_afectados.add(abono.id)
+
+            monto_clase = _calcular_monto_reserva(
+                turno.actividad,
+                TipoClase.ABONADA,
+                usuario,
+                descuento_porcentaje=abono.descuento_porcentaje if abono else 0.0,
+            )
+
+            if not credito_restaurado:
+                pagos_pendientes = _pagos_pendientes_de_abono(abono) if abono else []
+                if pagos_pendientes:
+                    descontado = _descontar_monto_de_pagos_pendientes(pagos_pendientes, monto_clase)
+                    resumen['monto_descontado_pendiente'] = round(resumen['monto_descontado_pendiente'] + descontado, 2)
+                else:
+                    credito = _crear_credito_por_cancelacion_admin(reserva, turno, monto_clase)
+                    if credito:
+                        resumen['creditos_generados'] += 1
+        else:
+            pagos_completados = _pagos_de_reserva_por_estado(
+                reserva.usuario_id,
+                turno.id,
+                TipoClase.NO_ABONADA,
+                estados=['completado'],
+            )
+            pagos_pendientes = _pagos_de_reserva_por_estado(
+                reserva.usuario_id,
+                turno.id,
+                TipoClase.NO_ABONADA,
+                estados=['pendiente'],
+            )
+
+            for pago_pendiente in pagos_pendientes:
+                db.session.delete(pago_pendiente)
+
+            if not credito_restaurado:
+                monto_pagado = round(sum(max(float(pago.monto or 0), 0.0) for pago in pagos_completados), 2)
+                monto_clase = _calcular_monto_reserva(turno.actividad, TipoClase.NO_ABONADA, usuario)
+                clase_totalmente_paga = monto_pagado >= monto_clase and not pagos_pendientes
+
+                if clase_totalmente_paga:
+                    credito = _crear_credito_por_cancelacion_admin(reserva, turno, monto_clase)
+                    if credito:
+                        resumen['creditos_generados'] += 1
+                elif monto_pagado > 0:
+                    metodo_pago = pagos_completados[-1].metodo_pago if pagos_completados else 'tarjeta_credito'
+                    if _registrar_reintegro_admin(usuario, reserva, turno, monto_pagado, metodo_pago):
+                        resumen['reintegros_generados'] += 1
+                        resumen['monto_reintegrado'] = round(resumen['monto_reintegrado'] + monto_pagado, 2)
 
         asunto = 'Cancelación de turno - Club 360'
         cuerpo = (
@@ -1442,15 +1597,23 @@ def _procesar_cancelacion_admin_con_reintegros(turno, motivo):
             f"Tu turno de {turno.actividad} del {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')} "
             "fue cancelado por administración.\n"
             f"Motivo: {motivo}\n\n"
-            "Si corresponde, se registró la devolución de tu pago."
+            "Si correspondía, se ajustó tu pago pendiente, reintegro o crédito."
         )
         enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
 
+        db.session.delete(reserva)
+
+    for abono_id in abonos_afectados:
+        if _cancelar_abono_si_sin_reservas_futuras(abono_id):
+            resumen['abonos_cancelados'] += 1
+
+    turno.cupos_disponibles = turno.capacidad_maxima
     # Limpia listas de espera porque el turno deja de existir operativamente.
     ListaEspera.query.filter_by(turno_id=turno.id).delete(synchronize_session=False)
+    return resumen
 
 
-def _obtener_turnos_recurrentes_para_cancelacion_admin(turno):
+def _obtener_turnos_recurrentes_activos(turno):
     inicio = turno.hora_inicio.time()
     fin = turno.hora_fin.time()
     dia_semana = turno.hora_inicio.weekday()
@@ -1458,7 +1621,7 @@ def _obtener_turnos_recurrentes_para_cancelacion_admin(turno):
     turnos_misma_actividad = (
         Turno.query
         .filter_by(actividad=turno.actividad, cancelado=False)
-        .filter(Turno.hora_inicio > _ahora_local())
+        .filter(Turno.hora_fin >= _ahora_local())
         .order_by(Turno.hora_inicio.asc())
         .all()
     )
@@ -1470,24 +1633,20 @@ def _obtener_turnos_recurrentes_para_cancelacion_admin(turno):
     ]
 
 
-def _obtener_turnos_recurrentes_cancelados_para_reanudacion_admin(turno):
-    inicio = turno.hora_inicio.time()
-    fin = turno.hora_fin.time()
-    dia_semana = turno.hora_inicio.weekday()
+def _sumar_resumen_cancelacion_admin(total, parcial):
+    for clave in (
+        'reservas_canceladas',
+        'creditos_generados',
+        'creditos_restaurados',
+        'reintegros_generados',
+        'abonos_cancelados',
+    ):
+        total[clave] += parcial.get(clave, 0)
 
-    turnos_misma_actividad = (
-        Turno.query
-        .filter_by(actividad=turno.actividad, cancelado=True)
-        .filter(Turno.hora_fin >= datetime.utcnow())
-        .order_by(Turno.hora_inicio.asc())
-        .all()
-    )
-    return [
-        turno_recurrente for turno_recurrente in turnos_misma_actividad
-        if turno_recurrente.hora_inicio.weekday() == dia_semana
-        and turno_recurrente.hora_inicio.time() == inicio
-        and turno_recurrente.hora_fin.time() == fin
-    ]
+    for clave in ('monto_reintegrado', 'monto_descontado_pendiente'):
+        total[clave] = round(total[clave] + parcial.get(clave, 0.0), 2)
+
+    return total
 
 
 def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
@@ -1670,6 +1829,7 @@ def eventos_turnos():
         turnos = (
             Turno.query
             .filter(Turno.hora_fin >= datetime.utcnow())
+            .filter(Turno.cancelado == False)
             .order_by(Turno.hora_inicio.asc())
             .all()
         )
@@ -1679,15 +1839,15 @@ def eventos_turnos():
                 'title': f"{turno.actividad.upper()} ({turno.cupos_disponibles}/{turno.capacidad_maxima})",
                 'start': turno.hora_inicio.isoformat(),
                 'end': turno.hora_fin.isoformat(),
-                'backgroundColor': '#455a64' if turno.cancelado else '#1565c0',
-                'borderColor': '#263238' if turno.cancelado else '#0d47a1',
+                'backgroundColor': '#1565c0',
+                'borderColor': '#0d47a1',
                 'extendedProps': {
-                    'cancelado': turno.cancelado,
-                    'motivo_cancelacion': turno.motivo_cancelacion or '',
+                    'cancelado': False,
+                    'motivo_cancelacion': '',
                     'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
                     'editar_url': url_for('turnos.editar_turno', turno_id=turno.id),
                     'cancelar_url': url_for('turnos.cancelar_turno_admin', turno_id=turno.id),
-                    'reanudar_url': url_for('turnos.reanudar_turno_admin', turno_id=turno.id),
+                    'eliminar_clase_url': url_for('turnos.eliminar_clase_admin', turno_id=turno.id),
                     'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                     'sin_cupos': turno.cupos_disponibles <= 0,
                 }
@@ -2133,6 +2293,88 @@ def mis_turnos():
         flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
     return render_template('turnos/mis_turnos.html', reservas=reservas)
+
+
+@turnos_bp.route('/buscar-turnos-cliente')
+@login_required
+def buscar_turnos_cliente_empleado():
+    if current_user.tipo_usuario != TipoUsuario.EMPLEADO:
+        flash('Esta sección está disponible solo para empleados', 'error')
+        return redirect(url_for('dashboard'))
+
+    dni = request.args.get('dni', '').strip()
+    cliente = None
+    reservas_info = []
+
+    if dni:
+        if not re.match(r'^\d{8}$', dni):
+            flash('El DNI debe tener 8 dígitos sin puntos', 'error')
+        else:
+            cliente = Usuario.query.filter_by(dni=dni, tipo_usuario=TipoUsuario.CLIENTE).first()
+            if not cliente:
+                flash('No existe un cliente registrado con ese DNI', 'error')
+            else:
+                reservas = (
+                    Reserva.query
+                    .join(Turno, Reserva.turno_id == Turno.id)
+                    .filter(Reserva.usuario_id == cliente.id)
+                    .filter(Turno.hora_fin >= _ahora_local())
+                    .order_by(Turno.hora_inicio.asc())
+                    .all()
+                )
+                for reserva in reservas:
+                    pagos_pendientes = _pagos_pendientes_de_reserva(reserva)
+                    deuda = round(sum(pago.monto for pago in pagos_pendientes), 2)
+                    reservas_info.append({
+                        'reserva': reserva,
+                        'deuda': deuda,
+                        'pagos_pendientes': pagos_pendientes,
+                    })
+
+    return render_template(
+        'turnos/buscar_turnos_cliente.html',
+        dni=dni,
+        cliente=cliente,
+        reservas_info=reservas_info,
+    )
+
+
+@turnos_bp.route('/buscar-turnos-cliente/<int:usuario_id>/<int:reserva_id>/pagar-efectivo', methods=['POST'])
+@login_required
+def registrar_pago_efectivo_turno_cliente(usuario_id, reserva_id):
+    if current_user.tipo_usuario != TipoUsuario.EMPLEADO:
+        flash('Esta acción está disponible solo para empleados', 'error')
+        return redirect(url_for('dashboard'))
+
+    cliente = Usuario.query.get_or_404(usuario_id)
+    reserva = Reserva.query.get_or_404(reserva_id)
+    if cliente.tipo_usuario != TipoUsuario.CLIENTE or reserva.usuario_id != cliente.id:
+        flash('La reserva indicada no corresponde al cliente.', 'error')
+        return redirect(url_for('turnos.buscar_turnos_cliente_empleado'))
+
+    pagos_pendientes = _pagos_pendientes_de_reserva(reserva)
+    total = round(sum(pago.monto for pago in pagos_pendientes), 2)
+    if total <= 0:
+        flash('Ese turno no tiene deuda pendiente.', 'info')
+        return redirect(url_for('turnos.buscar_turnos_cliente_empleado', dni=cliente.dni))
+
+    for pago in pagos_pendientes:
+        pago.estado = 'completado'
+        pago.metodo_pago = 'efectivo'
+        pago.fecha_pago = datetime.utcnow()
+        if not pago.referencia_transaccion:
+            pago.referencia_transaccion = f"efectivo-turno-{reserva.turno_id}-{cliente.id}-{int(datetime.utcnow().timestamp())}"
+
+    _activar_abonos_pendientes_sin_deuda(cliente)
+    _reactivar_si_sin_deudas(cliente)
+    db.session.commit()
+
+    flash(
+        f'Se registró pago en efectivo por ${total:.2f} para el turno de '
+        f'{reserva.turno.actividad.upper()} del {reserva.turno.hora_inicio.strftime("%d/%m/%Y %H:%M")}.',
+        'success',
+    )
+    return redirect(url_for('turnos.buscar_turnos_cliente_empleado', dni=cliente.dni))
 
 
 @turnos_bp.route('/buscar/<int:turno_id>')
@@ -2703,24 +2945,89 @@ def cancelar_turno_admin(turno_id):
         flash('Debes indicar el motivo de la cancelación', 'error')
         return redirect(url_for('turnos.administrar_turnos'))
 
-    turnos_a_cancelar = _obtener_turnos_recurrentes_para_cancelacion_admin(turno)
-    if not turnos_a_cancelar:
-        flash('No hay turnos futuros activos para cancelar en esa franja semanal', 'info')
+    if turno.hora_fin < _ahora_local():
+        flash('No se puede cancelar administrativamente un turno ya finalizado', 'error')
         return redirect(url_for('turnos.administrar_turnos'))
 
-    for turno_recurrente in turnos_a_cancelar:
-        _procesar_cancelacion_admin_con_reintegros(turno_recurrente, motivo)
-        turno_recurrente.cancelado = True
-        turno_recurrente.motivo_cancelacion = motivo
-
+    actividad = turno.actividad.upper()
+    fecha = turno.hora_inicio.strftime("%d/%m/%Y")
+    hora_inicio = turno.hora_inicio.strftime("%H:%M")
+    hora_fin = turno.hora_fin.strftime("%H:%M")
+    resumen = _procesar_cancelacion_admin_con_reintegros(turno, motivo)
+    db.session.delete(turno)
     db.session.commit()
-    dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
+
     flash(
-        f'Se cancelaron {len(turnos_a_cancelar)} turnos de {turno.actividad.upper()} '
-        f'los {dia_semana} de {turno.hora_inicio.strftime("%H:%M")} a {turno.hora_fin.strftime("%H:%M")}, '
-        'con notificaciones y devoluciones procesadas.',
+        f'Se canceló y eliminó el turno de {actividad} del {fecha} '
+        f'de {hora_inicio} a {hora_fin}. '
+        f'Reservas canceladas: {resumen["reservas_canceladas"]}. '
+        f'Créditos generados: {resumen["creditos_generados"]}. '
+        f'Créditos restaurados: {resumen["creditos_restaurados"]}. '
+        f'Reintegros: ${resumen["monto_reintegrado"]:.2f}. '
+        f'Descontado de pagos pendientes: ${resumen["monto_descontado_pendiente"]:.2f}.',
         'success',
     )
+    if resumen['abonos_cancelados']:
+        flash(f'Se dieron de baja {resumen["abonos_cancelados"]} abono(s) que quedaron sin clases futuras.', 'info')
+    return redirect(url_for('turnos.administrar_turnos'))
+
+
+@turnos_bp.route('/eliminar-clase-admin/<int:turno_id>', methods=['POST'])
+@login_required
+def eliminar_clase_admin(turno_id):
+    if not _es_admin(current_user):
+        flash('Solo administradores pueden eliminar clases', 'error')
+        return redirect(url_for('index'))
+
+    turno = Turno.query.get_or_404(turno_id)
+    if turno.cancelado:
+        flash('El turno ya no está activo', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    motivo = request.form.get('motivo', '').strip()
+    if not motivo:
+        flash('Debes indicar el motivo de la eliminación de la clase', 'error')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    turnos_a_eliminar = _obtener_turnos_recurrentes_activos(turno)
+    if not turnos_a_eliminar:
+        flash('No hay turnos activos para eliminar en esa clase.', 'info')
+        return redirect(url_for('turnos.administrar_turnos'))
+
+    actividad = turno.actividad.upper()
+    dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
+    hora_inicio = turno.hora_inicio.strftime("%H:%M")
+    hora_fin = turno.hora_fin.strftime("%H:%M")
+    resumen_total = {
+        'reservas_canceladas': 0,
+        'creditos_generados': 0,
+        'creditos_restaurados': 0,
+        'reintegros_generados': 0,
+        'monto_reintegrado': 0.0,
+        'monto_descontado_pendiente': 0.0,
+        'abonos_cancelados': 0,
+    }
+
+    for turno_recurrente in turnos_a_eliminar:
+        resumen = _procesar_cancelacion_admin_con_reintegros(turno_recurrente, motivo)
+        _sumar_resumen_cancelacion_admin(resumen_total, resumen)
+        db.session.delete(turno_recurrente)
+
+    db.session.commit()
+
+    flash(
+        f'Se eliminó la clase {actividad} de los {dia_semana} '
+        f'de {hora_inicio} a {hora_fin}. '
+        f'Turnos eliminados: {len(turnos_a_eliminar)}. '
+        f'Reservas canceladas: {resumen_total["reservas_canceladas"]}. '
+        f'Créditos generados: {resumen_total["creditos_generados"]}. '
+        f'Créditos restaurados: {resumen_total["creditos_restaurados"]}. '
+        f'Reintegros: ${resumen_total["monto_reintegrado"]:.2f}. '
+        f'Descontado de pagos pendientes: ${resumen_total["monto_descontado_pendiente"]:.2f}.',
+        'success',
+    )
+    if resumen_total['abonos_cancelados']:
+        flash(f'Se dieron de baja {resumen_total["abonos_cancelados"]} abono(s) que quedaron sin clases futuras.', 'info')
     return redirect(url_for('turnos.administrar_turnos'))
 
 
@@ -2731,25 +3038,5 @@ def reanudar_turno_admin(turno_id):
         flash('Solo administradores pueden reanudar turnos', 'error')
         return redirect(url_for('index'))
 
-    turno = Turno.query.get_or_404(turno_id)
-    if not turno.cancelado:
-        flash('El turno ya estaba activo', 'info')
-        return redirect(url_for('turnos.administrar_turnos'))
-
-    turnos_a_reanudar = _obtener_turnos_recurrentes_cancelados_para_reanudacion_admin(turno)
-    if not turnos_a_reanudar:
-        flash('No hay turnos futuros cancelados para reanudar en esa franja semanal', 'info')
-        return redirect(url_for('turnos.administrar_turnos'))
-
-    for turno_recurrente in turnos_a_reanudar:
-        turno_recurrente.cancelado = False
-        turno_recurrente.motivo_cancelacion = None
-
-    db.session.commit()
-    dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
-    flash(
-        f'Se reanudaron {len(turnos_a_reanudar)} turnos de {turno.actividad.upper()} '
-        f'los {dia_semana} de {turno.hora_inicio.strftime("%H:%M")} a {turno.hora_fin.strftime("%H:%M")}.',
-        'success',
-    )
+    flash('Los turnos cancelados por administración se eliminan. Para reanudarlo, creá un turno nuevo.', 'warning')
     return redirect(url_for('turnos.administrar_turnos'))
