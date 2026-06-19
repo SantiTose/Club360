@@ -4,7 +4,7 @@ import calendar
 import re
 from datetime import datetime, timedelta, time
 
-from flask import render_template, redirect, url_for, request, flash, jsonify, current_app
+from flask import render_template, redirect, url_for, request, flash, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
 
@@ -782,6 +782,20 @@ def _pagos_pendientes_de_reserva(reserva):
         reserva.tipo_clase,
         estados=['pendiente'],
     )
+
+
+def _monto_pendiente_de_reserva(reserva):
+    if _es_reserva_abonada(reserva) and reserva.abono:
+        return round(sum(pago.monto for pago in _pagos_pendientes_de_abono(reserva.abono)), 2)
+    return round(sum(pago.monto for pago in _pagos_pendientes_de_reserva(reserva)), 2)
+
+
+def _estado_cliente_de_reserva(reserva):
+    if reserva.asistencia_validada:
+        return 'Confirmado'
+    if _monto_pendiente_de_reserva(reserva) > 0:
+        return 'Pendiente'
+    return 'Pagado'
 
 
 def _registrar_reintegro_admin(usuario, reserva, turno, monto, metodo_pago):
@@ -1682,7 +1696,6 @@ def _enviar_email_qr_reserva(reserva, asunto='Reserva confirmada - Club 360'):
         f"Fecha y hora: {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}\n"
         f"Modalidad: {modalidad}\n"
         f"Código de asistencia: {reserva.qr_token}\n"
-        f"Link de validación para recepción: {validation_url}\n"
         f"QR generado: {qr_path}\n\n"
         "Presentá este QR en recepción para que un empleado registre tu asistencia."
     )
@@ -1726,7 +1739,6 @@ def _enviar_recordatorios_qr(base_dir, usuario_id=None):
             f"Hola {usuario.nombre},\n\n"
             f"Te recordamos tu clase de {turno.actividad} el {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}.\n"
             f"Código de asistencia: {reserva.qr_token}\n"
-            f"Link de validación para recepción: {validation_url}\n"
             f"QR generado: {qr_path}\n"
             "Presentalo en recepción para validar asistencia."
         )
@@ -2292,7 +2304,56 @@ def mis_turnos():
     if enviados:
         flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
-    return render_template('turnos/mis_turnos.html', reservas=reservas)
+    reservas_info = []
+    for reserva in reservas:
+        reservas_info.append({
+            'reserva': reserva,
+            'estado_pago': _estado_cliente_de_reserva(reserva),
+        })
+
+    return render_template('turnos/mis_turnos.html', reservas_info=reservas_info)
+
+
+@turnos_bp.route('/mis-turnos/<int:reserva_id>/qr')
+@login_required
+def ver_qr_reserva(reserva_id):
+    """Muestra el QR de asistencia de una reserva del cliente."""
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta vista está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    reserva = Reserva.query.get_or_404(reserva_id)
+    if reserva.usuario_id != current_user.id:
+        flash('No tienes permisos para ver este QR', 'error')
+        return redirect(url_for('turnos.mis_turnos'))
+
+    return render_template(
+        'turnos/ver_qr.html',
+        reserva=reserva,
+    )
+
+
+@turnos_bp.route('/mis-turnos/<int:reserva_id>/qr/imagen')
+@login_required
+def imagen_qr_reserva(reserva_id):
+    """Devuelve la imagen PNG del QR de asistencia de una reserva del cliente."""
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta vista está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    reserva = Reserva.query.get_or_404(reserva_id)
+    if reserva.usuario_id != current_user.id:
+        flash('No tienes permisos para ver este QR', 'error')
+        return redirect(url_for('turnos.mis_turnos'))
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    validation_url = url_for('turnos.validar_asistencia_qr', qr_token=reserva.qr_token, _external=True)
+    try:
+        qr_path = generar_qr_asistencia(base_dir, reserva, validation_url)
+    except RuntimeError:
+        return '', 503
+
+    return send_file(qr_path, mimetype='image/png', max_age=0)
 
 
 @turnos_bp.route('/buscar-turnos-cliente')
@@ -2469,7 +2530,12 @@ def administrar_turnos():
         return redirect(url_for('index'))
 
     turnos = Turno.query.order_by(Turno.hora_inicio.asc()).all()
-    return render_template('turnos/administrar.html', turnos=turnos, horas_disponibles=HORAS_DISPONIBLES)
+    return render_template(
+        'turnos/administrar.html',
+        turnos=turnos,
+        horas_disponibles=HORAS_DISPONIBLES,
+        fecha_limite_busqueda=_fecha_limite_busqueda_turnos().isoformat(),
+    )
 
 
 @turnos_bp.route('/mis-deudas')
@@ -2618,7 +2684,7 @@ def pagar_mi_suspension_no_abonada():
 @turnos_bp.route('/cobrar-deudas')
 @login_required
 def cobrar_deudas():
-    if not _es_empleado_o_admin(current_user):
+    if not _es_admin(current_user):
         flash('No tienes permisos para cobrar deudas', 'error')
         return redirect(url_for('dashboard'))
 
@@ -2648,7 +2714,7 @@ def cobrar_deudas():
 @turnos_bp.route('/cobrar-deudas/<int:usuario_id>', methods=['POST'])
 @login_required
 def cobrar_deudas_cliente(usuario_id):
-    if not _es_empleado_o_admin(current_user):
+    if not _es_admin(current_user):
         flash('No tienes permisos para cobrar deudas', 'error')
         return redirect(url_for('dashboard'))
 
@@ -2672,7 +2738,7 @@ def cobrar_deudas_cliente(usuario_id):
 @turnos_bp.route('/cobrar-deudas/<int:usuario_id>/<int:pago_id>', methods=['POST'])
 @login_required
 def cobrar_deuda_cliente(usuario_id, pago_id):
-    if not _es_empleado_o_admin(current_user):
+    if not _es_admin(current_user):
         flash('No tienes permisos para cobrar deudas', 'error')
         return redirect(url_for('dashboard'))
 
@@ -2699,7 +2765,7 @@ def cobrar_deuda_cliente(usuario_id, pago_id):
 @turnos_bp.route('/cobrar-deudas/<int:usuario_id>/abono/<int:abono_id>', methods=['POST'])
 @login_required
 def cobrar_deuda_abono_cliente(usuario_id, abono_id):
-    if not _es_empleado_o_admin(current_user):
+    if not _es_admin(current_user):
         flash('No tienes permisos para cobrar deudas', 'error')
         return redirect(url_for('dashboard'))
 
@@ -2724,7 +2790,7 @@ def cobrar_deuda_abono_cliente(usuario_id, abono_id):
 @turnos_bp.route('/cobrar-deudas/<int:usuario_id>/suspension-no-abonada', methods=['POST'])
 @login_required
 def cobrar_suspension_no_abonada_cliente(usuario_id):
-    if not _es_empleado_o_admin(current_user):
+    if not _es_admin(current_user):
         flash('No tienes permisos para cobrar deudas', 'error')
         return redirect(url_for('dashboard'))
 

@@ -12,7 +12,7 @@
     </div>
 
     <div class="calendar-toolbar-card">
-        {% if reservas %}
+        {% if reservas_info %}
         <table class="table">
             <thead>
                 <tr>
@@ -25,7 +25,8 @@
                 </tr>
             </thead>
             <tbody>
-                {% for reserva in reservas %}
+                {% for item in reservas_info %}
+                {% set reserva = item.reserva %}
                 <tr>
                     <td>{{ reserva.turno.actividad|capitalize }}</td>
                     <td>
@@ -34,8 +35,10 @@
                         {{ reserva.turno.hora_fin.strftime('%H:%M') }}
                     </td>
                     <td>{{ 'Abonada' if reserva.tipo_clase == 'abonada' else 'No abonada' }}</td>
-                    <td>{{ 'Validada' if reserva.asistencia_validada else 'Pendiente' }}</td>
-                    <td>{{ reserva.qr_token }}</td>
+                    <td>{{ item.estado_pago }}</td>
+                    <td>
+                        <a href="{{ url_for('turnos.ver_qr_reserva', reserva_id=reserva.id) }}" class="btn btn-secondary">Ver QR</a>
+                    </td>
                     <td>
                         <form method="POST" action="{{ url_for('turnos.cancelar_turno', turno_id=reserva.turno.id) }}" data-confirm="true" data-confirm-title="Cancelar reserva" data-confirm-message="Vas a cancelar tu reserva para {{ reserva.turno.actividad|capitalize }} del {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}." data-confirm-action="Sí" data-confirm-cancel="No">
                             <button type="submit" class="btn btn-danger">Cancelar</button>

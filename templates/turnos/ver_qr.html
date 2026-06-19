@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}QR del Turno - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page">
+    <div class="calendar-page-header">
+        <div>
+            <h2>QR del Turno</h2>
+            <p class="text-muted">Presentá este código en recepción para validar tu asistencia.</p>
+        </div>
+        <a href="{{ url_for('turnos.mis_turnos') }}" class="btn btn-secondary">Volver</a>
+    </div>
+
+    <div class="calendar-toolbar-card qr-detail-card">
+        <div class="qr-detail-summary">
+            <span class="turno-detail-kicker">{{ reserva.turno.actividad|capitalize }}</span>
+            <h3>{{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }} - {{ reserva.turno.hora_fin.strftime('%H:%M') }}</h3>
+            <p class="text-muted">{{ 'Abonada' if reserva.tipo_clase == 'abonada' else 'No abonada' }}</p>
+            {% if reserva.asistencia_validada %}
+            <div class="alert alert-success" style="margin-top: .85rem;">
+                La asistencia ya fue validada con este QR.
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="qr-preview">
+            <img src="{{ url_for('turnos.imagen_qr_reserva', reserva_id=reserva.id) }}" alt="QR de asistencia del turno">
+        </div>
+
+        <div class="qr-token-panel">
+            <span class="turno-detail-kicker">Código escrito</span>
+            <p>{{ reserva.qr_token }}</p>
+        </div>
+
+    </div>
+</section>
+{% endblock %}

@@ -1017,6 +1017,56 @@ textarea:focus {
     width: min(1250px, 100%);
 }
 
+.calendar-admin-toolbar {
+    width: min(1250px, 100%);
+    justify-self: center;
+}
+
+.qr-detail-card {
+    width: min(760px, 100%);
+    justify-self: center;
+    display: grid;
+    gap: 1rem;
+}
+
+.qr-detail-summary h3 {
+    margin: 0.25rem 0 0.25rem;
+}
+
+.qr-preview {
+    width: min(280px, 100%);
+    aspect-ratio: 1;
+    justify-self: center;
+    border: 1px solid rgba(31, 79, 95, 0.16);
+    border-radius: 18px;
+    background: #fff;
+    display: grid;
+    place-items: center;
+    position: relative;
+    box-shadow: 0 14px 32px rgba(31, 79, 95, 0.08);
+    overflow: hidden;
+}
+
+.qr-preview img {
+    width: 86%;
+    height: 86%;
+    object-fit: contain;
+    image-rendering: crisp-edges;
+}
+
+.qr-token-panel {
+    border: 1px solid rgba(31, 79, 95, 0.12);
+    border-radius: 16px;
+    padding: 0.85rem;
+    background: rgba(247, 250, 248, 0.86);
+}
+
+.qr-token-panel p {
+    margin: 0.25rem 0 0;
+    overflow-wrap: anywhere;
+    font-weight: 700;
+}
+
 .calendar-page-header {
     display: flex;
     justify-content: space-between;

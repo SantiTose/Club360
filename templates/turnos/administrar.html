@@ -2,12 +2,8 @@
 
 {% block title %}Administrar Turnos - Club 360{% endblock %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css">
-{% endblock %}
-
 {% block content %}
-<section class="calendar-page">
+<section class="calendar-page calendar-page-disponibles">
     <div class="calendar-page-header">
         <div>
             <h2>Gestión de Turnos y Clases</h2>
@@ -15,7 +11,7 @@
         </div>
     </div>
 
-    <div class="calendar-toolbar-card calendar-toolbar-card-compact">
+    <div class="calendar-toolbar-card calendar-toolbar-card-compact calendar-admin-toolbar">
         <div class="button-group" style="justify-content: flex-start; margin: 0;">
             <a href="{{ url_for('turnos.crear_turno') }}" class="btn btn-primary">Crear Clase</a>
             <a href="{{ url_for('turnos.validar_asistencia_manual') }}" class="btn btn-secondary">Validar Asistencia QR</a>
@@ -25,13 +21,13 @@
         </div>
     </div>
 
-    <div class="calendar-layout">
+    <div class="calendar-layout calendar-layout-week">
         <div id="calendar-admin" class="calendar-surface"></div>
         <aside class="calendar-side-column calendar-context-panel">
             <section class="calendar-context-section">
                 <span class="turno-detail-kicker">Agenda del día</span>
                 <h3 id="agenda-admin-title">Seleccioná un día</h3>
-                <p class="text-muted">Elegí una fecha del mes para ver el detalle horario de esa jornada.</p>
+                <p class="text-muted">Elegí una fecha de la semana para ver el detalle horario de esa jornada.</p>
                 <div id="agenda-admin-body" class="calendar-day-body"></div>
             </section>
 
@@ -46,7 +42,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     window.Club360CalendarUI.createMonthAgenda({
@@ -55,15 +50,17 @@ document.addEventListener('DOMContentLoaded', function() {
         agendaBodyId: 'agenda-admin-body',
         detailBodyId: 'detalle-admin-body',
         eventsUrl: '{{ url_for("turnos.eventos_turnos") }}?scope=admin',
+        maxWeekDate: '{{ fecha_limite_busqueda }}',
         emptyCalendarTitle: 'No hay turnos cargados',
         emptyCalendarMessage: 'Todavía no existen turnos en el sistema. Creá uno nuevo para empezar a organizar la agenda.',
-        initialAgendaHtml: '<div class="calendar-day-placeholder">Seleccioná un día del mes para revisar la agenda horaria.</div>',
+        initialAgendaHtml: '<div class="calendar-day-placeholder">Seleccioná un día de la semana para revisar la agenda horaria.</div>',
         emptyAgendaHtml: '<div class="calendar-day-placeholder">No hay turnos cargados para esta fecha.</div>',
         initialDetailHtml: '<div class="calendar-day-placeholder compact">Elegí una franja para editar o cancelar el turno.</div>',
         emptyDetailHtml: '<div class="calendar-day-placeholder compact">No hay un turno seleccionado.</div>',
         disableEmptyDateClick: true,
+        disableInitialWeekSelection: true,
         enableActivityFilter: true,
-        monthCellMode: 'status',
+        viewMode: 'week',
         renderAgendaCard(event, context) {
             const p = event.extendedProps;
             const estado = p.cancelado ? 'Cancelado' : 'Activo';

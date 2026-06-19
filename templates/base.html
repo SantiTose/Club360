@@ -30,8 +30,10 @@
                     {% elif current_user.tipo_usuario == 'empleado' %}
                     <li><a href="{{ url_for('turnos.buscar_turnos_cliente_empleado') }}" class="nav-link-pill">Buscar Turnos</a></li>
                     {% endif %}
-                    {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
+                    {% if current_user.tipo_usuario == 'administrador' %}
                     <li><a href="{{ url_for('turnos.cobrar_deudas') }}" class="nav-link-pill nav-link-pill-alt">Cobrar Deudas</a></li>
+                    {% endif %}
+                    {% if current_user.tipo_usuario in ['empleado', 'administrador'] %}
                     <li><a href="{{ url_for('auth.crear_usuario') }}" class="nav-link-pill nav-link-pill-alt">Crear Usuario</a></li>
                     {% endif %}
                     {% if current_user.tipo_usuario == 'administrador' %}
