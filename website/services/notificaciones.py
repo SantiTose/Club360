@@ -4,13 +4,34 @@ from datetime import datetime
 from email.message import EmailMessage
 
 
+class EmailDeliveryError(Exception):
+    pass
+
+
 def _get_outbox_path(base_dir):
     instance_dir = os.path.join(base_dir, 'instance')
     os.makedirs(instance_dir, exist_ok=True)
     return os.path.join(instance_dir, 'mail_outbox.log')
 
 
-def _get_smtp_config():
+def _cargar_env_local(base_dir):
+    env_path = os.path.join(base_dir, '.env')
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, 'r', encoding='utf-8') as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+
+
+def _get_smtp_config(base_dir):
+    _cargar_env_local(base_dir)
     server = os.environ.get('MAIL_SERVER', '').strip()
     if not server:
         return None
@@ -38,10 +59,10 @@ def _log_email(outbox, destinatario, asunto, cuerpo):
         f.write(contenido)
 
 
-def enviar_email_simulado(base_dir, destinatario, asunto, cuerpo):
+def enviar_email_simulado(base_dir, destinatario, asunto, cuerpo, requiere_envio_real=False):
     """Envía un email real si hay SMTP configurado; si no, lo guarda en el outbox local."""
     outbox = _get_outbox_path(base_dir)
-    smtp_config = _get_smtp_config()
+    smtp_config = _get_smtp_config(base_dir)
 
     if smtp_config:
         try:
@@ -57,8 +78,13 @@ def enviar_email_simulado(base_dir, destinatario, asunto, cuerpo):
                 if smtp_config['username'] and smtp_config['password']:
                     server.login(smtp_config['username'], smtp_config['password'])
                 server.send_message(msg)
-            return
-        except Exception:
-            pass
+            return True
+        except Exception as exc:
+            if requiere_envio_real:
+                raise EmailDeliveryError(f'No se pudo enviar el email real: {exc}') from exc
+
+    if requiere_envio_real:
+        raise EmailDeliveryError('No hay SMTP real configurado. Completa MAIL_SERVER, MAIL_USERNAME y MAIL_PASSWORD.')
 
     _log_email(outbox, destinatario, asunto, cuerpo)
+    return False

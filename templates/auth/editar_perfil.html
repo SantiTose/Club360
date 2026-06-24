@@ -95,6 +95,67 @@
             </div>
         </form>
 
+        <form method="POST" class="profile-edit-panel auth-form" novalidate>
+            <input type="hidden" name="action" value="cambiar_password">
+            <h2>Cambiar contrasena</h2>
+
+            {% if current_user.requiere_cambio_password %}
+                <div class="profile-empty-state password-required-notice">
+                    <strong>Tenes una contrasena temporal</strong>
+                    <span>Elegi una nueva contrasena para dejar actualizada tu cuenta.</span>
+                </div>
+            {% else %}
+                <div class="form-group">
+                    <label for="password_actual" class="form-label">Contrasena actual</label>
+                    <input
+                        type="password"
+                        id="password_actual"
+                        name="password_actual"
+                        class="form-control {% if field_errors.get('password_actual') %}is-invalid{% endif %}"
+                        autocomplete="current-password"
+                        required
+                    >
+                    {% if field_errors.get('password_actual') %}<small class="form-text error">{{ field_errors['password_actual'] }}</small>{% endif %}
+                </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label for="password" class="form-label">Nueva contrasena</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    minlength="6"
+                    class="form-control {% if field_errors.get('password') %}is-invalid{% endif %}"
+                    autocomplete="new-password"
+                    required
+                >
+                {% if field_errors.get('password') %}
+                    <small class="form-text error">{{ field_errors['password'] }}</small>
+                {% else %}
+                    <small class="form-text">Debe tener al menos 6 caracteres.</small>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="password_confirm" class="form-label">Confirmar nueva contrasena</label>
+                <input
+                    type="password"
+                    id="password_confirm"
+                    name="password_confirm"
+                    minlength="6"
+                    class="form-control {% if field_errors.get('password_confirm') %}is-invalid{% endif %}"
+                    autocomplete="new-password"
+                    required
+                >
+                {% if field_errors.get('password_confirm') %}<small class="form-text error">{{ field_errors['password_confirm'] }}</small>{% endif %}
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn btn-primary">Actualizar contrasena</button>
+            </div>
+        </form>
+
         <div class="profile-edit-panel">
             <h2>Tarjetas de crédito</h2>
 

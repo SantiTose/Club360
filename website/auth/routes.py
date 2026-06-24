@@ -1,9 +1,9 @@
-from flask import render_template, redirect, url_for, request, flash
+from flask import current_app, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from website.auth import auth_bp
 from website import db
 from website.models import Usuario, TipoUsuario, EstadoUsuario, TarjetaCredito
-from website.services import enviar_email_simulado
+from website.services import EmailDeliveryError, enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
 import calendar
@@ -26,6 +26,15 @@ def _generar_password_temporal():
 
 def _generar_token_reset():
     return secrets.token_urlsafe(32)
+
+
+def _validar_password_nueva(password, password_confirm):
+    field_errors = {}
+    if len(password) < 6:
+        field_errors['password'] = 'La contrasena debe tener al menos 6 caracteres'
+    if password != password_confirm:
+        field_errors['password_confirm'] = 'Las contrasenas no coinciden'
+    return field_errors
 
 
 def _parsear_fecha_nacimiento(fecha_raw):
@@ -187,6 +196,21 @@ def _asegurar_tarjeta_legacy(usuario):
     db.session.commit()
 
 
+def _render_editar_perfil(field_errors=None, form_data=None):
+    fecha_formateada = current_user.fecha_nacimiento.isoformat() if current_user.fecha_nacimiento else ''
+    return render_template(
+        'auth/editar_perfil.html',
+        field_errors=field_errors or {},
+        form_data=form_data or {
+            'nombre': current_user.nombre,
+            'apellido': current_user.apellido,
+            'email': current_user.email,
+            'fecha_nacimiento': fecha_formateada,
+        },
+        tarjetas=_tarjetas_del_cliente(current_user),
+    )
+
+
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     """Registrar nuevo usuario."""
@@ -334,6 +358,9 @@ def login():
         
         if usuario and check_password_hash(usuario.password, password):
             login_user(usuario, remember=bool(remember))
+            if usuario.requiere_cambio_password and usuario.tipo_usuario == TipoUsuario.CLIENTE:
+                flash('Ingresaste con una contrasena temporal. Cambiala desde Editar perfil para continuar.', 'warning')
+                return redirect(url_for('auth.editar_perfil'))
             if usuario.requiere_cambio_password:
                 flash('Debes cambiar tu contraseña temporal para continuar', 'warning')
                 return redirect(url_for('auth.cambiar_password_inicial'))
@@ -356,6 +383,20 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@auth_bp.before_app_request
+def requerir_cambio_password_temporal_cliente():
+    if not current_user.is_authenticated:
+        return None
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE or not current_user.requiere_cambio_password:
+        return None
+
+    endpoints_permitidos = {'auth.editar_perfil', 'auth.logout', 'static'}
+    if request.endpoint not in endpoints_permitidos:
+        flash('Para continuar, cambia tu contrasena temporal desde Editar perfil.', 'warning')
+        return redirect(url_for('auth.editar_perfil'))
+    return None
+
+
 @auth_bp.route('/perfil/editar', methods=['GET', 'POST'])
 @login_required
 def editar_perfil():
@@ -367,6 +408,10 @@ def editar_perfil():
 
     if request.method == 'POST':
         action = request.form.get('action', 'perfil')
+
+        if current_user.requiere_cambio_password and action != 'cambiar_password':
+            flash('Primero tenes que cambiar tu contrasena temporal.', 'warning')
+            return redirect(url_for('auth.editar_perfil'))
 
         if action == 'perfil':
             nombre = request.form.get('nombre', '').strip()
@@ -475,21 +520,28 @@ def editar_perfil():
             flash('Tarjeta quitada correctamente', 'success')
             return redirect(url_for('auth.editar_perfil'))
 
-        flash('Acción no válida', 'error')
+        if action == 'cambiar_password':
+            password_actual = request.form.get('password_actual', '')
+            password = request.form.get('password', '')
+            password_confirm = request.form.get('password_confirm', '')
+            field_errors = _validar_password_nueva(password, password_confirm)
+
+            if not current_user.requiere_cambio_password and not check_password_hash(current_user.password, password_actual):
+                field_errors['password_actual'] = 'La contrasena actual no es correcta'
+
+            if field_errors:
+                return _render_editar_perfil(field_errors=field_errors)
+
+            current_user.password = generate_password_hash(password)
+            current_user.requiere_cambio_password = False
+            db.session.commit()
+            flash('Contrasena actualizada correctamente', 'success')
+            return redirect(url_for('dashboard'))
+
+        flash('Accion no valida', 'error')
         return redirect(url_for('auth.editar_perfil'))
 
-    fecha_formateada = current_user.fecha_nacimiento.isoformat() if current_user.fecha_nacimiento else ''
-    return render_template(
-        'auth/editar_perfil.html',
-        field_errors={},
-        form_data={
-            'nombre': current_user.nombre,
-            'apellido': current_user.apellido,
-            'email': current_user.email,
-            'fecha_nacimiento': fecha_formateada,
-        },
-        tarjetas=_tarjetas_del_cliente(current_user),
-    )
+    return _render_editar_perfil()
 
 
 @auth_bp.route('/reset-password', methods=['GET', 'POST'])
@@ -497,14 +549,24 @@ def reset_password():
     """Recuperar acceso enviando una contraseña temporal por correo."""
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
+        field_errors = {}
+
+        if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+            field_errors['email'] = 'Ingresa un email valido'
+            return render_template('auth/reset_password.html', field_errors=field_errors, form_data={'email': email})
+
         usuario = Usuario.query.filter_by(email=email).first()
+
+        if not usuario:
+            field_errors['email'] = 'No existe una cuenta registrada con ese email'
+            return render_template('auth/reset_password.html', field_errors=field_errors, form_data={'email': email})
 
         if usuario:
             password_temporal = _generar_password_temporal()
             usuario.password = generate_password_hash(password_temporal)
+            usuario.requiere_cambio_password = True
             usuario.reset_password_token = None
             usuario.reset_password_expira = None
-            db.session.commit()
 
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             asunto = 'Recuperación de contraseña - Club 360'
@@ -514,13 +576,27 @@ def reset_password():
                 f"Tu Contraseña temporal es: {password_temporal}\n\n"
                 "Podés iniciar sesión con esa contraseña y luego cambiarla desde tu perfil si lo deseás."
             )
-            enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+            try:
+                enviar_email_simulado(
+                    base_dir,
+                    usuario.email,
+                    asunto,
+                    cuerpo,
+                    requiere_envio_real=not current_app.config.get('TESTING', False),
+                )
+            except EmailDeliveryError as exc:
+                db.session.rollback()
+                current_app.logger.exception('Fallo el envio de email de recuperacion')
+                field_errors['email'] = str(exc)
+                return render_template('auth/reset_password.html', field_errors=field_errors, form_data={'email': email})
+
+            db.session.commit()
 
         # Respuesta neutra para no revelar si el email existe o no.
         flash('Si el email está registrado, te enviamos tu contraseña temporal por correo.', 'success')
         return redirect(url_for('auth.login'))
 
-    return render_template('auth/reset_password.html')
+    return render_template('auth/reset_password.html', field_errors={}, form_data={})
 
 
 @auth_bp.route('/crear-usuario', methods=['GET', 'POST'])

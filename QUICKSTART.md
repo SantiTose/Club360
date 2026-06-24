@@ -18,6 +18,23 @@ python app.py
 
 La aplicación estará en: **http://localhost:5000**
 
+## Envio real de emails con Gmail
+
+Para que "Recuperar contrasena" envie un correo real a Gmail, crea un archivo `.env` en la raiz del proyecto con estos datos:
+
+```env
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=tu-cuenta@gmail.com
+MAIL_PASSWORD=tu-contrasena-de-aplicacion
+MAIL_DEFAULT_SENDER=tu-cuenta@gmail.com
+```
+
+Importante: `MAIL_PASSWORD` no es tu contrasena normal de Gmail. En Google tenes que activar verificacion en 2 pasos y crear una "contrasena de aplicacion" para Mail. Sin esos datos, la recuperacion no cambia la contrasena y muestra el error en pantalla.
+
+El sistema verifica que el email exista como usuario registrado en Club360. No es posible verificar de forma confiable que una casilla externa exista antes de enviar: Gmail y otros proveedores no exponen esa validacion por seguridad. La prueba real es que el SMTP acepte el envio y el correo llegue a la bandeja.
+
 ## 2. Cuentas de Prueba
 
 Después de ejecutar `init_db.py`, tendrás:
