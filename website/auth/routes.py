@@ -494,32 +494,32 @@ def editar_perfil():
 
 @auth_bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
-    """Restablecer contraseña."""
+    """Recuperar acceso enviando una contraseña temporal por correo."""
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
         usuario = Usuario.query.filter_by(email=email).first()
-        
+
         if usuario:
-            token = _generar_token_reset()
-            usuario.reset_password_token = token
-            usuario.reset_password_expira = datetime.utcnow() + timedelta(hours=1)
+            password_temporal = _generar_password_temporal()
+            usuario.password = generate_password_hash(password_temporal)
+            usuario.reset_password_token = None
+            usuario.reset_password_expira = None
             db.session.commit()
 
-            enlace = url_for('auth.reset_password_token', token=token, _external=True)
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
             asunto = 'Recuperación de contraseña - Club 360'
             cuerpo = (
                 f"Hola {usuario.nombre},\n\n"
-                "Recibimos una solicitud para restablecer tu contraseña.\n"
-                f"Usa este enlace (válido por 1 hora): {enlace}\n\n"
-                "Si no solicitaste este cambio, puedes ignorar este mensaje."
+                "Recibimos una solicitud para recuperar el acceso a tu cuenta.\n"
+                f"Tu Contraseña temporal es: {password_temporal}\n\n"
+                "Podés iniciar sesión con esa contraseña y luego cambiarla desde tu perfil si lo deseás."
             )
             enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
 
         # Respuesta neutra para no revelar si el email existe o no.
-        flash('Si el email está registrado, te enviamos un enlace de recuperación.', 'success')
+        flash('Si el email está registrado, te enviamos tu contraseña temporal por correo.', 'success')
         return redirect(url_for('auth.login'))
-    
+
     return render_template('auth/reset_password.html')
 
 
