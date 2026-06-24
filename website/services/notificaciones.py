@@ -30,19 +30,29 @@ def _cargar_env_local(base_dir):
             os.environ.setdefault(key, value)
 
 
-def _get_smtp_config(base_dir):
+def _get_mail_env(cuenta_mail, suffix, default=''):
+    if cuenta_mail == 'default':
+        return os.environ.get(f'MAIL_{suffix}', default).strip()
+    return os.environ.get(f'{cuenta_mail.upper()}_MAIL_{suffix}', default).strip()
+
+
+def _get_smtp_config(base_dir, cuenta_mail='default'):
     _cargar_env_local(base_dir)
-    server = os.environ.get('MAIL_SERVER', '').strip()
+    server = _get_mail_env(cuenta_mail, 'SERVER', os.environ.get('MAIL_SERVER', ''))
     if not server:
         return None
 
     return {
         'server': server,
-        'port': int(os.environ.get('MAIL_PORT', '587')),
-        'username': os.environ.get('MAIL_USERNAME', '').strip(),
-        'password': os.environ.get('MAIL_PASSWORD', '').strip(),
-        'use_tls': os.environ.get('MAIL_USE_TLS', 'true').strip().lower() in {'1', 'true', 'yes', 'on'},
-        'sender': os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME', 'club360@example.com')).strip(),
+        'port': int(_get_mail_env(cuenta_mail, 'PORT', os.environ.get('MAIL_PORT', '587'))),
+        'username': _get_mail_env(cuenta_mail, 'USERNAME'),
+        'password': _get_mail_env(cuenta_mail, 'PASSWORD'),
+        'use_tls': _get_mail_env(cuenta_mail, 'USE_TLS', os.environ.get('MAIL_USE_TLS', 'true')).lower() in {'1', 'true', 'yes', 'on'},
+        'sender': _get_mail_env(
+            cuenta_mail,
+            'DEFAULT_SENDER',
+            _get_mail_env(cuenta_mail, 'USERNAME', os.environ.get('MAIL_USERNAME', 'club360@example.com')),
+        ),
     }
 
 
@@ -59,10 +69,10 @@ def _log_email(outbox, destinatario, asunto, cuerpo):
         f.write(contenido)
 
 
-def enviar_email_simulado(base_dir, destinatario, asunto, cuerpo, requiere_envio_real=False):
+def enviar_email_simulado(base_dir, destinatario, asunto, cuerpo, requiere_envio_real=False, cuenta_mail='default'):
     """Envía un email real si hay SMTP configurado; si no, lo guarda en el outbox local."""
     outbox = _get_outbox_path(base_dir)
-    smtp_config = _get_smtp_config(base_dir)
+    smtp_config = _get_smtp_config(base_dir, cuenta_mail)
 
     if smtp_config:
         try:
