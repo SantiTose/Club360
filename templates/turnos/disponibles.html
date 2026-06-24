@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Turnos Disponibles - Club 360{% endblock %}
+{% block title %}{{ 'Gestionar Turnos' if current_user.tipo_usuario == 'empleado' else 'Turnos Disponibles' }} - Club 360{% endblock %}
 
 {% block content %}
 <section class="calendar-page calendar-page-disponibles">
     <div class="calendar-page-header">
         <div>
+            {% if current_user.tipo_usuario == 'empleado' %}
+            <h2>Gestionar Turnos</h2>
+            <p class="text-muted">Seleccioná una clase de la semana para reservarla a un cliente.</p>
+            {% else %}
             <h2>Buscar Turnos</h2>
             <p class="text-muted">Explorá las clases de la semana.</p>
+            {% endif %}
         </div>
     </div>
 
@@ -163,17 +168,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="form-group" style="margin-bottom: .8rem;">
                             <label for="cliente_email_${event.id}"><strong>Mail del cliente</strong></label>
                             <input id="cliente_email_${event.id}" type="email" name="cliente_email" class="form-control" placeholder="cliente@email.com" required>
-                        </div>
-                        ` : ''}
-                        ${permiteAsignarCliente && !usaCredito && !isFull ? `
-                        <div class="form-group" style="margin-bottom: .8rem;">
-                            <label><strong>Forma de pago</strong></label>
-                            <div class="reservation-mode-pills">
-                                <input type="radio" id="metodo_pago_efectivo_${event.id}" name="metodo_pago_reserva" value="efectivo" checked>
-                                <label for="metodo_pago_efectivo_${event.id}" class="reservation-mode-pill">Efectivo</label>
-                                <input type="radio" id="metodo_pago_tarjeta_${event.id}" name="metodo_pago_reserva" value="tarjeta_credito">
-                                <label for="metodo_pago_tarjeta_${event.id}" class="reservation-mode-pill">Tarjeta de crédito</label>
-                            </div>
                         </div>
                         ` : ''}
                         ${usaCredito ? '' : `<div class="form-group" style="margin-bottom: .8rem;">

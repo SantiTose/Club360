@@ -174,6 +174,9 @@ def _obtener_metodo_pago_reserva(reserva_interna):
     if not reserva_interna:
         return 'tarjeta_credito', None
 
+    if current_user.tipo_usuario == TipoUsuario.EMPLEADO:
+        return 'pendiente', None
+
     metodo_pago = request.form.get('metodo_pago_reserva', 'tarjeta_credito').strip()
     if metodo_pago not in {'efectivo', 'tarjeta_credito'}:
         return None, 'Debes elegir una forma de pago válida'
@@ -1019,7 +1022,9 @@ def _crear_pago_pendiente_reserva(
     monto_senia = round(monto_final * 0.5, 2) if tipo_clase == TipoClase.NO_ABONADA else monto_final
     monto_deuda = round(monto_final - monto_senia, 2) if tipo_clase == TipoClase.NO_ABONADA else 0.0
 
-    if metodo_pago == 'tarjeta_credito' and monto_senia > 0:
+    if metodo_pago == 'pendiente':
+        estado_pago = 'pendiente'
+    elif metodo_pago == 'tarjeta_credito' and monto_senia > 0:
         saldo = float(usuario.tarjeta_credito_saldo or 0.0)
         if _tarjeta_credito_vencida(usuario):
             estado_pago = 'pendiente'
@@ -1041,7 +1046,7 @@ def _crear_pago_pendiente_reserva(
         db.session.add(Pago(
             usuario_id=usuario.id,
             monto=monto_deuda,
-            metodo_pago='tarjeta_credito',
+            metodo_pago='pendiente' if metodo_pago == 'pendiente' else 'tarjeta_credito',
             estado='pendiente',
             tipo_clase=tipo_clase,
             fecha_pago=datetime.utcnow(),
@@ -2144,11 +2149,18 @@ def reservar_turno(turno_id):
                 flash(f'Reserva abonada confirmada para {cliente_objetivo.nombre} {cliente_objetivo.apellido}.{extra_credito}', 'success')
         else:
             if estado_pago == 'pendiente':
-                flash(
-                    f'Turno reservado para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
-                    'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.',
-                    'warning',
-                )
+                if metodo_pago_reserva == 'pendiente':
+                    flash(
+                        f'Turno reservado para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. '
+                        'Se generó la deuda pendiente para este turno.',
+                        'warning',
+                    )
+                else:
+                    flash(
+                        f'Turno reservado para {cliente_objetivo.nombre} {cliente_objetivo.apellido}, '
+                        'pero el pago quedó pendiente por saldo insuficiente en la tarjeta.',
+                        'warning',
+                    )
             elif metodo_pago_reserva == 'efectivo':
                 flash(f'Turno reservado exitosamente para {cliente_objetivo.nombre} {cliente_objetivo.apellido}. Se registró una seña en efectivo por ${monto_final:.2f}.', 'success')
             else:
@@ -2467,7 +2479,7 @@ def validar_asistencia_qr(qr_token):
 
     reserva = Reserva.query.filter_by(qr_token=qr_token).first()
     if not reserva:
-        flash('Ese qr no tiene datos valios', 'error')
+        flash('Ese QR no contiene datos válidos.', 'error')
         return redirect(url_for('dashboard'))
 
     if reserva.asistencia_validada:
