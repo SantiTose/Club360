@@ -274,7 +274,7 @@ def build_parser():
     p.set_defaults(func=demo_suspension_abonada)
 
     p = sub.add_parser('demo-suspension-no-abonada', help='Crear escenario de suspensión por 3 deudas no abonadas')
-    p.add_argument('--email', default='carlos@example.com')
+    p.add_argument('--email', default='noabonadoexample@gmail.com')
     p.add_argument('--actividad', choices=['futbol', 'basquet', 'voley', 'padel'], default='padel')
     p.add_argument('--hora', type=int, default=14)
     p.add_argument('--monto', type=float, default=120.0)

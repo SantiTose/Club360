@@ -212,7 +212,7 @@ Preparar escenario:
 
 ```bash
 python scripts/demo_console.py demo-suspension-no-abonada \
-  --email carlos@example.com \
+  --email noabonadoexample@gmail.com \
   --actividad padel \
   --hora 14 \
   --monto 120
@@ -227,7 +227,7 @@ python scripts/demo_console.py suspensiones
 
 En la app:
 
-- Iniciar sesión como `carlos@example.com / cliente123`.
+- Iniciar sesión como `noabonadoexample@gmail.com / cliente123`.
 - Ir a `Mis Deudas`.
 - Ver deuda como `Suspensión turnos no abonados`.
 - Pagar suspensión.

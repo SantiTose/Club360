@@ -42,47 +42,6 @@ def _crear_turno_demo(actividad, inicio, capacidad=8):
     return turno
 
 
-def _crear_suspensiones_demo_carlos(cliente):
-    ahora = datetime.utcnow()
-    inicio_mes = ahora.date().replace(day=1)
-    fin_mes = _fin_de_mes(inicio_mes)
-
-    abono = AbonoCliente(
-        usuario_id=cliente.id,
-        actividad='futbol',
-        dia_semana=3,
-        hora_inicio=15,
-        fecha_desde=inicio_mes,
-        fecha_hasta=fin_mes,
-        estado=EstadoAbono.SUSPENDIDO,
-    )
-    db.session.add(abono)
-    db.session.flush()
-
-    db.session.add(Pago(
-        usuario_id=cliente.id,
-        monto=16000.0,
-        metodo_pago='tarjeta_credito',
-        estado='pendiente',
-        tipo_clase=TipoClase.ABONADA,
-        fecha_pago=ahora - timedelta(days=18),
-        referencia_transaccion=f"abono-total-{abono.id}-{cliente.id}-{int(ahora.timestamp())}",
-    ))
-
-    db.session.add(Suspension(
-        usuario_id=cliente.id,
-        motivo='Suspensión automática por abono pendiente',
-        estado='activa',
-        fecha_inicio=ahora - timedelta(days=3),
-    ))
-    db.session.add(Suspension(
-        usuario_id=cliente.id,
-        motivo='Suspensión automática por 3 deudas no abonadas - futbol jueves 15:00',
-        estado='activa',
-        fecha_inicio=ahora - timedelta(days=2),
-    ))
-
-
 def _crear_suspensiones_demo_paulina(cliente):
     ahora = datetime.utcnow()
     inicio_mes = ahora.date().replace(day=1)
@@ -235,17 +194,17 @@ def init_database():
         
         # Crear clientes de prueba
         cliente1 = Usuario(
-            nombre='Carlos',
-            apellido='García',
+            nombre='Felipe',
+            apellido='Martinez',
             dni='34567890',
-            email='carlos@example.com',
+            email='felipe@example.com',
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
-            estado=EstadoUsuario.SUSPENDIDO,
+            estado='activo',
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
-            tarjeta_credito_saldo=0.0
+            tarjeta_credito_saldo=100000.0
         )
         
         cliente2 = Usuario(
@@ -330,11 +289,9 @@ def init_database():
                 es_principal=True,
             ))
         db.session.commit()
-        _crear_suspensiones_demo_carlos(cliente1)
         _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
         db.session.flush()
-        _crear_reserva_demo(cliente1, 'futbol')
         _crear_reserva_demo(paulina_suspendida, 'padel')
         _crear_reserva_demo(pedro_sin_fondos, 'basquet')
         db.session.commit()
@@ -352,8 +309,8 @@ def init_database():
         print("\nCuentas de prueba:")
         print("- Admin: admin@club360.com / admin123")
         print("- Empleado: juan@club360.com / empleado123")
+        print("- Todo ok: felipe@example.com / cliente123")
         print("- Todo ok: maria@example.com / cliente123")
-        print("- Suspendido abonada/no abonada sin saldo: carlos@example.com / cliente123")
         print("- Suspendida abonada/no abonada con fondos infinitos: paulina@example.com / cliente123")
         print("- Tarjeta vencida y sin fondos: pedro@example.com / cliente123")
         print("- Pepe Gonzalez: abonadoexample@gmail.com / cliente123")
