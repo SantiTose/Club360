@@ -444,6 +444,14 @@ def logout():
 def requerir_perfil_completo_cliente():
     if not current_user.is_authenticated:
         return None
+
+    endpoints_password_temporal = {'auth.cambiar_password_inicial', 'auth.logout', 'static'}
+    if current_user.requiere_cambio_password:
+        if request.endpoint not in endpoints_password_temporal:
+            flash('Debes cambiar tu contraseña temporal para continuar', 'warning')
+            return redirect(url_for('auth.cambiar_password_inicial'))
+        return None
+
     if current_user.tipo_usuario != TipoUsuario.CLIENTE:
         return None
 
@@ -453,12 +461,6 @@ def requerir_perfil_completo_cliente():
             return redirect(url_for('auth.editar_perfil'))
         return None
 
-    if not current_user.requiere_cambio_password:
-        return None
-
-    if request.endpoint not in endpoints_permitidos:
-        flash('Para continuar, cambia tu contrasena temporal desde Editar perfil.', 'warning')
-        return redirect(url_for('auth.editar_perfil'))
     return None
 
 
@@ -772,7 +774,7 @@ def crear_usuario():
             f"Contraseña temporal: {password_temporal}\n\n"
             "Al iniciar sesión deberás cambiar esta contraseña de forma obligatoria."
         )
-        enviar_email_simulado(base_dir, email, asunto, cuerpo)
+        enviar_email_simulado(base_dir, 'abonadoexample@gmail.com', asunto, cuerpo)
 
         flash('Usuario creado exitosamente. Se envió contraseña temporal por email.', 'success')
         return redirect(url_for('dashboard'))

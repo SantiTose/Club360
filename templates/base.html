@@ -9,11 +9,12 @@
 </head>
 <body>
     {% set bloquear_navegacion_por_tarjeta = current_user.is_authenticated and current_user.tipo_usuario == 'cliente' and not current_user.tarjeta_credito_ultimos4 %}
+    {% set bloquear_navegacion_por_password = current_user.is_authenticated and current_user.requiere_cambio_password %}
     <!-- Navbar -->
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                {% if bloquear_navegacion_por_tarjeta %}
+                {% if bloquear_navegacion_por_tarjeta or bloquear_navegacion_por_password %}
                 <span class="nav-link-disabled">
                     <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo">
                     <span>Club 360</span>
@@ -27,6 +28,9 @@
             </div>
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
+                    {% if bloquear_navegacion_por_password %}
+                    <li><span class="nav-link-pill nav-link-disabled">Cambiar contraseña</span></li>
+                    {% else %}
                     {% if bloquear_navegacion_por_tarjeta %}
                     <li><span class="nav-link-pill nav-link-disabled">Mi Perfil</span></li>
                     {% else %}
@@ -62,6 +66,7 @@
                     {% if current_user.tipo_usuario == 'administrador' %}
                     <li><a href="{{ url_for('turnos.administrar_turnos') }}" class="nav-link-pill nav-link-pill-alt">Gestionar Turnos</a></li>
                     <li><a href="{{ url_for('auth.gestionar_empleados') }}" class="nav-link-pill nav-link-pill-alt">Gestionar Empleados</a></li>
+                    {% endif %}
                     {% endif %}
                     <li class="user-menu">
                         <div class="user-chip">
