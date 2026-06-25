@@ -16,8 +16,7 @@
         {% if not reserva.asistencia_validada %}
         {% if monto_pendiente > 0 %}
         <div class="alert alert-warning">
-            No se puede validar la asistencia hasta que no se termine de pagar el turno.
-            Monto pendiente: ${{ '%.2f'|format(monto_pendiente) }}.
+            No se puede validar la asistencia hasta que el turno esté pagado al 100%.
         </div>
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
         {% else %}

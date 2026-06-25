@@ -2565,7 +2565,7 @@ def validar_asistencia_qr(qr_token):
     monto_pendiente = _monto_pendiente_de_reserva(reserva)
     if request.method == 'POST':
         if monto_pendiente > 0:
-            flash('No se puede validar la asistencia hasta que no se termine de pagar el turno', 'error')
+            flash('No se puede validar la asistencia hasta que el turno esté pagado al 100%.', 'error')
             return redirect(url_for('turnos.validar_asistencia_qr', qr_token=qr_token))
 
         reserva.asistencia_validada = True
