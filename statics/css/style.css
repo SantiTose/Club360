@@ -284,6 +284,37 @@ p {
 .alert-danger,
 .alert-error { background: #fbeceb; border-color: #efc4c0; color: #963535; }
 
+.waitlist-invite {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid #bfe1cf;
+    border-radius: var(--radius-md);
+    background: #e6f4ed;
+    box-shadow: var(--shadow-sm);
+}
+
+.waitlist-invite h3 {
+    margin: 0.15rem 0 0.25rem;
+    color: #1f4f3b;
+}
+
+.waitlist-invite p {
+    margin: 0;
+    color: #315a49;
+    font-weight: 600;
+}
+
+.waitlist-invite-actions {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .hero {
     position: relative;
     overflow: hidden;
@@ -2048,7 +2079,23 @@ textarea:focus {
 .confirm-modal-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 0.7rem;
+}
+
+.confirm-modal-actions [hidden] {
+    display: none !important;
+}
+
+.confirm-modal-actions.has-alt-action {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+}
+
+.confirm-modal-actions.has-alt-action .btn {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
 }
 
 .turnos-grid {
@@ -3013,5 +3060,9 @@ tbody tr:hover {
 
     .confirm-modal-actions {
         flex-direction: column-reverse;
+    }
+
+    .confirm-modal-actions.has-alt-action {
+        grid-template-columns: 1fr;
     }
 }

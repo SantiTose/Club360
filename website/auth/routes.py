@@ -28,6 +28,44 @@ def _generar_token_reset():
     return secrets.token_urlsafe(32)
 
 
+def _cancelar_reservas_por_eliminacion_cuenta(cliente):
+    from website.models import Reserva, Turno, TipoClase
+    from website.turnos.routes import _notificar_siguiente_lista_espera
+
+    reservas = (
+        Reserva.query
+        .filter_by(usuario_id=cliente.id)
+        .all()
+    )
+    canceladas = 0
+    for reserva in reservas:
+        turno = reserva.turno
+        if turno and not turno.cancelado and turno.hora_fin >= datetime.utcnow():
+            tipo_cupo_liberado = TipoClase.ABONADA if reserva.tipo_clase == TipoClase.ABONADA or reserva.abono_id else TipoClase.NO_ABONADA
+            turno.cupos_disponibles = min(turno.capacidad_maxima, turno.cupos_disponibles + 1)
+            _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado)
+            canceladas += 1
+        db.session.delete(reserva)
+    return canceladas
+
+
+def _eliminar_cuenta_cliente(cliente):
+    from website.models import AbonoCliente, CreditoCliente, ListaEspera, Pago, Suspension, TarjetaCredito, Turno
+
+    reservas_canceladas = _cancelar_reservas_por_eliminacion_cuenta(cliente)
+
+    Turno.query.filter_by(usuario_id=cliente.id).update({'usuario_id': None}, synchronize_session=False)
+    ListaEspera.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+    Suspension.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+    CreditoCliente.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+    TarjetaCredito.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+    Pago.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+    AbonoCliente.query.filter_by(usuario_id=cliente.id).delete(synchronize_session=False)
+
+    db.session.delete(cliente)
+    return reservas_canceladas
+
+
 def _validar_password_nueva(password, password_confirm):
     field_errors = {}
     if len(password) < 6:
@@ -436,6 +474,23 @@ def editar_perfil():
     if request.method == 'POST':
         action = request.form.get('action', 'perfil')
         tarjeta_obligatoria_pendiente = not _cliente_tiene_tarjeta(current_user)
+
+        if action == 'eliminar_cuenta':
+            from website.turnos.routes import _total_deudas_pendientes
+
+            total_deuda = _total_deudas_pendientes(current_user.id)
+            if total_deuda > 0:
+                flash(f'No podés eliminar tu cuenta porque tenés una deuda pendiente de ${total_deuda:.2f}. Primero tenés que pagarla.', 'error')
+                return redirect(url_for('turnos.mis_deudas'))
+
+            reservas_canceladas = _eliminar_cuenta_cliente(current_user)
+            db.session.commit()
+            logout_user()
+            flash(
+                f'Tu cuenta fue eliminada correctamente. Reservas canceladas: {reservas_canceladas}.',
+                'success',
+            )
+            return redirect(url_for('index'))
 
         if tarjeta_obligatoria_pendiente and action != 'agregar_tarjeta':
             flash('Primero tenes que agregar una tarjeta de credito para continuar.', 'warning')

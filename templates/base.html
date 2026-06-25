@@ -99,6 +99,32 @@
             {% endif %}
         {% endwith %}
 
+        {% if invitacion_lista_espera %}
+        <section class="waitlist-invite" id="waitlist-invite">
+            <div>
+                <span class="turno-detail-kicker">Cupo liberado</span>
+                <h3>¿Querés anotarte en este turno?</h3>
+                <p>
+                    {{ invitacion_lista_espera.turno.actividad|upper }}
+                    el {{ invitacion_lista_espera.turno.hora_inicio.strftime('%d/%m/%Y') }}
+                    de {{ invitacion_lista_espera.turno.hora_inicio.strftime('%H:%M') }}
+                    a {{ invitacion_lista_espera.turno.hora_fin.strftime('%H:%M') }}
+                    como {{ 'abonado' if invitacion_lista_espera.tipo_clase == 'abonada' else 'no abonado' }}.
+                </p>
+            </div>
+            <div class="waitlist-invite-actions">
+                <form method="POST" action="{{ url_for('turnos.reservar_turno', turno_id=invitacion_lista_espera.turno_id) }}" data-waitlist-response="true">
+                    <input type="hidden" name="tipo_clase" value="{{ invitacion_lista_espera.tipo_clase }}">
+                    <input type="hidden" name="redirect_to" value="mis_turnos">
+                    <button type="submit" class="btn btn-success">Sí</button>
+                </form>
+                <form method="POST" action="{{ url_for('turnos.rechazar_cupo_lista_espera', item_id=invitacion_lista_espera.id) }}" data-waitlist-response="true">
+                    <button type="submit" class="btn btn-secondary">No</button>
+                </form>
+            </div>
+        </section>
+        {% endif %}
+
         {% block content %}{% endblock %}
     </main>
 
@@ -116,12 +142,23 @@
             <p id="confirm-modal-message">Esta acción requiere confirmación.</p>
             <div class="confirm-modal-actions">
                 <button type="button" class="btn btn-secondary" id="confirm-modal-cancel">Cancelar</button>
+                <button type="button" class="btn btn-secondary" id="confirm-modal-alt" hidden>Acción alternativa</button>
                 <button type="button" class="btn btn-danger" id="confirm-modal-accept">Confirmar</button>
             </div>
         </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        document.querySelectorAll('[data-waitlist-response="true"]').forEach((form) => {
+            form.addEventListener('submit', () => {
+                const invite = document.getElementById('waitlist-invite');
+                if (invite) {
+                    invite.hidden = true;
+                }
+            });
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

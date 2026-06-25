@@ -11,8 +11,9 @@
         </div>
     </div>
 
+    {% if reservas_info %}
     <div class="calendar-toolbar-card">
-        {% if reservas_info %}
+        <h3 style="margin-bottom: 1rem;">Turnos activos</h3>
         <table class="table">
             <thead>
                 <tr>
@@ -48,12 +49,47 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
+    </div>
+    {% endif %}
+
+    {% if reservas_confirmadas_info %}
+    <div class="calendar-toolbar-card">
+        <h3 style="margin-bottom: 1rem;">Turnos confirmados</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Actividad</th>
+                    <th>Fecha y horario</th>
+                    <th>Modalidad</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in reservas_confirmadas_info %}
+                {% set reserva = item.reserva %}
+                <tr>
+                    <td>{{ reserva.turno.actividad|capitalize }}</td>
+                    <td>
+                        {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}
+                        -
+                        {{ reserva.turno.hora_fin.strftime('%H:%M') }}
+                    </td>
+                    <td>{{ 'Abonada' if reserva.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                    <td>{{ item.estado_pago }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if not reservas_info and not reservas_confirmadas_info %}
+    <div class="calendar-toolbar-card">
         <div class="calendar-empty-state" style="margin-top: 0;">
             <p>No tienes turnos reservados.</p>
             <a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="btn btn-primary">Reservar un turno</a>
         </div>
-        {% endif %}
     </div>
+    {% endif %}
 </section>
 {% endblock %}

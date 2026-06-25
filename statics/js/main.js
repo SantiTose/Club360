@@ -618,16 +618,31 @@ window.addEventListener('DOMContentLoaded', function() {
     const titleEl = document.getElementById('confirm-modal-title');
     const messageEl = document.getElementById('confirm-modal-message');
     const acceptBtn = document.getElementById('confirm-modal-accept');
+    const altBtn = document.getElementById('confirm-modal-alt');
     const cancelBtn = document.getElementById('confirm-modal-cancel');
+    const actionsEl = modal.querySelector('.confirm-modal-actions');
 
     let pendingAction = null;
+    let pendingAltAction = null;
     let pendingTrigger = null;
 
-    function openModal({ title, message, actionLabel = 'Confirmar', actionClass = 'btn-danger', cancelLabel = 'Cancelar' }) {
+    function openModal({
+        title,
+        message,
+        actionLabel = 'Confirmar',
+        actionClass = 'btn-danger',
+        cancelLabel = 'Cancelar',
+        altLabel = '',
+        altActionClass = 'btn-secondary'
+    }) {
         titleEl.textContent = title;
         messageEl.textContent = message;
         acceptBtn.textContent = actionLabel;
         acceptBtn.className = `btn ${actionClass}`;
+        altBtn.textContent = altLabel;
+        altBtn.className = `btn ${altActionClass}`;
+        altBtn.hidden = !altLabel;
+        actionsEl.classList.toggle('has-alt-action', Boolean(altLabel));
         cancelBtn.textContent = cancelLabel;
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
@@ -639,7 +654,9 @@ window.addEventListener('DOMContentLoaded', function() {
         modal.classList.remove('is-open');
         modal.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('modal-open');
+        actionsEl.classList.remove('has-alt-action');
         pendingAction = null;
+        pendingAltAction = null;
         if (pendingTrigger) {
             pendingTrigger.focus();
             pendingTrigger = null;
@@ -710,12 +727,31 @@ window.addEventListener('DOMContentLoaded', function() {
             form.dataset.confirmed = 'true';
             form.submit();
         };
+        pendingAltAction = null;
+        if (form.dataset.confirmAltAction) {
+            pendingAltAction = function() {
+                if (form.dataset.confirmAltName) {
+                    let input = form.querySelector(`input[name="${form.dataset.confirmAltName}"]`);
+                    if (!input) {
+                        input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = form.dataset.confirmAltName;
+                        form.appendChild(input);
+                    }
+                    input.value = form.dataset.confirmAltValue || '';
+                }
+                form.dataset.confirmed = 'true';
+                form.submit();
+            };
+        }
         openModal({
             title: form.dataset.confirmTitle || 'Confirmar acción',
             message: form.dataset.confirmMessage || '¿Querés continuar con esta acción?',
             actionLabel: form.dataset.confirmAction || 'Confirmar',
             cancelLabel: form.dataset.confirmCancel || 'Cancelar',
-            actionClass: form.dataset.confirmVariant === 'secondary' ? 'btn-primary' : 'btn-danger'
+            actionClass: form.dataset.confirmVariant === 'secondary' ? 'btn-primary' : 'btn-danger',
+            altLabel: form.dataset.confirmAltAction || '',
+            altActionClass: form.dataset.confirmAltVariant === 'danger' ? 'btn-danger' : 'btn-secondary'
         });
     });
 
@@ -728,6 +764,11 @@ window.addEventListener('DOMContentLoaded', function() {
     cancelBtn.addEventListener('click', closeModal);
     acceptBtn.addEventListener('click', function() {
         const action = pendingAction;
+        closeModal();
+        if (action) action();
+    });
+    altBtn.addEventListener('click', function() {
+        const action = pendingAltAction;
         closeModal();
         if (action) action();
     });

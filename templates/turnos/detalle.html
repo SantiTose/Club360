@@ -14,27 +14,37 @@
 
     <h4 style="margin-top: 1.5rem;">Listas de espera</h4>
 
-    {% if listas['general'] %}
+    {% set hay_espera = listas['abonada'] or listas['no_abonada'] %}
+    {% if hay_espera %}
+    {% for tipo, titulo in [('abonada', 'Abonados'), ('no_abonada', 'No abonados')] %}
+    <h5 style="margin-top: 1rem;">{{ titulo }}</h5>
+    {% if listas[tipo] %}
     <table class="table">
         <thead>
             <tr>
                 <th>Posición</th>
                 <th>Usuario</th>
                 <th>Email</th>
-                <th>Modalidad</th>
+                <th>Estado</th>
+                <th>Inscripción</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in listas['general'] %}
+            {% for item in listas[tipo] %}
             <tr>
                 <td>{{ item.posicion }}</td>
                 <td>{{ item.usuario.apellido }}, {{ item.usuario.nombre }}</td>
                 <td>{{ item.usuario.email }}</td>
-                <td>{{ 'Abonada' if item.tipo_clase == 'abonada' else 'No abonada' }}</td>
+                <td>{{ 'Avisado' if item.estado == 'notificado' else 'Esperando' }}</td>
+                <td>{{ item.fecha_registro.strftime('%d/%m/%Y %H:%M') if item.fecha_registro else '-' }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <p class="text-muted">No hay usuarios en esta lista.</p>
+    {% endif %}
+    {% endfor %}
     {% else %}
     <p>No hay usuarios en lista de espera.</p>
     {% endif %}

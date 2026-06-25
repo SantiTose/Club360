@@ -188,6 +188,8 @@ def _obtener_metodo_pago_reserva(reserva_interna):
 def _resolver_redirect_reserva():
     if request.form.get('redirect_to') == 'administrar_turnos' and _es_admin(current_user):
         return redirect(url_for('turnos.administrar_turnos'))
+    if request.form.get('redirect_to') == 'mis_turnos':
+        return redirect(url_for('turnos.mis_turnos'))
     return redirect(url_for('turnos.ver_turnos_disponibles'))
 
 
@@ -530,6 +532,45 @@ def _obtener_siguiente_lista_espera_para_cupo(turno, tipo_cupo_liberado):
     )
 
 
+def _obtener_invitacion_activa_turno(turno_id):
+    return (
+        ListaEspera.query
+        .filter_by(turno_id=turno_id, estado=ESTADO_ESPERA_NOTIFICADO)
+        .order_by(ListaEspera.fecha_notificacion.asc(), ListaEspera.fecha_registro.asc())
+        .first()
+    )
+
+
+def _enviar_email_cupo_lista_espera(item):
+    turno = item.turno
+    usuario = item.usuario
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    asunto = 'Se libero un cupo - Club 360'
+    cuerpo = (
+        f"Hola {usuario.nombre},\n\n"
+        f"Se libero {turno.actividad.upper()} el {turno.hora_inicio.strftime('%d/%m/%Y')} "
+        f"a las {turno.hora_inicio.strftime('%H:%M')}.\n"
+        "Inicia sesion en la pagina para confirmar la reserva.\n\n"
+        "El cupo no queda reservado hasta que confirmes desde el sistema."
+    )
+    enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+
+
+def _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado):
+    if turno.cupos_disponibles <= 0:
+        return None
+
+    siguiente = _obtener_siguiente_lista_espera_para_cupo(turno, tipo_cupo_liberado)
+    if not siguiente:
+        return None
+
+    siguiente.estado = ESTADO_ESPERA_NOTIFICADO
+    siguiente.fecha_notificacion = datetime.utcnow()
+    siguiente.tipo_cupo_liberado = tipo_cupo_liberado
+    _enviar_email_cupo_lista_espera(siguiente)
+    return siguiente
+
+
 def _recalcular_posiciones_lista(turno_id):
     for tipo_clase in (TipoClase.ABONADA, TipoClase.NO_ABONADA):
         pendientes = (
@@ -564,6 +605,17 @@ def _agregar_a_lista_espera_si_no_existe(turno, usuario_id, tipo_clase):
 
     _agregar_a_lista_espera(turno, usuario_id, tipo_clase)
     return True
+
+
+def _eliminar_espera_usuario_turno(turno_id, usuario_id):
+    eliminadas = (
+        ListaEspera.query
+        .filter_by(turno_id=turno_id, usuario_id=usuario_id)
+        .delete(synchronize_session=False)
+    )
+    if eliminadas:
+        _recalcular_posiciones_lista(turno_id)
+    return eliminadas
 
 
 def _limpiar_esperas_de_abono(usuario_id, abono):
@@ -622,51 +674,8 @@ def _crear_abono_desde_lista_espera(usuario, turno):
 
 
 def _promover_siguiente_lista_espera(turno, tipo_clase=None):
-    siguiente = _obtener_siguiente_lista_espera(turno, tipo_clase=tipo_clase)
-    if not siguiente or turno.cupos_disponibles <= 0:
-        return None
-
-    usuario_id = siguiente.usuario_id
-    tipo_clase = siguiente.tipo_clase
-    usuario_promovido = Usuario.query.get(usuario_id)
-    if not usuario_promovido:
-        db.session.delete(siguiente)
-        _recalcular_posiciones_lista(turno.id)
-        return None
-
-    if tipo_clase == TipoClase.ABONADA:
-        abono, creadas, conflictos = _crear_abono_desde_lista_espera(usuario_promovido, turno)
-        if conflictos or not abono:
-            return None
-
-        _limpiar_esperas_de_abono(usuario_id, abono)
-        reservas_qr = Reserva.query.filter_by(usuario_id=usuario_id, abono_id=abono.id).all()
-        _enviar_emails_qr_reservas(reservas_qr, asunto='Abono confirmado desde lista de espera - Club 360')
-        return usuario_promovido
-
-    reserva_promovida = Reserva(
-        usuario_id=usuario_id,
-        turno_id=turno.id,
-        tipo_clase=tipo_clase,
-        qr_token=secrets.token_urlsafe(24),
-    )
-    db.session.add(reserva_promovida)
-    turno.cupos_disponibles -= 1
-    db.session.delete(siguiente)
-
-    _crear_pago_pendiente_reserva(
-        usuario_promovido,
-        turno,
-        tipo_clase,
-        f"espera-{turno.id}-{usuario_id}-{int(datetime.utcnow().timestamp())}",
-        metodo_pago='tarjeta_credito',
-    )
-
-    db.session.flush()
-    _enviar_email_qr_reserva(reserva_promovida, asunto='Promoción desde lista de espera - Club 360')
-
-    _recalcular_posiciones_lista(turno.id)
-    return usuario_promovido
+    tipo_cupo_liberado = tipo_clase or TipoClase.NO_ABONADA
+    return _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado)
 
 
 def _abono_cubre_turno(abono, turno):
@@ -1707,34 +1716,12 @@ def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
 
 
 def _enviar_email_qr_reserva(reserva, asunto='Reserva confirmada - Club 360'):
-    turno = reserva.turno
-    usuario = reserva.usuario
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    validation_url = url_for('turnos.validar_asistencia_qr', qr_token=reserva.qr_token, _external=True)
-    try:
-        qr_path = generar_qr_asistencia(base_dir, reserva, validation_url)
-    except RuntimeError as exc:
-        qr_path = f"No generado: {exc}"
-    modalidad = 'Abonada' if reserva.tipo_clase == TipoClase.ABONADA else 'No abonada'
-    cuerpo = (
-        f"Hola {usuario.nombre},\n\n"
-        "Tu reserva quedó confirmada.\n\n"
-        f"Actividad: {turno.actividad.upper()}\n"
-        f"Fecha y hora: {turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}\n"
-        f"Modalidad: {modalidad}\n"
-        f"Código de asistencia: {reserva.qr_token}\n"
-        f"QR generado: {qr_path}\n\n"
-        "Presentá este QR en recepción para que un empleado registre tu asistencia."
-    )
-    enviar_email_simulado(base_dir, usuario.email, asunto, cuerpo)
+    # El QR se consulta desde "Mis Turnos"; no se envía por mail al reservar.
+    return False
 
 
 def _enviar_emails_qr_reservas(reservas, asunto='Reserva confirmada - Club 360'):
-    enviados = 0
-    for reserva in reservas:
-        _enviar_email_qr_reserva(reserva, asunto=asunto)
-        enviados += 1
-    return enviados
+    return 0
 
 
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
@@ -1872,8 +1859,12 @@ def eventos_turnos():
             .order_by(Turno.hora_inicio.asc())
             .all()
         )
-        eventos = [
-            {
+        eventos = []
+        for turno in turnos:
+            espera_abonados = ListaEspera.query.filter_by(turno_id=turno.id, tipo_clase=TipoClase.ABONADA).count()
+            espera_no_abonados = ListaEspera.query.filter_by(turno_id=turno.id, tipo_clase=TipoClase.NO_ABONADA).count()
+            invitacion_pendiente = bool(_obtener_invitacion_activa_turno(turno.id))
+            eventos.append({
                 'id': str(turno.id),
                 'title': f"{turno.actividad.upper()} ({turno.cupos_disponibles}/{turno.capacidad_maxima})",
                 'start': turno.hora_inicio.isoformat(),
@@ -1888,11 +1879,14 @@ def eventos_turnos():
                     'cancelar_url': url_for('turnos.cancelar_turno_admin', turno_id=turno.id),
                     'eliminar_clase_url': url_for('turnos.eliminar_clase_admin', turno_id=turno.id),
                     'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
-                    'sin_cupos': turno.cupos_disponibles <= 0,
+                    'detalle_url': url_for('turnos.buscar_turno', turno_id=turno.id),
+                    'sin_cupos': turno.cupos_disponibles <= 0 or invitacion_pendiente,
+                    'invitacion_pendiente': invitacion_pendiente,
+                    'espera_abonados': espera_abonados,
+                    'espera_no_abonados': espera_no_abonados,
+                    'espera_total': espera_abonados + espera_no_abonados,
                 }
-            }
-            for turno in turnos
-        ]
+            })
         return jsonify(eventos)
 
     query = (
@@ -1916,31 +1910,32 @@ def eventos_turnos():
             reserva.turno_id
             for reserva in Reserva.query.filter_by(usuario_id=current_user.id).all()
         }
-    eventos = [
-        {
+    eventos = []
+    for turno in turnos:
+        invitacion_pendiente = bool(_obtener_invitacion_activa_turno(turno.id))
+        cupos_disponibles_visibles = 0 if invitacion_pendiente else turno.cupos_disponibles
+        eventos.append({
             'id': str(turno.id),
             'title': f"{turno.actividad.upper()} ({turno.cupos_disponibles}/{turno.capacidad_maxima})",
             'start': turno.hora_inicio.isoformat(),
             'end': turno.hora_fin.isoformat(),
-            'backgroundColor': '#2e7d32' if turno.cupos_disponibles > 0 else '#ef6c00',
-            'borderColor': '#1b5e20' if turno.cupos_disponibles > 0 else '#e65100',
+            'backgroundColor': '#2e7d32' if cupos_disponibles_visibles > 0 else '#ef6c00',
+            'borderColor': '#1b5e20' if cupos_disponibles_visibles > 0 else '#e65100',
             'extendedProps': {
                 'actividad': turno.actividad,
                 'cupos': f"{turno.cupos_disponibles}/{turno.capacidad_maxima}",
-                'cupos_disponibles': turno.cupos_disponibles,
+                'cupos_disponibles': cupos_disponibles_visibles,
                 'capacidad_maxima': turno.capacidad_maxima,
                 'precio': _calcular_monto_reserva(turno.actividad, TipoClase.NO_ABONADA, current_user),
                 'duracion_minutos': int((turno.hora_fin - turno.hora_inicio).total_seconds() // 60),
                 'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                 'cancelar_url': url_for('turnos.cancelar_turno', turno_id=turno.id),
-                'sin_cupos': turno.cupos_disponibles <= 0,
+                'sin_cupos': cupos_disponibles_visibles <= 0,
                 'ya_reservado': turno.id in reservas_usuario,
                 'tiene_abono': bool(_buscar_abono_activo_para_turno(current_user.id, turno)) if current_user.tipo_usuario == TipoUsuario.CLIENTE else False,
                 'credito_disponible': bool(credito_disponible and credito_disponible.actividad == turno.actividad),
             }
-        }
-        for turno in turnos
-    ]
+        })
     return jsonify(eventos)
 
 
@@ -2007,10 +2002,28 @@ def reservar_turno(turno_id):
         flash('El cliente ya tiene reservado este turno' if reserva_interna else 'Ya tienes reservado este turno', 'error')
         return _resolver_redirect_reserva()
 
+    invitacion_activa = _obtener_invitacion_activa_turno(turno_id)
+    if invitacion_activa and invitacion_activa.usuario_id != cliente_objetivo.id:
+        existente_espera = ListaEspera.query.filter_by(
+            turno_id=turno_id,
+            usuario_id=cliente_objetivo.id
+        ).first()
+        if existente_espera:
+            flash('El cliente ya está en la lista de espera para este turno' if reserva_interna else 'Ya estás en la lista de espera para este turno', 'info')
+        else:
+            _agregar_a_lista_espera(turno, cliente_objetivo.id, tipo_clase)
+            db.session.commit()
+            flash(f'El cupo liberado está pendiente de confirmación. {cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera.', 'info')
+        return _resolver_redirect_reserva()
+
+    if invitacion_activa and invitacion_activa.usuario_id == cliente_objetivo.id:
+        tipo_clase = invitacion_activa.tipo_clase
+
     if turno.cupos_disponibles > 0:
         credito_aplicado = 0.0
         monto_final = 0.0
         estado_pago = 'completado'
+        reserva_para_qr = None
         credito = _obtener_credito_disponible(cliente_objetivo.id, turno.actividad) if usar_credito else None
         if usar_credito and not credito:
             flash('No hay créditos disponibles para esta actividad.', 'error')
@@ -2031,6 +2044,7 @@ def reservar_turno(turno_id):
             turno.cupos_disponibles -= 1
             db.session.flush()
             _marcar_credito_usado(credito, reserva)
+            _eliminar_espera_usuario_turno(turno_id, cliente_objetivo.id)
             db.session.commit()
             _enviar_email_qr_reserva(reserva)
             flash('Ha utilizado su credito y se reservo el turno exitosamente.', 'success')
@@ -2060,6 +2074,7 @@ def reservar_turno(turno_id):
                 if creado_abono:
                     if _abono_tiene_pagos_pendientes(abono):
                         abono.estado = EstadoAbono.PENDIENTE
+                    _eliminar_espera_usuario_turno(turno_id, cliente_objetivo.id)
                     db.session.commit()
                     reservas_qr = (
                         Reserva.query
@@ -2154,6 +2169,7 @@ def reservar_turno(turno_id):
                 flash('No se pudo cobrar la seña con tarjeta de crédito. No se pudo reservar el turno.', 'error')
                 return _resolver_redirect_reserva()
 
+        _eliminar_espera_usuario_turno(turno_id, cliente_objetivo.id)
         db.session.commit()
         if tipo_clase == TipoClase.ABONADA and reserva_para_qr:
             _enviar_email_qr_reserva(reserva_para_qr)
@@ -2209,6 +2225,30 @@ def reservar_turno(turno_id):
     return _resolver_redirect_reserva()
 
 
+@turnos_bp.route('/lista-espera/<int:item_id>/rechazar', methods=['POST'])
+@login_required
+def rechazar_cupo_lista_espera(item_id):
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta acción está disponible solo para clientes', 'error')
+        return redirect(url_for('dashboard'))
+
+    item = ListaEspera.query.get_or_404(item_id)
+    if item.usuario_id != current_user.id or item.estado != ESTADO_ESPERA_NOTIFICADO:
+        flash('No tienes una invitación activa para este cupo', 'error')
+        return redirect(url_for('dashboard'))
+
+    turno = item.turno
+    tipo_cupo_liberado = item.tipo_cupo_liberado or item.tipo_clase
+    db.session.delete(item)
+    db.session.flush()
+    _recalcular_posiciones_lista(turno.id)
+    _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado)
+    db.session.commit()
+
+    flash('Te quitamos de la lista de espera de ese turno.', 'info')
+    return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+
 @turnos_bp.route('/cancelar/<int:turno_id>', methods=['POST'])
 @login_required
 def cancelar_turno(turno_id):
@@ -2224,6 +2264,7 @@ def cancelar_turno(turno_id):
         return redirect(url_for('turnos.mis_turnos'))
     
     es_reserva_abonada = _es_reserva_abonada(reserva)
+    tipo_cupo_liberado = TipoClase.ABONADA if es_reserva_abonada else TipoClase.NO_ABONADA
     credito_generado = None
     pago_reserva = _buscar_pago_abono_completado(current_user.id, reserva.abono_id) if es_reserva_abonada else None
     abono_id_cancelado = reserva.abono_id if es_reserva_abonada else None
@@ -2264,41 +2305,9 @@ def cancelar_turno(turno_id):
             flash('Cancelación no abonada con menos de 24h: seña no reembolsable', 'warning')
 
     abono_cancelado_por_vacio = _cancelar_abono_si_sin_reservas_futuras(abono_id_cancelado)
-    reserva_promovida_para_qr = None
-
-    # Si hay lista de espera, asciende automáticamente al primero.
-    siguiente = _obtener_siguiente_lista_espera(turno)
-    if siguiente and turno.cupos_disponibles > 0:
-        reserva_promovida_para_qr = Reserva(
-            usuario_id=siguiente.usuario_id,
-            turno_id=turno_id,
-            tipo_clase=siguiente.tipo_clase,
-            qr_token=secrets.token_urlsafe(24),
-        )
-        db.session.add(reserva_promovida_para_qr)
-        turno.cupos_disponibles -= 1
-        (
-            ListaEspera.query
-            .filter_by(turno_id=turno_id, usuario_id=siguiente.usuario_id)
-            .delete(synchronize_session=False)
-        )
-
-        # Cobra automaticamente la seña al usuario promovido desde lista de espera.
-        usuario_promovido = Usuario.query.get(siguiente.usuario_id)
-        _crear_pago_pendiente_reserva(
-            usuario_promovido,
-            turno,
-            siguiente.tipo_clase,
-            f"espera-{turno_id}-{siguiente.usuario_id}-{int(datetime.utcnow().timestamp())}",
-            metodo_pago='tarjeta_credito',
-        )
-
-        # Recalcular posiciones restantes por cada tipo de lista.
-        _recalcular_posiciones_lista(turno_id)
+    _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado)
 
     db.session.commit()
-    if reserva_promovida_para_qr:
-        _enviar_email_qr_reserva(reserva_promovida_para_qr, asunto='Promoción desde lista de espera - Club 360')
     
     if credito_generado:
         flash(
@@ -2339,13 +2348,22 @@ def mis_turnos():
         flash('Se enviaron recordatorios de clases con QR para hoy', 'info')
 
     reservas_info = []
+    reservas_confirmadas_info = []
     for reserva in reservas:
-        reservas_info.append({
+        item = {
             'reserva': reserva,
             'estado_pago': _estado_cliente_de_reserva(reserva),
-        })
+        }
+        if reserva.asistencia_validada:
+            reservas_confirmadas_info.append(item)
+        else:
+            reservas_info.append(item)
 
-    return render_template('turnos/mis_turnos.html', reservas_info=reservas_info)
+    return render_template(
+        'turnos/mis_turnos.html',
+        reservas_info=reservas_info,
+        reservas_confirmadas_info=reservas_confirmadas_info,
+    )
 
 
 @turnos_bp.route('/mis-turnos/<int:reserva_id>/qr')
@@ -2475,16 +2493,22 @@ def registrar_pago_efectivo_turno_cliente(usuario_id, reserva_id):
 @turnos_bp.route('/buscar/<int:turno_id>')
 @login_required
 def buscar_turno(turno_id):
-    """Buscar un turno (para empleados)."""
-    if not _es_empleado_o_admin(current_user):
+    """Ver detalle de un turno para administradores."""
+    if not _es_admin(current_user):
         flash('No tienes permisos para acceder a esta funcionalidad', 'error')
         return redirect(url_for('index'))
 
     turno = Turno.query.get_or_404(turno_id)
     listas = {
-        TIPO_LISTA_GENERAL: (
+        TipoClase.ABONADA.value: (
             ListaEspera.query
-            .filter_by(turno_id=turno.id, tipo_lista=TIPO_LISTA_GENERAL)
+            .filter_by(turno_id=turno.id, tipo_clase=TipoClase.ABONADA)
+            .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
+            .all()
+        ),
+        TipoClase.NO_ABONADA.value: (
+            ListaEspera.query
+            .filter_by(turno_id=turno.id, tipo_clase=TipoClase.NO_ABONADA)
             .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
             .all()
         ),
@@ -3084,8 +3108,9 @@ def eliminar_clase_admin(turno_id):
         flash('El turno ya no está activo', 'info')
         return redirect(url_for('turnos.administrar_turnos'))
 
+    modo_eliminacion = request.form.get('modo_eliminacion', 'todas').strip()
     motivo = request.form.get('motivo', '').strip()
-    if not motivo:
+    if modo_eliminacion != 'sin_reservas' and not motivo:
         flash('Debes indicar el motivo de la eliminación de la clase', 'error')
         return redirect(url_for('turnos.administrar_turnos'))
 
@@ -3098,6 +3123,31 @@ def eliminar_clase_admin(turno_id):
     dia_semana = DIAS_SEMANA[turno.hora_inicio.weekday()]
     hora_inicio = turno.hora_inicio.strftime("%H:%M")
     hora_fin = turno.hora_fin.strftime("%H:%M")
+
+    if modo_eliminacion == 'sin_reservas':
+        turnos_sin_reservas = [
+            turno_recurrente for turno_recurrente in turnos_a_eliminar
+            if turno_recurrente.cupos_disponibles == turno_recurrente.capacidad_maxima
+            and Reserva.query.filter_by(turno_id=turno_recurrente.id).count() == 0
+        ]
+        if not turnos_sin_reservas:
+            flash('No hay instancias sin reservas para eliminar en esta clase.', 'info')
+            return redirect(url_for('turnos.administrar_turnos'))
+
+        for turno_recurrente in turnos_sin_reservas:
+            ListaEspera.query.filter_by(turno_id=turno_recurrente.id).delete(synchronize_session=False)
+            db.session.delete(turno_recurrente)
+
+        db.session.commit()
+        turnos_con_reserva = len(turnos_a_eliminar) - len(turnos_sin_reservas)
+        flash(
+            f'Se eliminaron {len(turnos_sin_reservas)} instancia(s) sin reservas de la clase '
+            f'{actividad} de los {dia_semana} de {hora_inicio} a {hora_fin}. '
+            f'Se dejaron {turnos_con_reserva} instancia(s) con reservas.',
+            'success',
+        )
+        return redirect(url_for('turnos.administrar_turnos'))
+
     resumen_total = {
         'reservas_canceladas': 0,
         'creditos_generados': 0,

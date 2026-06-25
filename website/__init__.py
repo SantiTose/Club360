@@ -232,6 +232,24 @@ def create_app(config_name='development'):
         procesar_suspensiones_automaticas_diarias()
         app.extensions['club360_last_daily_suspension_audit'] = today_key
 
+    @app.context_processor
+    def _inject_lista_espera_invitacion():
+        if not current_user.is_authenticated:
+            return {'invitacion_lista_espera': None}
+
+        from website.models import ListaEspera, TipoUsuario
+
+        if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+            return {'invitacion_lista_espera': None}
+
+        invitacion = (
+            ListaEspera.query
+            .filter_by(usuario_id=current_user.id, estado='notificado')
+            .order_by(ListaEspera.fecha_notificacion.asc(), ListaEspera.fecha_registro.asc())
+            .first()
+        )
+        return {'invitacion_lista_espera': invitacion}
+
     # Register blueprints
     from website.auth import auth_bp
     from website.turnos import turnos_bp

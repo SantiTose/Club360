@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="button" class="calendar-slot-card ${context.isActive ? 'is-active' : ''}" data-event-id="${event.id}">
                     <span class="calendar-slot-time">${context.helpers.getHourRange(event.start, event.end)}</span>
                     <strong>${context.helpers.escapeHtml(event.title)}</strong>
-                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(estado)}</span>
+                    <span class="calendar-slot-meta">${context.helpers.escapeHtml(estado)} · Espera: ${p.espera_total || 0}</span>
                 </button>
             `;
         },
@@ -99,6 +99,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 : !p.cancelado
                 ? '<p class="text-warning" style="margin-top:1rem;">Sin cupos disponibles para asignar.</p>'
                 : '';
+            const avisoInvitacion = p.invitacion_pendiente
+                ? '<p class="text-warning" style="margin-top:1rem;">Hay un cupo liberado pendiente de confirmación por lista de espera.</p>'
+                : '';
             const cancelForm = `<form method="POST" action="${p.cancelar_url}" style="margin-top: .5rem;" data-confirm="true" data-confirm-title="Cancelar turno" data-confirm-message="Vas a cancelar y eliminar el turno de ${helpers.escapeHtml(event.title)}. Esta acción impactará en los usuarios reservados y no se podrá reanudar." data-confirm-action="Sí" data-confirm-cancel="No">
                     <div class="form-group" style="margin-bottom: .75rem;">
                         <label for="motivo_cancelacion"><strong>Motivo de cancelación</strong></label>
@@ -106,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <button type="submit" class="btn btn-danger btn-block">Cancelar Turno</button>
                </form>`;
-            const deleteClassForm = `<form method="POST" action="${p.eliminar_clase_url}" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);" data-confirm="true" data-confirm-title="Eliminar clase" data-confirm-message="Vas a eliminar todos los turnos activos de esta clase semanal. Esta acción impactará en los usuarios reservados y no se podrá deshacer." data-confirm-action="Eliminar" data-confirm-cancel="No">
+            const deleteClassForm = `<form method="POST" action="${p.eliminar_clase_url}" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);" data-confirm="true" data-confirm-title="Eliminar clase" data-confirm-message="Vas a eliminar todos los turnos activos de esta clase semanal. Esta acción impactará en los usuarios reservados y no se podrá deshacer." data-confirm-action="Eliminar" data-confirm-cancel="No" data-confirm-alt-action="Eliminar clases sin reserva" data-confirm-alt-name="modo_eliminacion" data-confirm-alt-value="sin_reservas">
                     <h4 style="margin-bottom: .55rem;">Eliminar Clase</h4>
                     <p class="text-muted" style="margin-bottom: .75rem;">Elimina todas las instancias activas de este deporte, día y horario.</p>
                     <div class="form-group" style="margin-bottom: .75rem;">
@@ -125,10 +128,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>
                     <div><strong>Finaliza</strong><span>${helpers.escapeHtml(fin)}</span></div>
                     <div><strong>Cupos</strong><span>${helpers.escapeHtml(p.cupos)}</span></div>
+                    <div><strong>Espera abonados</strong><span>${helpers.escapeHtml(String(p.espera_abonados || 0))}</span></div>
+                    <div><strong>Espera no abonados</strong><span>${helpers.escapeHtml(String(p.espera_no_abonados || 0))}</span></div>
                 </div>
                 <div class="turno-detail-actions">
-                    <a href="${p.editar_url}" class="btn btn-secondary btn-block">Editar</a>
+                    <a href="${p.detalle_url}" class="btn btn-secondary btn-block">Ver listas de espera</a>
                 </div>
+                ${avisoInvitacion}
                 ${formularioReserva}
                 ${cancelForm}
                 ${deleteClassForm}
