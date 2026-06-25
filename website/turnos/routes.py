@@ -2016,7 +2016,7 @@ def reservar_turno(turno_id):
         else:
             _agregar_a_lista_espera(turno, cliente_objetivo.id, tipo_clase)
             db.session.commit()
-            flash(f'El cupo liberado está pendiente de confirmación. {cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera.', 'info')
+            flash('Fuiste agregado a la lista de espera con exito.', 'info')
         return _resolver_redirect_reserva()
 
     if invitacion_activa and invitacion_activa.usuario_id == cliente_objetivo.id:
@@ -2109,17 +2109,11 @@ def reservar_turno(turno_id):
                         mensaje += ' Se aplicó un crédito a una clase del abono.'
                     flash(mensaje, 'success')
                     if turnos_en_espera:
-                        flash('Alguno de los turnos del abono no tenía cupo y fue agregado a la lista de espera.', 'info')
+                        flash('Fuiste agregado a la lista de espera con exito.', 'info')
                     for turno_espera in turnos_en_espera:
                         personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_espera.id).count()
                         if personas_en_espera == 10:
                             _notificar_admin_lista_espera_llena(turno_espera, TIPO_LISTA_GENERAL, personas_en_espera)
-                        flash(
-                            f'{cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera de '
-                            f'{turno_espera.actividad.upper()} del {turno_espera.hora_inicio.strftime("%d/%m/%Y %H:%M")} '
-                            'porque ya no tenía cupo.',
-                            'info'
-                        )
                     return _resolver_redirect_reserva()
 
             _, conflicto = _asegurar_reserva_abono(
@@ -2221,7 +2215,7 @@ def reservar_turno(turno_id):
         if personas_en_espera == 10:
             _notificar_admin_lista_espera_llena(turno, TIPO_LISTA_GENERAL, personas_en_espera)
 
-        flash(f'Turno lleno. {cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera', 'info')
+        flash('Fuiste agregado a la lista de espera con exito.', 'info')
     
     return _resolver_redirect_reserva()
 
