@@ -142,6 +142,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const mensajeCredito = '<p class="text-muted" style="margin-bottom:.75rem;">Vas a usar un crédito disponible para reservar esta clase suelta sin cargo.</p>';
             const mensajeReserva = usaCredito && !isFull
                 ? mensajeCredito
+                : p.en_lista_espera
+                ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya estás en la lista de espera para este turno. Podés salir si cambiás de idea.</p>'
                 : isFull
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Este turno ya está completo. Podés anotarte en la lista de espera para esta fecha y horario.</p>'
                 : mensajeAbono;
@@ -161,6 +163,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button type="submit" class="btn btn-secondary btn-block">Cancelar turno</button>
                         </form>
                    </div>`
+                : p.en_lista_espera
+                ? `<form method="POST" action="${p.salir_lista_espera_url}" data-confirm="true" data-confirm-title="Salir de la lista de espera" data-confirm-message="Vas a salir de la lista de espera para ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}." data-confirm-action="Salir">
+                        ${mensajeReserva}
+                        <button type="submit" class="btn btn-secondary btn-block">Salir de la lista de espera</button>
+                   </form>`
                 : `<form method="POST" action="${p.reservar_url}" data-confirm="true" data-confirm-title="${tituloConfirmacion}" data-confirm-message="${mensajeConfirmacion}" data-confirm-action="${accionConfirmacion}">
                         ${mensajeReserva}
                         ${usaCredito ? '<input type="hidden" name="usar_credito" value="1">' : ''}
@@ -185,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return `
                 <div class="turno-detail-header">
                     <span class="turno-detail-sport">${helpers.escapeHtml(actividad)}</span>
-                    <span class="badge badge-primary">${p.ya_reservado ? 'Ya reservado' : isFull ? 'Lista de espera' : 'Turno disponible'}</span>
+                    <span class="badge badge-primary">${p.ya_reservado ? 'Ya reservado' : p.en_lista_espera ? 'En lista de espera' : isFull ? 'Lista de espera' : 'Turno disponible'}</span>
                 </div>
                 <div class="turno-detail-meta">
                     <div><strong>Inicio</strong><span>${helpers.escapeHtml(inicio)}</span></div>

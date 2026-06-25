@@ -42,6 +42,69 @@ def _crear_turno_demo(actividad, inicio, capacidad=8):
     return turno
 
 
+def _crear_cliente_seed(nombre, apellido, dni, email, password='cliente123', saldo=100000.0):
+    return Usuario(
+        nombre=nombre,
+        apellido=apellido,
+        dni=dni,
+        email=email,
+        password=generate_password_hash(password),
+        tipo_usuario='cliente',
+        estado='activo',
+        tarjeta_credito_marca='Visa',
+        tarjeta_credito_ultimos4='1111',
+        tarjeta_credito_vencimiento=date(2030, 12, 31),
+        tarjeta_credito_saldo=saldo,
+    )
+
+
+def _crear_reserva_en_turno(usuario, turno, tipo_clase=TipoClase.NO_ABONADA, abono=None):
+    reserva = Reserva(
+        usuario_id=usuario.id,
+        turno_id=turno.id,
+        abono_id=abono.id if abono else None,
+        tipo_clase=tipo_clase,
+        qr_token=secrets.token_urlsafe(24),
+    )
+    db.session.add(reserva)
+    turno.cupos_disponibles = max(turno.cupos_disponibles - 1, 0)
+    db.session.flush()
+    return reserva
+
+
+def _crear_pago_no_abonado_con_deuda(usuario, turno, referencia):
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=4000.0,
+        metodo_pago='tarjeta_credito',
+        estado='completado',
+        tipo_clase=TipoClase.NO_ABONADA,
+        fecha_pago=datetime.utcnow(),
+        referencia_transaccion=f'{referencia}-senia',
+    ))
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=4000.0,
+        metodo_pago='tarjeta_credito',
+        estado='pendiente',
+        tipo_clase=TipoClase.NO_ABONADA,
+        fecha_pago=datetime.utcnow(),
+        referencia_transaccion=f'{referencia}-saldo',
+    ))
+
+
+def _crear_entrada_lista_espera(usuario, turno, tipo_clase, posicion):
+    db.session.add(ListaEspera(
+        usuario_id=usuario.id,
+        turno_id=turno.id,
+        tipo_lista='general',
+        tipo_clase=tipo_clase,
+        posicion=posicion,
+        estado='esperando',
+        fecha_registro=datetime.utcnow() + timedelta(seconds=posicion),
+    ))
+
+
 def _crear_suspensiones_demo_paulina(cliente):
     ahora = datetime.utcnow()
     inicio_mes = ahora.date().replace(day=1)
@@ -93,11 +156,11 @@ def _crear_clases_demo_recurrentes_hasta_fin_anio():
     fin_anio = hoy.replace(month=12, day=31)
     clases = [
         # actividad, dia_semana(lunes=0), hora
-        ('basquet', 4, 19),
-        ('voley', 1, 14),
-        ('padel', 2, 10),
-        ('futbol', 3, 15),
-        ('futbol', 4, 18),
+        ('basquet', 0, 14),
+        ('basquet', 2, 10),
+        ('padel', 4, 16),
+        ('padel', 4, 19),
+        ('futbol', 5, 13),
     ]
     creados_por_actividad = {}
 
@@ -106,12 +169,13 @@ def _crear_clases_demo_recurrentes_hasta_fin_anio():
         creados_por_actividad[actividad] = 0
         while fecha <= fin_anio:
             inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora)
+            capacidad = 5 if (actividad, dia_semana, hora) == ('basquet', 0, 14) else 10
             turno = Turno(
                 actividad=actividad,
                 hora_inicio=inicio,
                 hora_fin=inicio + timedelta(hours=1),
-                capacidad_maxima=10,
-                cupos_disponibles=10,
+                capacidad_maxima=capacidad,
+                cupos_disponibles=capacidad,
                 cancelado=False,
             )
             db.session.add(turno)
@@ -119,6 +183,75 @@ def _crear_clases_demo_recurrentes_hasta_fin_anio():
             fecha += timedelta(days=7)
 
     return creados_por_actividad
+
+
+def _buscar_turno(actividad, fecha, hora):
+    inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora)
+    return Turno.query.filter_by(
+        actividad=actividad,
+        hora_inicio=inicio,
+        cancelado=False,
+    ).first()
+
+
+def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
+    # En 2026, los equivalentes viernes/sabado de esa semana son 10/07 y 11/07.
+    viernes_padel = _buscar_turno('padel', date(2026, 7, 10), 19)
+    sabado_futbol = _buscar_turno('futbol', date(2026, 7, 11), 13)
+    miercoles_basquet = _buscar_turno('basquet', date(2026, 7, 8), 10)
+    lunes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 13), 14)
+
+    if viernes_padel:
+        viernes_padel.capacidad_maxima = 1
+        viernes_padel.cupos_disponibles = 1
+        abono_maria_padel = AbonoCliente(
+            usuario_id=maria.id,
+            actividad='padel',
+            dia_semana=4,
+            hora_inicio=19,
+            fecha_desde=date(2026, 7, 1),
+            fecha_hasta=date(2026, 7, 31),
+            estado=EstadoAbono.ACTIVO,
+        )
+        db.session.add(abono_maria_padel)
+        db.session.flush()
+        _crear_reserva_en_turno(maria, viernes_padel, TipoClase.ABONADA, abono_maria_padel)
+        db.session.add(Pago(
+            usuario_id=maria.id,
+            monto=8000.0,
+            metodo_pago='tarjeta_credito',
+            estado='completado',
+            tipo_clase=TipoClase.ABONADA,
+            fecha_pago=datetime.utcnow(),
+            referencia_transaccion=f'abono-demo-{abono_maria_padel.id}-{maria.id}',
+        ))
+        _crear_entrada_lista_espera(pepe, viernes_padel, TipoClase.ABONADA, 1)
+        _crear_entrada_lista_espera(carlos, viernes_padel, TipoClase.NO_ABONADA, 1)
+
+    if sabado_futbol:
+        sabado_futbol.capacidad_maxima = 1
+        sabado_futbol.cupos_disponibles = 1
+        _crear_reserva_en_turno(maria, sabado_futbol, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_con_deuda(maria, sabado_futbol, f'reserva-demo-{sabado_futbol.id}-{maria.id}')
+        _crear_entrada_lista_espera(carlos, sabado_futbol, TipoClase.NO_ABONADA, 1)
+        _crear_entrada_lista_espera(pepe, sabado_futbol, TipoClase.NO_ABONADA, 2)
+
+    if lunes_basquet_lleno:
+        lunes_basquet_lleno.capacidad_maxima = 5
+        lunes_basquet_lleno.cupos_disponibles = 5
+        for usuario in usuarios_espera_basquet[:5]:
+            _crear_reserva_en_turno(usuario, lunes_basquet_lleno, TipoClase.NO_ABONADA)
+        for posicion, usuario in enumerate(usuarios_espera_basquet[5:14], start=1):
+            _crear_entrada_lista_espera(usuario, lunes_basquet_lleno, TipoClase.NO_ABONADA, posicion)
+
+    viernes_padel_deuda = _buscar_turno('padel', date(2026, 7, 3), 16)
+    if viernes_padel_deuda:
+        _crear_reserva_en_turno(maria, viernes_padel_deuda, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_con_deuda(maria, viernes_padel_deuda, f'reserva-demo-{viernes_padel_deuda.id}-{maria.id}')
+
+    if miercoles_basquet:
+        _crear_reserva_en_turno(maria, miercoles_basquet, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_con_deuda(maria, miercoles_basquet, f'reserva-demo-{miercoles_basquet.id}-{maria.id}')
 
 
 def _crear_reserva_demo(usuario, actividad, tipo_clase=TipoClase.NO_ABONADA):
@@ -277,9 +410,36 @@ def init_database():
             tarjeta_credito_saldo=100000.0
         )
 
-        db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez, carlos_cordero])
+        usuarios_espera_basquet = [
+            _crear_cliente_seed('Lucia', 'Ramos', '91000001', 'lucia.ramos@example.com'),
+            _crear_cliente_seed('Tomas', 'Silva', '91000002', 'tomas.silva@example.com'),
+            _crear_cliente_seed('Valentina', 'Molina', '91000003', 'valentina.molina@example.com'),
+            _crear_cliente_seed('Mateo', 'Herrera', '91000004', 'mateo.herrera@example.com'),
+            _crear_cliente_seed('Sofia', 'Nuñez', '91000005', 'sofia.nunez@example.com'),
+            _crear_cliente_seed('Agustin', 'Paz', '91000006', 'agustin.paz@example.com'),
+            _crear_cliente_seed('Camila', 'Ortiz', '91000007', 'camila.ortiz@example.com'),
+            _crear_cliente_seed('Bruno', 'Vega', '91000008', 'bruno.vega@example.com'),
+            _crear_cliente_seed('Martina', 'Suarez', '91000009', 'martina.suarez@example.com'),
+            _crear_cliente_seed('Nicolas', 'Castro', '91000010', 'nicolas.castro@example.com'),
+            _crear_cliente_seed('Julieta', 'Medina', '91000011', 'julieta.medina@example.com'),
+            _crear_cliente_seed('Santino', 'Acosta', '91000012', 'santino.acosta@example.com'),
+            _crear_cliente_seed('Renata', 'Flores', '91000013', 'renata.flores@example.com'),
+            _crear_cliente_seed('Bautista', 'Rios', '91000014', 'bautista.rios@example.com'),
+        ]
+
+        clientes = [
+            cliente1,
+            cliente2,
+            pedro_sin_fondos,
+            paulina_suspendida,
+            pepe_gonzalez,
+            carlos_cordero,
+            *usuarios_espera_basquet,
+        ]
+
+        db.session.add_all(clientes)
         db.session.commit()
-        for cliente in [cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez, carlos_cordero]:
+        for cliente in clientes:
             db.session.add(TarjetaCredito(
                 usuario_id=cliente.id,
                 marca=cliente.tarjeta_credito_marca,
@@ -292,18 +452,18 @@ def init_database():
         _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
         db.session.flush()
-        _crear_reserva_demo(paulina_suspendida, 'padel')
-        _crear_reserva_demo(pedro_sin_fondos, 'basquet')
+        _crear_escenarios_turnos_demo(cliente2, pepe_gonzalez, carlos_cordero, usuarios_espera_basquet)
         db.session.commit()
         print("✓ Clientes creados")
         
         print("Clases demo recurrentes creadas hasta fin de anio:")
-        print("  - Basquet: viernes 19:00 con 10 cupos")
-        print("  - Voley: martes 14:00 con 10 cupos")
-        print("  - Padel: miercoles 10:00 con 10 cupos")
-        print("  - Futbol: jueves 15:00 con 10 cupos")
-        print("  - Futbol: viernes 18:00 con 10 cupos")
+        print("  - Basquet: lunes 14:00 con 5 cupos")
+        print("  - Basquet: miercoles 10:00 con 10 cupos")
+        print("  - Padel: viernes 16:00 con 10 cupos")
+        print("  - Padel: viernes 19:00 con 10 cupos")
+        print("  - Futbol: sabado 13:00 con 10 cupos")
         print(f"  Total por deporte: {clases_demo}")
+        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026 y 13/07/2026.")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")

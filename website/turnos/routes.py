@@ -1700,19 +1700,14 @@ def _sumar_resumen_cancelacion_admin(total, parcial):
 
 
 def _notificar_admin_lista_espera_llena(turno, tipo_lista, cantidad):
-    admins = Usuario.query.filter_by(tipo_usuario=TipoUsuario.ADMINISTRADOR).all()
-    if not admins:
-        return
-
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    for admin in admins:
-        asunto = 'Alerta de lista de espera - Club 360'
-        cuerpo = (
-            f"Hola {admin.nombre},\n\n"
-            f"La lista de espera '{tipo_lista}' del turno {turno.actividad} "
-            f"({turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}) alcanzó {cantidad} personas."
-        )
-        enviar_email_simulado(base_dir, admin.email, asunto, cuerpo)
+    asunto = 'Alerta de lista de espera - Club 360'
+    cuerpo = (
+        "Hola Admin,\n\n"
+        f"La lista de espera '{tipo_lista}' del turno {turno.actividad} "
+        f"({turno.hora_inicio.strftime('%d/%m/%Y %H:%M')}) alcanzó {cantidad} personas."
+    )
+    enviar_email_simulado(base_dir, 'abonadoexample@gmail.com', asunto, cuerpo)
 
 
 def _enviar_email_qr_reserva(reserva, asunto='Reserva confirmada - Club 360'):
@@ -1914,6 +1909,12 @@ def eventos_turnos():
     for turno in turnos:
         invitacion_pendiente = bool(_obtener_invitacion_activa_turno(turno.id))
         cupos_disponibles_visibles = 0 if invitacion_pendiente else turno.cupos_disponibles
+        espera_usuario = None
+        if current_user.tipo_usuario == TipoUsuario.CLIENTE:
+            espera_usuario = ListaEspera.query.filter_by(
+                turno_id=turno.id,
+                usuario_id=current_user.id,
+            ).first()
         eventos.append({
             'id': str(turno.id),
             'title': f"{turno.actividad.upper()} ({turno.cupos_disponibles}/{turno.capacidad_maxima})",
@@ -1930,8 +1931,10 @@ def eventos_turnos():
                 'duracion_minutos': int((turno.hora_fin - turno.hora_inicio).total_seconds() // 60),
                 'reservar_url': url_for('turnos.reservar_turno', turno_id=turno.id),
                 'cancelar_url': url_for('turnos.cancelar_turno', turno_id=turno.id),
+                'salir_lista_espera_url': url_for('turnos.salir_lista_espera_turno', turno_id=turno.id),
                 'sin_cupos': cupos_disponibles_visibles <= 0,
                 'ya_reservado': turno.id in reservas_usuario,
+                'en_lista_espera': bool(espera_usuario),
                 'tiene_abono': bool(_buscar_abono_activo_para_turno(current_user.id, turno)) if current_user.tipo_usuario == TipoUsuario.CLIENTE else False,
                 'credito_disponible': bool(credito_disponible and credito_disponible.actividad == turno.actividad),
             }
@@ -2111,7 +2114,6 @@ def reservar_turno(turno_id):
                         personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_espera.id).count()
                         if personas_en_espera == 10:
                             _notificar_admin_lista_espera_llena(turno_espera, TIPO_LISTA_GENERAL, personas_en_espera)
-                            flash('La lista de espera de este turno llegó a 10 personas', 'warning')
                         flash(
                             f'{cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera de '
                             f'{turno_espera.actividad.upper()} del {turno_espera.hora_inicio.strftime("%d/%m/%Y %H:%M")} '
@@ -2218,7 +2220,6 @@ def reservar_turno(turno_id):
         personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_id).count()
         if personas_en_espera == 10:
             _notificar_admin_lista_espera_llena(turno, TIPO_LISTA_GENERAL, personas_en_espera)
-            flash('La lista de espera de este turno llegó a 10 personas', 'warning')
 
         flash(f'Turno lleno. {cliente_objetivo.nombre} {cliente_objetivo.apellido} fue agregado a la lista de espera', 'info')
     
@@ -2246,6 +2247,35 @@ def rechazar_cupo_lista_espera(item_id):
     db.session.commit()
 
     flash('Te quitamos de la lista de espera de ese turno.', 'info')
+    return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+
+@turnos_bp.route('/lista-espera/turno/<int:turno_id>/salir', methods=['POST'])
+@login_required
+def salir_lista_espera_turno(turno_id):
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        flash('Esta acción está disponible solo para clientes', 'error')
+        return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+    item = ListaEspera.query.filter_by(
+        turno_id=turno_id,
+        usuario_id=current_user.id,
+    ).first()
+    if not item:
+        flash('No estás en la lista de espera de ese turno.', 'info')
+        return redirect(url_for('turnos.ver_turnos_disponibles'))
+
+    turno = item.turno
+    estaba_notificado = item.estado == ESTADO_ESPERA_NOTIFICADO
+    tipo_cupo_liberado = item.tipo_cupo_liberado or item.tipo_clase
+    db.session.delete(item)
+    db.session.flush()
+    _recalcular_posiciones_lista(turno.id)
+    if estaba_notificado:
+        _notificar_siguiente_lista_espera(turno, tipo_cupo_liberado)
+    db.session.commit()
+
+    flash('Saliste de la lista de espera de ese turno.', 'info')
     return redirect(url_for('turnos.ver_turnos_disponibles'))
 
 
