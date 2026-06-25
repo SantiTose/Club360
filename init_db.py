@@ -304,9 +304,23 @@ def init_database():
             tarjeta_credito_saldo=100000.0
         )
 
-        db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez])
+        carlos_cordero = Usuario(
+            nombre='Carlos',
+            apellido='Cordero',
+            dni='90123456',
+            email='noabonadoexample@gmail.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado='activo',
+            tarjeta_credito_marca='Visa',
+            tarjeta_credito_ultimos4='1111',
+            tarjeta_credito_vencimiento=date(2030, 12, 31),
+            tarjeta_credito_saldo=100000.0
+        )
+
+        db.session.add_all([cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez, carlos_cordero])
         db.session.commit()
-        for cliente in [cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez]:
+        for cliente in [cliente1, cliente2, pedro_sin_fondos, paulina_suspendida, pepe_gonzalez, carlos_cordero]:
             db.session.add(TarjetaCredito(
                 usuario_id=cliente.id,
                 marca=cliente.tarjeta_credito_marca,
@@ -343,6 +357,7 @@ def init_database():
         print("- Suspendida abonada/no abonada con fondos infinitos: paulina@example.com / cliente123")
         print("- Tarjeta vencida y sin fondos: pedro@example.com / cliente123")
         print("- Pepe Gonzalez: abonadoexample@gmail.com / cliente123")
+        print("- Carlos Cordero: noabonadoexample@gmail.com / cliente123")
 
 
 if __name__ == '__main__':

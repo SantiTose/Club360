@@ -8,25 +8,47 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% set bloquear_navegacion_por_tarjeta = current_user.is_authenticated and current_user.tipo_usuario == 'cliente' and not current_user.tarjeta_credito_ultimos4 %}
     <!-- Navbar -->
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
+                {% if bloquear_navegacion_por_tarjeta %}
+                <span class="nav-link-disabled">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo">
+                    <span>Club 360</span>
+                </span>
+                {% else %}
                 <a href="{{ url_for('index') }}">
                     <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Club 360 Logo">
                     <span>Club 360</span>
                 </a>
+                {% endif %}
             </div>
             <ul class="navbar-menu">
                 {% if current_user.is_authenticated %}
+                    {% if bloquear_navegacion_por_tarjeta %}
+                    <li><span class="nav-link-pill nav-link-disabled">Mi Perfil</span></li>
+                    {% else %}
                     <li><a href="{{ url_for('dashboard') }}" class="nav-link-pill">Mi Perfil</a></li>
+                    {% endif %}
                     {% if current_user.tipo_usuario == 'cliente' %}
+                    {% if bloquear_navegacion_por_tarjeta %}
+                    <li><span class="nav-link-pill nav-link-disabled">Mis Turnos</span></li>
+                    <li><span class="nav-link-pill nav-link-disabled">Mis Creditos</span></li>
+                    <li><span class="nav-link-pill nav-link-disabled">Mis Deudas</span></li>
+                    {% else %}
                     <li><a href="{{ url_for('turnos.mis_turnos') }}" class="nav-link-pill">Mis Turnos</a></li>
                     <li><a href="{{ url_for('mis_creditos') }}" class="nav-link-pill">Mis Creditos</a></li>
                     <li><a href="{{ url_for('turnos.mis_deudas') }}" class="nav-link-pill">Mis Deudas</a></li>
                     {% endif %}
+                    {% endif %}
                     {% if current_user.tipo_usuario == 'cliente' %}
+                    {% if bloquear_navegacion_por_tarjeta %}
+                    <li><span class="nav-link-pill nav-link-disabled">Buscar Turnos</span></li>
+                    {% else %}
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill">Buscar Turnos</a></li>
+                    {% endif %}
                     {% elif current_user.tipo_usuario == 'empleado' %}
                     <li><a href="{{ url_for('turnos.buscar_turnos_cliente_empleado') }}" class="nav-link-pill">Buscar Turnos</a></li>
                     <li><a href="{{ url_for('turnos.ver_turnos_disponibles') }}" class="nav-link-pill nav-link-pill-alt">Gestionar Turnos</a></li>

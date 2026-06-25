@@ -42,31 +42,6 @@
                     {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
                 </div>
                 <div class="form-group">
-                    <label for="tarjeta_credito" class="form-label">Tarjeta de crédito</label>
-                    <input type="text" id="tarjeta_credito" name="tarjeta_credito" inputmode="numeric" autocomplete="cc-number" class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}" value="{{ form_data.get('tarjeta_credito', '') }}" placeholder="4111 1111 1111 1111">
-                    {% if field_errors.get('tarjeta_credito') %}
-                        <small class="form-text error">{{ field_errors['tarjeta_credito'] }}</small>
-                    {% else %}
-                        <small class="form-text">Requerida para clientes. Solo se guardan marca y últimos 4 dígitos.</small>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="form-group-row">
-                <div class="form-group">
-                    <label for="tarjeta_vencimiento" class="form-label">Vencimiento de tarjeta</label>
-                    <input type="month" id="tarjeta_vencimiento" name="tarjeta_vencimiento" class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}" value="{{ form_data.get('tarjeta_vencimiento', '') }}">
-                    <small class="form-text">Requerido para clientes.</small>
-                </div>
-                <div class="form-group">
-                    <label for="tarjeta_cvv" class="form-label">CVV</label>
-                    <input type="text" id="tarjeta_cvv" name="tarjeta_cvv" inputmode="numeric" autocomplete="off" pattern="[0-9]{3}" maxlength="3" class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}" placeholder="123">
-                    <small class="form-text">Código de seguridad de 3 dígitos.</small>
-                </div>
-            </div>
-
-            <div class="form-group-row">
-                <div class="form-group">
                     <label for="tipo_usuario" class="form-label">Tipo de usuario</label>
                     <select id="tipo_usuario" name="tipo_usuario" class="form-control {% if field_errors.get('tipo_usuario') %}is-invalid{% endif %}">
                         <option value="cliente" {% if form_data.get('tipo_usuario') == 'cliente' %}selected{% endif %}>Cliente</option>
@@ -83,7 +58,7 @@
 
             <div class="form-group">
                 <label class="form-label">Credenciales iniciales</label>
-                <p class="form-text">El sistema generará automáticamente una contraseña temporal y la enviará por email para que el usuario la cambie en su primer ingreso.</p>
+                <p class="form-text">El sistema generara automaticamente una contrasena temporal y la enviara por email. Si el usuario es cliente, debera agregar su tarjeta al ingresar por primera vez.</p>
             </div>
 
             <div class="button-group" style="justify-content: flex-start;">

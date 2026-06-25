@@ -261,6 +261,7 @@ def create_app(config_name='development'):
         _ensure_reserva_tipo_clase_column()
         _ensure_reserva_abono_column()
         _ensure_lista_espera_tipo_clase_column()
+        _ensure_lista_espera_invitacion_columns()
         _ensure_pago_tipo_clase_column()
         _ensure_creditos_clientes_table()
         _backfill_reserva_qr_tokens()
@@ -467,6 +468,9 @@ def _rebuild_lista_espera_if_needed():
                 tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada',
                 posicion INTEGER NOT NULL,
                 fecha_registro DATETIME,
+                estado VARCHAR(20) NOT NULL DEFAULT 'esperando',
+                fecha_notificacion DATETIME,
+                tipo_cupo_liberado VARCHAR(20),
                 FOREIGN KEY(usuario_id) REFERENCES usuarios (id),
                 FOREIGN KEY(turno_id) REFERENCES turnos (id)
             )
@@ -479,7 +483,10 @@ def _rebuild_lista_espera_if_needed():
                 tipo_lista,
                 tipo_clase,
                 posicion,
-                fecha_registro
+                fecha_registro,
+                estado,
+                fecha_notificacion,
+                tipo_cupo_liberado
             )
             SELECT
                 id,
@@ -488,7 +495,10 @@ def _rebuild_lista_espera_if_needed():
                 tipo_lista,
                 tipo_clase,
                 posicion,
-                fecha_registro
+                fecha_registro,
+                'esperando',
+                NULL,
+                NULL
             FROM lista_espera_legacy
         """))
         db.session.execute(text("DROP TABLE lista_espera_legacy"))
@@ -925,6 +935,26 @@ def _ensure_lista_espera_tipo_clase_column():
     columnas = {c['name'] for c in inspector.get_columns('lista_espera')}
     if 'tipo_clase' not in columnas:
         db.session.execute(text("ALTER TABLE lista_espera ADD COLUMN tipo_clase VARCHAR(20) NOT NULL DEFAULT 'no_abonada'"))
+        db.session.commit()
+
+
+def _ensure_lista_espera_invitacion_columns():
+    inspector = inspect(db.engine)
+    if 'lista_espera' not in inspector.get_table_names():
+        return
+
+    columnas = {c['name'] for c in inspector.get_columns('lista_espera')}
+    updates = []
+    if 'estado' not in columnas:
+        updates.append("ALTER TABLE lista_espera ADD COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'esperando'")
+    if 'fecha_notificacion' not in columnas:
+        updates.append("ALTER TABLE lista_espera ADD COLUMN fecha_notificacion DATETIME")
+    if 'tipo_cupo_liberado' not in columnas:
+        updates.append("ALTER TABLE lista_espera ADD COLUMN tipo_cupo_liberado VARCHAR(20)")
+
+    for statement in updates:
+        db.session.execute(text(statement))
+    if updates:
         db.session.commit()
 
 

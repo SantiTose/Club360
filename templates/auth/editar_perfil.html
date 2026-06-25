@@ -9,11 +9,20 @@
             <span class="dashboard-eyebrow">Mi perfil</span>
             <h1>Editar datos</h1>
         </div>
+        {% if not requiere_tarjeta %}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+        {% endif %}
     </div>
+
+    {% if requiere_tarjeta %}
+    <div class="alert alert-warning">
+        Para continuar usando el sistema, agrega una tarjeta de credito.
+    </div>
+    {% endif %}
 
     <div class="profile-edit-grid">
         <form method="POST" class="profile-edit-panel auth-form" novalidate>
+            {% if requiere_tarjeta %}<fieldset disabled>{% endif %}
             <input type="hidden" name="action" value="perfil">
             <h2>Datos personales</h2>
 
@@ -93,9 +102,11 @@
             <div class="button-group">
                 <button type="submit" class="btn btn-primary">Guardar cambios</button>
             </div>
+            {% if requiere_tarjeta %}</fieldset>{% endif %}
         </form>
 
         <form method="POST" class="profile-edit-panel auth-form" novalidate>
+            {% if requiere_tarjeta %}<fieldset disabled>{% endif %}
             <input type="hidden" name="action" value="cambiar_password">
             <h2>Cambiar contrasena</h2>
 
@@ -154,6 +165,7 @@
             <div class="button-group">
                 <button type="submit" class="btn btn-primary">Actualizar contrasena</button>
             </div>
+            {% if requiere_tarjeta %}</fieldset>{% endif %}
         </form>
 
         <div class="profile-edit-panel">

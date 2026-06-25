@@ -32,6 +32,8 @@ HORA_APERTURA = 8
 HORA_CIERRE = 22
 HORAS_DISPONIBLES = list(range(HORA_APERTURA, HORA_CIERRE))
 TIPO_LISTA_GENERAL = 'general'
+ESTADO_ESPERA_ESPERANDO = 'esperando'
+ESTADO_ESPERA_NOTIFICADO = 'notificado'
 DIAS_SEMANA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
 DIAS_SEMANA_CREACION = list(enumerate(DIAS_SEMANA[:6]))
 FERIADOS_FIJOS_MM_DD = {
@@ -504,31 +506,51 @@ def _obtener_restricciones_suspension(cliente):
 
 
 def _obtener_siguiente_lista_espera(turno, tipo_clase=None):
-    query = ListaEspera.query.filter_by(turno_id=turno.id)
+    query = ListaEspera.query.filter_by(turno_id=turno.id, estado=ESTADO_ESPERA_ESPERANDO)
     if tipo_clase:
         query = query.filter_by(tipo_clase=tipo_clase)
     return query.order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc()).first()
 
 
-def _recalcular_posiciones_lista(turno_id):
-    pendientes = (
+def _obtener_siguiente_lista_espera_para_cupo(turno, tipo_cupo_liberado):
+    if ListaEspera.query.filter_by(turno_id=turno.id, estado=ESTADO_ESPERA_NOTIFICADO).first():
+        return None
+
+    if tipo_cupo_liberado == TipoClase.ABONADA:
+        siguiente = _obtener_siguiente_lista_espera(turno, tipo_clase=TipoClase.ABONADA)
+        if siguiente:
+            return siguiente
+        return _obtener_siguiente_lista_espera(turno, tipo_clase=TipoClase.NO_ABONADA)
+
+    return (
         ListaEspera.query
-        .filter_by(turno_id=turno_id)
-        .order_by(ListaEspera.posicion.asc(), ListaEspera.fecha_registro.asc())
-        .all()
+        .filter_by(turno_id=turno.id, estado=ESTADO_ESPERA_ESPERANDO)
+        .order_by(ListaEspera.fecha_registro.asc(), ListaEspera.posicion.asc())
+        .first()
     )
-    for index, item in enumerate(pendientes, start=1):
-        item.posicion = index
+
+
+def _recalcular_posiciones_lista(turno_id):
+    for tipo_clase in (TipoClase.ABONADA, TipoClase.NO_ABONADA):
+        pendientes = (
+            ListaEspera.query
+            .filter_by(turno_id=turno_id, tipo_clase=tipo_clase)
+            .order_by(ListaEspera.fecha_registro.asc(), ListaEspera.id.asc())
+            .all()
+        )
+        for index, item in enumerate(pendientes, start=1):
+            item.posicion = index
 
 
 def _agregar_a_lista_espera(turno, usuario_id, tipo_clase):
-    posicion = ListaEspera.query.filter_by(turno_id=turno.id).count() + 1
+    posicion = ListaEspera.query.filter_by(turno_id=turno.id, tipo_clase=tipo_clase).count() + 1
     db.session.add(ListaEspera(
         usuario_id=usuario_id,
         turno_id=turno.id,
         tipo_lista=TIPO_LISTA_GENERAL,
         tipo_clase=tipo_clase,
         posicion=posicion,
+        estado=ESTADO_ESPERA_ESPERANDO,
     ))
 
 

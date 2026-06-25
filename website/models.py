@@ -120,6 +120,9 @@ class ListaEspera(db.Model):
     tipo_clase = db.Column(db.String(20), nullable=False, default=TipoClase.NO_ABONADA)
     posicion = db.Column(db.Integer, nullable=False)
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    estado = db.Column(db.String(20), nullable=False, default='esperando')
+    fecha_notificacion = db.Column(db.DateTime)
+    tipo_cupo_liberado = db.Column(db.String(20))
 
     turno = db.relationship('Turno', backref='listas_espera')
 

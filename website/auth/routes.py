@@ -149,6 +149,21 @@ def _tarjetas_del_cliente(usuario):
     )
 
 
+def _cliente_tiene_tarjeta(usuario):
+    if usuario.tipo_usuario != TipoUsuario.CLIENTE:
+        return True
+
+    tiene_tarjeta = TarjetaCredito.query.filter_by(usuario_id=usuario.id).first() is not None
+    if tiene_tarjeta:
+        return True
+
+    return bool(
+        usuario.tarjeta_credito_marca
+        and usuario.tarjeta_credito_ultimos4
+        and usuario.tarjeta_credito_vencimiento
+    )
+
+
 def _sincronizar_tarjeta_principal(usuario):
     principal = (
         TarjetaCredito.query
@@ -198,6 +213,7 @@ def _asegurar_tarjeta_legacy(usuario):
 
 def _render_editar_perfil(field_errors=None, form_data=None):
     fecha_formateada = current_user.fecha_nacimiento.isoformat() if current_user.fecha_nacimiento else ''
+    tarjetas = _tarjetas_del_cliente(current_user)
     return render_template(
         'auth/editar_perfil.html',
         field_errors=field_errors or {},
@@ -207,7 +223,8 @@ def _render_editar_perfil(field_errors=None, form_data=None):
             'email': current_user.email,
             'fecha_nacimiento': fecha_formateada,
         },
-        tarjetas=_tarjetas_del_cliente(current_user),
+        tarjetas=tarjetas,
+        requiere_tarjeta=not tarjetas,
     )
 
 
@@ -358,6 +375,8 @@ def login():
         
         if usuario and check_password_hash(usuario.password, password):
             login_user(usuario, remember=bool(remember))
+            if usuario.tipo_usuario == TipoUsuario.CLIENTE and not _cliente_tiene_tarjeta(usuario):
+                return redirect(url_for('auth.editar_perfil'))
             if usuario.requiere_cambio_password and usuario.tipo_usuario == TipoUsuario.CLIENTE:
                 flash('Ingresaste con una contrasena temporal. Cambiala desde Editar perfil para continuar.', 'warning')
                 return redirect(url_for('auth.editar_perfil'))
@@ -384,13 +403,21 @@ def logout():
 
 
 @auth_bp.before_app_request
-def requerir_cambio_password_temporal_cliente():
+def requerir_perfil_completo_cliente():
     if not current_user.is_authenticated:
         return None
-    if current_user.tipo_usuario != TipoUsuario.CLIENTE or not current_user.requiere_cambio_password:
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
         return None
 
     endpoints_permitidos = {'auth.editar_perfil', 'auth.logout', 'static'}
+    if not _cliente_tiene_tarjeta(current_user):
+        if request.endpoint not in endpoints_permitidos:
+            return redirect(url_for('auth.editar_perfil'))
+        return None
+
+    if not current_user.requiere_cambio_password:
+        return None
+
     if request.endpoint not in endpoints_permitidos:
         flash('Para continuar, cambia tu contrasena temporal desde Editar perfil.', 'warning')
         return redirect(url_for('auth.editar_perfil'))
@@ -408,8 +435,13 @@ def editar_perfil():
 
     if request.method == 'POST':
         action = request.form.get('action', 'perfil')
+        tarjeta_obligatoria_pendiente = not _cliente_tiene_tarjeta(current_user)
 
-        if current_user.requiere_cambio_password and action != 'cambiar_password':
+        if tarjeta_obligatoria_pendiente and action != 'agregar_tarjeta':
+            flash('Primero tenes que agregar una tarjeta de credito para continuar.', 'warning')
+            return redirect(url_for('auth.editar_perfil'))
+
+        if current_user.requiere_cambio_password and action != 'cambiar_password' and not tarjeta_obligatoria_pendiente:
             flash('Primero tenes que cambiar tu contrasena temporal.', 'warning')
             return redirect(url_for('auth.editar_perfil'))
 
@@ -612,9 +644,6 @@ def crear_usuario():
         apellido = request.form.get('apellido', '').strip()
         dni = request.form.get('dni', '').strip()
         fecha_nacimiento_raw = request.form.get('fecha_nacimiento', '').strip()
-        tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
-        tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
-        tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
         email = request.form.get('email', '').strip().lower()
         tipo_usuario = request.form.get('tipo_usuario', TipoUsuario.CLIENTE)
 
@@ -635,19 +664,6 @@ def crear_usuario():
         if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
             field_errors['email'] = 'El email no es válido'
 
-        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = (None, None, None)
-        tarjeta_vencimiento = None
-        if tipo_usuario == TipoUsuario.CLIENTE:
-            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
-                tarjeta_credito_raw,
-                tarjeta_vencimiento_raw,
-                tarjeta_cvv_raw,
-            )
-            if error_tarjeta:
-                field_errors['tarjeta_credito'] = error_tarjeta
-            else:
-                tarjeta_vencimiento = _parsear_vencimiento_tarjeta(tarjeta_vencimiento_raw)
-
         tipos_permitidos = {TipoUsuario.CLIENTE}
         if _es_admin(current_user):
             tipos_permitidos.update({TipoUsuario.EMPLEADO, TipoUsuario.ADMINISTRADOR})
@@ -665,8 +681,6 @@ def crear_usuario():
                     'apellido': apellido,
                     'dni': dni,
                     'fecha_nacimiento': fecha_nacimiento_raw,
-                    'tarjeta_credito': tarjeta_credito_raw,
-                    'tarjeta_vencimiento': tarjeta_vencimiento_raw,
                     'email': email,
                     'tipo_usuario': tipo_usuario,
                 },
@@ -681,9 +695,9 @@ def crear_usuario():
             dni=dni,
             fecha_nacimiento=fecha_nacimiento,
             autorizacion_menor=False,
-            tarjeta_credito_marca=tarjeta_marca,
-            tarjeta_credito_ultimos4=tarjeta_ultimos4,
-            tarjeta_credito_vencimiento=tarjeta_vencimiento,
+            tarjeta_credito_marca=None,
+            tarjeta_credito_ultimos4=None,
+            tarjeta_credito_vencimiento=None,
             tarjeta_credito_saldo=100000.0 if tipo_usuario == TipoUsuario.CLIENTE else 0.0,
             email=email,
             password=generate_password_hash(password_temporal),
@@ -692,16 +706,6 @@ def crear_usuario():
             requiere_cambio_password=True,
         )
         db.session.add(nuevo_usuario)
-        db.session.flush()
-        if tipo_usuario == TipoUsuario.CLIENTE:
-            db.session.add(TarjetaCredito(
-                usuario_id=nuevo_usuario.id,
-                marca=tarjeta_marca,
-                ultimos4=tarjeta_ultimos4,
-                vencimiento=tarjeta_vencimiento,
-                saldo=100000.0,
-                es_principal=True,
-            ))
         db.session.commit()
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
