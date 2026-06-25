@@ -21,6 +21,7 @@ from website.models import (
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta, date
 import calendar
+import hashlib
 import secrets
 
 
@@ -58,6 +59,10 @@ def _crear_cliente_seed(nombre, apellido, dni, email, password='cliente123', sal
     )
 
 
+def _hash_numero_tarjeta(numero):
+    return hashlib.sha256(numero.encode('utf-8')).hexdigest()
+
+
 def _crear_reserva_en_turno(usuario, turno, tipo_clase=TipoClase.NO_ABONADA, abono=None):
     reserva = Reserva(
         usuario_id=usuario.id,
@@ -72,14 +77,15 @@ def _crear_reserva_en_turno(usuario, turno, tipo_clase=TipoClase.NO_ABONADA, abo
     return reserva
 
 
-def _crear_pago_no_abonado_con_deuda(usuario, turno, referencia):
+def _crear_pago_no_abonado_con_deuda(usuario, turno):
+    referencia = f"reserva-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
     db.session.add(Pago(
         usuario_id=usuario.id,
         monto=4000.0,
         metodo_pago='tarjeta_credito',
         estado='completado',
         tipo_clase=TipoClase.NO_ABONADA,
-        fecha_pago=datetime.utcnow(),
+        fecha_pago=turno.hora_inicio,
         referencia_transaccion=f'{referencia}-senia',
     ))
     db.session.add(Pago(
@@ -88,7 +94,7 @@ def _crear_pago_no_abonado_con_deuda(usuario, turno, referencia):
         metodo_pago='tarjeta_credito',
         estado='pendiente',
         tipo_clase=TipoClase.NO_ABONADA,
-        fecha_pago=datetime.utcnow(),
+        fecha_pago=turno.hora_inicio,
         referencia_transaccion=f'{referencia}-saldo',
     ))
 
@@ -199,6 +205,7 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
     viernes_padel = _buscar_turno('padel', date(2026, 7, 10), 19)
     sabado_futbol = _buscar_turno('futbol', date(2026, 7, 11), 13)
     miercoles_basquet = _buscar_turno('basquet', date(2026, 7, 8), 10)
+    miercoles_basquet_deuda = _buscar_turno('basquet', date(2026, 7, 15), 10)
     lunes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 13), 14)
 
     if viernes_padel:
@@ -219,11 +226,11 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
         db.session.add(Pago(
             usuario_id=maria.id,
             monto=8000.0,
-            metodo_pago='tarjeta_credito',
-            estado='completado',
+            metodo_pago='pendiente',
+            estado='pendiente',
             tipo_clase=TipoClase.ABONADA,
-            fecha_pago=datetime.utcnow(),
-            referencia_transaccion=f'abono-demo-{abono_maria_padel.id}-{maria.id}',
+            fecha_pago=viernes_padel.hora_inicio,
+            referencia_transaccion=f'abono-total-{abono_maria_padel.id}-{maria.id}-{int(datetime.utcnow().timestamp())}',
         ))
         _crear_entrada_lista_espera(pepe, viernes_padel, TipoClase.ABONADA, 1)
         _crear_entrada_lista_espera(carlos, viernes_padel, TipoClase.NO_ABONADA, 1)
@@ -232,7 +239,7 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
         sabado_futbol.capacidad_maxima = 1
         sabado_futbol.cupos_disponibles = 1
         _crear_reserva_en_turno(maria, sabado_futbol, TipoClase.NO_ABONADA)
-        _crear_pago_no_abonado_con_deuda(maria, sabado_futbol, f'reserva-demo-{sabado_futbol.id}-{maria.id}')
+        _crear_pago_no_abonado_con_deuda(maria, sabado_futbol)
         _crear_entrada_lista_espera(carlos, sabado_futbol, TipoClase.NO_ABONADA, 1)
         _crear_entrada_lista_espera(pepe, sabado_futbol, TipoClase.NO_ABONADA, 2)
 
@@ -247,11 +254,15 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
     viernes_padel_deuda = _buscar_turno('padel', date(2026, 7, 3), 16)
     if viernes_padel_deuda:
         _crear_reserva_en_turno(maria, viernes_padel_deuda, TipoClase.NO_ABONADA)
-        _crear_pago_no_abonado_con_deuda(maria, viernes_padel_deuda, f'reserva-demo-{viernes_padel_deuda.id}-{maria.id}')
+        _crear_pago_no_abonado_con_deuda(maria, viernes_padel_deuda)
 
     if miercoles_basquet:
         _crear_reserva_en_turno(maria, miercoles_basquet, TipoClase.NO_ABONADA)
-        _crear_pago_no_abonado_con_deuda(maria, miercoles_basquet, f'reserva-demo-{miercoles_basquet.id}-{maria.id}')
+        _crear_pago_no_abonado_con_deuda(maria, miercoles_basquet)
+
+    if miercoles_basquet_deuda:
+        _crear_reserva_en_turno(maria, miercoles_basquet_deuda, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_con_deuda(maria, miercoles_basquet_deuda)
 
 
 def _crear_reserva_demo(usuario, actividad, tipo_clase=TipoClase.NO_ABONADA):
@@ -444,6 +455,7 @@ def init_database():
                 usuario_id=cliente.id,
                 marca=cliente.tarjeta_credito_marca,
                 ultimos4=cliente.tarjeta_credito_ultimos4,
+                numero_hash=_hash_numero_tarjeta(f'411111111111{cliente.tarjeta_credito_ultimos4}'),
                 vencimiento=cliente.tarjeta_credito_vencimiento,
                 saldo=cliente.tarjeta_credito_saldo,
                 es_principal=True,
@@ -463,7 +475,7 @@ def init_database():
         print("  - Padel: viernes 19:00 con 10 cupos")
         print("  - Futbol: sabado 13:00 con 10 cupos")
         print(f"  Total por deporte: {clases_demo}")
-        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026 y 13/07/2026.")
+        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026 y 15/07/2026.")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")

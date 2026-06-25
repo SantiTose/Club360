@@ -7,6 +7,7 @@ from website.services import EmailDeliveryError, enviar_email_simulado
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
 import calendar
+import hashlib
 import os
 import secrets
 import re
@@ -69,9 +70,15 @@ def _eliminar_cuenta_cliente(cliente):
 def _validar_password_nueva(password, password_confirm):
     field_errors = {}
     if len(password) < 6:
-        field_errors['password'] = 'La contrasena debe tener al menos 6 caracteres'
+        field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
     if password != password_confirm:
-        field_errors['password_confirm'] = 'Las contrasenas no coinciden'
+        field_errors['password_confirm'] = 'Las contraseñas no coinciden'
+    return field_errors
+
+
+def _validar_password_distinta_a_actual(usuario, password, field_errors):
+    if password and check_password_hash(usuario.password, password):
+        field_errors['password'] = 'La nueva contraseña no puede ser igual a la actual'
     return field_errors
 
 
@@ -151,8 +158,8 @@ def _normalizar_tarjeta_credito(tarjeta_raw):
     numero = re.sub(r'\D', '', tarjeta_raw or '')
     if not numero:
         return None, None, 'Debes ingresar una tarjeta de crédito'
-    if len(numero) < 13 or len(numero) > 19:
-        return None, None, 'La tarjeta debe tener entre 13 y 19 dígitos'
+    if len(numero) != 16:
+        return None, None, 'La tarjeta debe tener 16 dígitos'
     if len(set(numero)) == 1:
         return None, None, 'El numero de tarjeta no es valido'
     if not _tarjeta_es_valida(numero):
@@ -160,22 +167,36 @@ def _normalizar_tarjeta_credito(tarjeta_raw):
     return _marca_tarjeta(numero), numero[-4:], None
 
 
+def _hash_numero_tarjeta(numero):
+    return hashlib.sha256(numero.encode('utf-8')).hexdigest()
+
+
 def _normalizar_datos_tarjeta_credito(tarjeta_raw, vencimiento_raw, cvv_raw):
     numero = re.sub(r'\D', '', tarjeta_raw or '')
     cvv = (cvv_raw or '').strip()
 
     if not numero:
-        return None, None, 'Debes ingresar una tarjeta de credito'
-    if len(numero) < 13 or len(numero) > 19:
-        return None, None, 'La tarjeta debe tener entre 13 y 19 digitos'
+        return None, None, None, 'Debes ingresar una tarjeta de credito'
+    if len(numero) != 16:
+        return None, None, None, 'La tarjeta debe tener 16 dígitos'
     if len(set(numero)) == 1 or not _tarjeta_es_valida(numero):
-        return None, None, 'El numero de tarjeta no es valido'
+        return None, None, None, 'El numero de tarjeta no es valido'
     if not _vencimiento_tarjeta_es_valido(vencimiento_raw):
-        return None, None, 'La fecha de vencimiento no es valida'
+        return None, None, None, 'La fecha de vencimiento no es valida'
     if not re.match(r'^\d{3}$', cvv):
-        return None, None, 'El codigo de seguridad debe tener 3 digitos'
+        return None, None, None, 'El codigo de seguridad debe tener 3 digitos'
 
-    return _marca_tarjeta(numero), numero[-4:], None
+    return _marca_tarjeta(numero), numero[-4:], _hash_numero_tarjeta(numero), None
+
+
+def _tarjeta_duplicada(usuario_id, numero_hash, tarjeta_id_excluida=None):
+    if not numero_hash:
+        return False
+
+    query = TarjetaCredito.query.filter_by(usuario_id=usuario_id, numero_hash=numero_hash)
+    if tarjeta_id_excluida:
+        query = query.filter(TarjetaCredito.id != tarjeta_id_excluida)
+    return query.first() is not None
 
 
 def _tarjetas_del_cliente(usuario):
@@ -302,7 +323,7 @@ def register():
             if _edad(fecha_nacimiento) < 18:
                 field_errors['fecha_nacimiento'] = 'Solo podran registrarse personas de 18 años o mas'
 
-        tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
+        tarjeta_marca, tarjeta_ultimos4, tarjeta_numero_hash, error_tarjeta = _normalizar_datos_tarjeta_credito(
             tarjeta_credito_raw,
             tarjeta_vencimiento_raw,
             tarjeta_cvv_raw,
@@ -358,6 +379,7 @@ def register():
                 usuario_id=nuevo_usuario.id,
                 marca=tarjeta_marca,
                 ultimos4=tarjeta_ultimos4,
+                numero_hash=tarjeta_numero_hash,
                 vencimiento=tarjeta_vencimiento,
                 saldo=100000.0,
                 es_principal=True,
@@ -416,7 +438,7 @@ def login():
             if usuario.tipo_usuario == TipoUsuario.CLIENTE and not _cliente_tiene_tarjeta(usuario):
                 return redirect(url_for('auth.editar_perfil'))
             if usuario.requiere_cambio_password and usuario.tipo_usuario == TipoUsuario.CLIENTE:
-                flash('Ingresaste con una contrasena temporal. Cambiala desde Editar perfil para continuar.', 'warning')
+                flash('Ingresaste con una contraseña temporal. Cambiala desde Editar perfil para continuar.', 'warning')
                 return redirect(url_for('auth.editar_perfil'))
             if usuario.requiere_cambio_password:
                 flash('Debes cambiar tu contraseña temporal para continuar', 'warning')
@@ -485,13 +507,10 @@ def editar_perfil():
                 flash(f'No podés eliminar tu cuenta porque tenés una deuda pendiente de ${total_deuda:.2f}. Primero tenés que pagarla.', 'error')
                 return redirect(url_for('turnos.mis_deudas'))
 
-            reservas_canceladas = _eliminar_cuenta_cliente(current_user)
+            _eliminar_cuenta_cliente(current_user)
             db.session.commit()
             logout_user()
-            flash(
-                f'Tu cuenta fue eliminada correctamente. Reservas canceladas: {reservas_canceladas}.',
-                'success',
-            )
+            flash('Tu cuenta fue eliminada correctamente.', 'success')
             return redirect(url_for('index'))
 
         if tarjeta_obligatoria_pendiente and action != 'agregar_tarjeta':
@@ -499,7 +518,7 @@ def editar_perfil():
             return redirect(url_for('auth.editar_perfil'))
 
         if current_user.requiere_cambio_password and action != 'cambiar_password' and not tarjeta_obligatoria_pendiente:
-            flash('Primero tenes que cambiar tu contrasena temporal.', 'warning')
+            flash('Primero tenes que cambiar tu contraseña temporal.', 'warning')
             return redirect(url_for('auth.editar_perfil'))
 
         if action == 'perfil':
@@ -554,7 +573,7 @@ def editar_perfil():
             tarjeta_credito_raw = request.form.get('tarjeta_credito', '').strip()
             tarjeta_vencimiento_raw = request.form.get('tarjeta_vencimiento', '').strip()
             tarjeta_cvv_raw = request.form.get('tarjeta_cvv', '').strip()
-            tarjeta_marca, tarjeta_ultimos4, error_tarjeta = _normalizar_datos_tarjeta_credito(
+            tarjeta_marca, tarjeta_ultimos4, tarjeta_numero_hash, error_tarjeta = _normalizar_datos_tarjeta_credito(
                 tarjeta_credito_raw,
                 tarjeta_vencimiento_raw,
                 tarjeta_cvv_raw,
@@ -570,16 +589,26 @@ def editar_perfil():
                     id=request.form.get('tarjeta_id'),
                     usuario_id=current_user.id,
                 ).first_or_404()
+                if _tarjeta_duplicada(current_user.id, tarjeta_numero_hash, tarjeta_id_excluida=tarjeta.id):
+                    flash('Ya tenés agregada una tarjeta con ese número.', 'error')
+                    return redirect(url_for('auth.editar_perfil'))
+
                 tarjeta.marca = tarjeta_marca
                 tarjeta.ultimos4 = tarjeta_ultimos4
+                tarjeta.numero_hash = tarjeta_numero_hash
                 tarjeta.vencimiento = tarjeta_vencimiento
                 flash('Tarjeta actualizada correctamente', 'success')
             else:
+                if _tarjeta_duplicada(current_user.id, tarjeta_numero_hash):
+                    flash('Ya tenés agregada una tarjeta con ese número.', 'error')
+                    return redirect(url_for('auth.editar_perfil'))
+
                 es_primera_tarjeta = not TarjetaCredito.query.filter_by(usuario_id=current_user.id).first()
                 tarjeta = TarjetaCredito(
                     usuario_id=current_user.id,
                     marca=tarjeta_marca,
                     ultimos4=tarjeta_ultimos4,
+                    numero_hash=tarjeta_numero_hash,
                     vencimiento=tarjeta_vencimiento,
                     saldo=100000.0,
                     es_principal=es_primera_tarjeta,
@@ -616,7 +645,9 @@ def editar_perfil():
             field_errors = _validar_password_nueva(password, password_confirm)
 
             if not current_user.requiere_cambio_password and not check_password_hash(current_user.password, password_actual):
-                field_errors['password_actual'] = 'La contrasena actual no es correcta'
+                field_errors['password_actual'] = 'La contraseña actual no es correcta'
+
+            _validar_password_distinta_a_actual(current_user, password, field_errors)
 
             if field_errors:
                 return _render_editar_perfil(field_errors=field_errors)
@@ -624,7 +655,7 @@ def editar_perfil():
             current_user.password = generate_password_hash(password)
             current_user.requiere_cambio_password = False
             db.session.commit()
-            flash('Contrasena actualizada correctamente', 'success')
+            flash('Contraseña actualizada correctamente', 'success')
             return redirect(url_for('dashboard'))
 
         flash('Accion no valida', 'error')
@@ -760,19 +791,24 @@ def crear_usuario():
             password=generate_password_hash(password_temporal),
             tipo_usuario=tipo_usuario,
             estado=EstadoUsuario.ACTIVO,
-            requiere_cambio_password=True,
+            requiere_cambio_password=tipo_usuario != TipoUsuario.CLIENTE,
         )
         db.session.add(nuevo_usuario)
         db.session.commit()
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         asunto = 'Alta de cuenta Club 360 - contraseña temporal'
+        indicacion_ingreso = (
+            "Al iniciar sesión deberás agregar una tarjeta de crédito para continuar."
+            if tipo_usuario == TipoUsuario.CLIENTE
+            else "Al iniciar sesión deberás cambiar esta contraseña de forma obligatoria."
+        )
         cuerpo = (
             f"Hola {nombre},\n\n"
             "Tu cuenta fue creada por el personal de Club 360.\n"
             f"Email de acceso: {email}\n"
             f"Contraseña temporal: {password_temporal}\n\n"
-            "Al iniciar sesión deberás cambiar esta contraseña de forma obligatoria."
+            f"{indicacion_ingreso}"
         )
         enviar_email_simulado(base_dir, 'abonadoexample@gmail.com', asunto, cuerpo)
 
@@ -837,6 +873,8 @@ def cambiar_password_inicial():
             field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres'
         if password != password_confirm:
             field_errors['password_confirm'] = 'Las contraseñas no coinciden'
+        if password and check_password_hash(current_user.password, password):
+            field_errors['password'] = 'La nueva contraseña no puede ser igual a la actual'
 
         if field_errors:
             return render_template('auth/cambiar_password_inicial.html', field_errors=field_errors)

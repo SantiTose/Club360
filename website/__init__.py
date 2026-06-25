@@ -684,6 +684,7 @@ def _ensure_tarjetas_credito_table():
                 usuario_id INTEGER NOT NULL,
                 marca VARCHAR(20) NOT NULL,
                 ultimos4 VARCHAR(4) NOT NULL,
+                numero_hash VARCHAR(64),
                 vencimiento DATE NOT NULL,
                 saldo FLOAT NOT NULL DEFAULT 100000,
                 es_principal BOOLEAN NOT NULL DEFAULT 0,
@@ -694,11 +695,17 @@ def _ensure_tarjetas_credito_table():
         """))
         db.session.commit()
 
+    columnas = {c['name'] for c in inspector.get_columns('tarjetas_credito')}
+    if 'numero_hash' not in columnas:
+        db.session.execute(text("ALTER TABLE tarjetas_credito ADD COLUMN numero_hash VARCHAR(64)"))
+        db.session.commit()
+
     db.session.execute(text("""
         INSERT INTO tarjetas_credito (
             usuario_id,
             marca,
             ultimos4,
+            numero_hash,
             vencimiento,
             saldo,
             es_principal,
@@ -709,6 +716,7 @@ def _ensure_tarjetas_credito_table():
             usuarios.id,
             usuarios.tarjeta_credito_marca,
             usuarios.tarjeta_credito_ultimos4,
+            NULL,
             usuarios.tarjeta_credito_vencimiento,
             usuarios.tarjeta_credito_saldo,
             1,

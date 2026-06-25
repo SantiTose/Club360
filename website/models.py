@@ -81,6 +81,7 @@ class TarjetaCredito(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     marca = db.Column(db.String(20), nullable=False)
     ultimos4 = db.Column(db.String(4), nullable=False)
+    numero_hash = db.Column(db.String(64))
     vencimiento = db.Column(db.Date, nullable=False)
     saldo = db.Column(db.Float, nullable=False, default=100000.0)
     es_principal = db.Column(db.Boolean, nullable=False, default=False)

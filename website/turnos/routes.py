@@ -2562,14 +2562,23 @@ def validar_asistencia_qr(qr_token):
         flash('El qr provisto ya fue registrado escaneado previamente, intente con otro', 'error')
         return redirect(url_for('dashboard'))
 
+    monto_pendiente = _monto_pendiente_de_reserva(reserva)
     if request.method == 'POST':
+        if monto_pendiente > 0:
+            flash('No se puede validar la asistencia hasta que no se termine de pagar el turno', 'error')
+            return redirect(url_for('turnos.validar_asistencia_qr', qr_token=qr_token))
+
         reserva.asistencia_validada = True
         reserva.fecha_asistencia = datetime.utcnow()
         db.session.commit()
         flash('Asistencia validada correctamente', 'success')
         return redirect(url_for('dashboard'))
 
-    return render_template('turnos/validar_asistencia.html', reserva=reserva)
+    return render_template(
+        'turnos/validar_asistencia.html',
+        reserva=reserva,
+        monto_pendiente=monto_pendiente,
+    )
 
 
 @turnos_bp.route('/validar-asistencia', methods=['GET', 'POST'])

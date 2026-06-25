@@ -48,6 +48,68 @@ function club360GetHourRange(start, end) {
     return `${club360FormatTime(start)} - ${club360FormatTime(end)}`;
 }
 
+function togglePassword(fieldId, button) {
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+
+    const slash = button ? button.querySelector('.eye-slash') : null;
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (slash) slash.style.display = 'none';
+    } else {
+        input.type = 'password';
+        if (slash) slash.style.display = 'block';
+    }
+}
+
+function club360InitPasswordToggles(root = document) {
+    root.querySelectorAll('.password-toggle').forEach((button) => {
+        const input = button.parentElement ? button.parentElement.querySelector('input') : null;
+        const slash = button.querySelector('.eye-slash');
+        if (slash) {
+            slash.style.display = input && input.type === 'password' ? 'block' : 'none';
+        }
+    });
+}
+
+function club360FormatCardNumber(value) {
+    return String(value || '')
+        .replace(/\D/g, '')
+        .slice(0, 16)
+        .replace(/(.{4})/g, '$1 ')
+        .trim();
+}
+
+function club360FormatCardExpiry(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function club360InitCardInputs(root = document) {
+    root.querySelectorAll('.js-only-digits').forEach((input) => {
+        input.addEventListener('input', () => {
+            input.value = input.value.replace(/\D/g, '');
+        });
+    });
+
+    root.querySelectorAll('.js-card-number').forEach((input) => {
+        input.value = club360FormatCardNumber(input.value);
+        input.addEventListener('input', () => {
+            input.value = club360FormatCardNumber(input.value);
+        });
+    });
+
+    root.querySelectorAll('.js-card-expiry').forEach((input) => {
+        input.value = club360FormatCardExpiry(input.value);
+        input.addEventListener('input', () => {
+            input.value = club360FormatCardExpiry(input.value);
+        });
+    });
+}
+
+window.togglePassword = togglePassword;
+
 window.Club360CalendarUI = {
     createMonthAgenda(config) {
         const calendarEl = document.getElementById(config.calendarId);
@@ -612,6 +674,9 @@ window.Club360Dialogs = {
 };
 
 window.addEventListener('DOMContentLoaded', function() {
+    club360InitPasswordToggles();
+    club360InitCardInputs();
+
     const modal = document.getElementById('confirm-modal');
     if (!modal) return;
 

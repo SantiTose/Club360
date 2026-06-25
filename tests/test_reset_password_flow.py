@@ -1,12 +1,14 @@
 import os
+from datetime import date
+from unittest.mock import patch
 
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from website import create_app, db
 from website.models import TarjetaCredito, Usuario
 
 
-def test_reset_password_envia_contrasena_y_no_pide_segundo_paso(tmp_path):
+def test_reset_password_envia_contraseña_y_no_pide_segundo_paso(tmp_path):
     app = create_app('testing')
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
@@ -78,19 +80,32 @@ def test_cliente_con_password_temporal_cambia_desde_editar_perfil():
 
         response = client.get('/dashboard', follow_redirects=False)
         assert response.status_code == 302
-        assert response.headers['Location'].endswith('/auth/perfil/editar')
+        assert response.headers['Location'].endswith('/auth/cambiar-password-inicial')
 
         response = client.post(
-            '/auth/perfil/editar',
+            '/auth/cambiar-password-inicial',
             data={
-                'action': 'cambiar_password',
+                'password': 'temporal123',
+                'password_confirm': 'temporal123',
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert 'La nueva contraseña no puede ser igual a la actual'.encode() in response.data
+
+        response = client.post(
+            '/auth/cambiar-password-inicial',
+            data={
                 'password': 'cliente456',
                 'password_confirm': 'cliente456',
             },
             follow_redirects=False,
         )
         assert response.status_code == 302
-        assert response.headers['Location'].endswith('/auth/perfil/editar')
+        assert response.headers['Location'].endswith('/dashboard')
+
+        usuario_actualizado = Usuario.query.get(usuario.id)
+        assert usuario_actualizado.requiere_cambio_password is False
 
         response = client.post(
             '/auth/perfil/editar',
@@ -106,20 +121,62 @@ def test_cliente_con_password_temporal_cambia_desde_editar_perfil():
         assert response.headers['Location'].endswith('/auth/perfil/editar')
         assert TarjetaCredito.query.filter_by(usuario_id=usuario.id).count() == 1
 
+
+def test_cliente_no_puede_reutilizar_password_actual_desde_editar_perfil():
+    app = create_app('testing')
+    app.config['TESTING'] = True
+    app.config['SERVER_NAME'] = 'localhost'
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        usuario = Usuario(
+            nombre='Maria',
+            apellido='Lopez',
+            dni='45678901',
+            email='maria@example.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado='activo',
+            tarjeta_credito_marca='Visa',
+            tarjeta_credito_ultimos4='1111',
+        )
+        db.session.add(usuario)
+        db.session.flush()
+        db.session.add(TarjetaCredito(
+            usuario_id=usuario.id,
+            marca='Visa',
+            ultimos4='1111',
+            vencimiento=date(2030, 12, 31),
+            saldo=100000.0,
+            es_principal=True,
+        ))
+        db.session.commit()
+
+        client = app.test_client()
+        response = client.post(
+            '/auth/login',
+            data={'email': usuario.email, 'password': 'cliente123'},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
         response = client.post(
             '/auth/perfil/editar',
             data={
                 'action': 'cambiar_password',
-                'password': 'cliente456',
-                'password_confirm': 'cliente456',
+                'password_actual': 'cliente123',
+                'password': 'cliente123',
+                'password_confirm': 'cliente123',
             },
-            follow_redirects=False,
+            follow_redirects=True,
         )
-        assert response.status_code == 302
-        assert response.headers['Location'].endswith('/dashboard')
+        assert response.status_code == 200
+        assert 'La nueva contraseña no puede ser igual a la actual'.encode() in response.data
 
         usuario_actualizado = Usuario.query.get(usuario.id)
-        assert usuario_actualizado.requiere_cambio_password is False
+        assert check_password_hash(usuario_actualizado.password, 'cliente123')
 
 
 def test_crear_cliente_desde_personal_no_pide_ni_guarda_tarjeta():
@@ -151,22 +208,33 @@ def test_crear_cliente_desde_personal_no_pide_ni_guarda_tarjeta():
         )
         assert response.status_code == 302
 
-        response = client.post(
-            '/auth/crear-usuario',
-            data={
-                'nombre': 'Cliente',
-                'apellido': 'SinTarjeta',
-                'dni': '11223344',
-                'fecha_nacimiento': '1990-01-01',
-                'email': 'cliente-sin-tarjeta@example.com',
-                'tipo_usuario': 'cliente',
-            },
-            follow_redirects=False,
-        )
+        with patch('website.auth.routes._generar_password_temporal', return_value='temporal123'):
+            response = client.post(
+                '/auth/crear-usuario',
+                data={
+                    'nombre': 'Cliente',
+                    'apellido': 'SinTarjeta',
+                    'dni': '11223344',
+                    'fecha_nacimiento': '1990-01-01',
+                    'email': 'cliente-sin-tarjeta@example.com',
+                    'tipo_usuario': 'cliente',
+                },
+                follow_redirects=False,
+            )
         assert response.status_code == 302
 
         cliente = Usuario.query.filter_by(email='cliente-sin-tarjeta@example.com').one()
         assert cliente.tarjeta_credito_marca is None
         assert cliente.tarjeta_credito_ultimos4 is None
         assert cliente.tarjeta_credito_vencimiento is None
+        assert cliente.requiere_cambio_password is False
         assert TarjetaCredito.query.filter_by(usuario_id=cliente.id).count() == 0
+
+        client.get('/auth/logout')
+        response = client.post(
+            '/auth/login',
+            data={'email': cliente.email, 'password': 'temporal123'},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert response.headers['Location'].endswith('/auth/perfil/editar')

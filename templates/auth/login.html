@@ -80,29 +80,4 @@
     </div>
 </div>
 
-<script>
-function togglePassword(fieldId, button) {
-    const input = document.getElementById(fieldId);
-    const slash = button.querySelector('.eye-slash');
-
-    if (input.type === 'password') {
-        input.type = 'text';
-        if (slash) slash.style.display = 'none';
-    } else {
-        input.type = 'password';
-        if (slash) slash.style.display = 'block';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.password-toggle').forEach((button) => {
-        const input = button.parentElement.querySelector('input');
-        const slash = button.querySelector('.eye-slash');
-        if (slash) {
-            slash.style.display = input && input.type === 'password' ? 'block' : 'none';
-        }
-    });
-});
-</script>
-
 {% endblock %}

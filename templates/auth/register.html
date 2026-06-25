@@ -153,12 +153,13 @@
                         type="text"
                         id="tarjeta_credito"
                         name="tarjeta_credito"
-                        class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                        class="form-control js-card-number {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
                         placeholder="4111 1111 1111 1111"
                         value="{{ form_data.get('tarjeta_credito', '') }}"
                         inputmode="numeric"
                         autocomplete="off"
-                        pattern="[0-9 ]{13,23}"
+                        maxlength="19"
+                        pattern="[0-9 ]{19}"
                         data-validation-message="Debes ingresar un numero de tarjeta valido"
                         data-helper-message="Solo se guardan marca y ultimos 4 digitos."
                         required
@@ -173,10 +174,14 @@
                 <div class="form-group">
                     <label for="tarjeta_vencimiento" class="form-label">Fecha de vencimiento</label>
                     <input
-                        type="month"
+                        type="text"
                         id="tarjeta_vencimiento"
                         name="tarjeta_vencimiento"
-                        class="form-control {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                        inputmode="numeric"
+                        class="form-control js-card-expiry {% if field_errors.get('tarjeta_credito') %}is-invalid{% endif %}"
+                        placeholder="03/2030"
+                        maxlength="7"
+                        pattern="(0[1-9]|1[0-2])/[0-9]{4}"
                         value="{{ form_data.get('tarjeta_vencimiento', '') }}"
                         autocomplete="off"
                         data-validation-message="Debes ingresar una fecha de vencimiento valida"
@@ -220,28 +225,7 @@
 </div>
 
 <script>
-function togglePassword(fieldId, button) {
-    const input = document.getElementById(fieldId);
-    const slash = button.querySelector('.eye-slash');
-
-    if (input.type === 'password') {
-        input.type = 'text';
-        if (slash) slash.style.display = 'none';
-    } else {
-        input.type = 'password';
-        if (slash) slash.style.display = 'block';
-    }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.password-toggle').forEach((button) => {
-        const input = button.parentElement.querySelector('input');
-        const slash = button.querySelector('.eye-slash');
-        if (slash) {
-            slash.style.display = input && input.type === 'password' ? 'block' : 'none';
-        }
-    });
-
     const form = document.querySelector('.auth-form');
     if (!form) return;
 

@@ -11,12 +11,21 @@
         <p><strong>Actividad:</strong> {{ reserva.turno.actividad|upper }}</p>
         <p><strong>Inicio:</strong> {{ reserva.turno.hora_inicio.strftime('%d/%m/%Y %H:%M') }}</p>
         <p><strong>Estado asistencia:</strong> {{ 'Validada' if reserva.asistencia_validada else 'Pendiente' }}</p>
+        <p><strong>Estado pago:</strong> {{ 'Pagado' if monto_pendiente <= 0 else 'Pendiente' }}</p>
 
         {% if not reserva.asistencia_validada %}
+        {% if monto_pendiente > 0 %}
+        <div class="alert alert-warning">
+            No se puede validar la asistencia hasta que no se termine de pagar el turno.
+            Monto pendiente: ${{ '%.2f'|format(monto_pendiente) }}.
+        </div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
+        {% else %}
         <form method="POST">
             <button type="submit" class="btn btn-success">Confirmar Asistencia</button>
             <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
         </form>
+        {% endif %}
         {% endif %}
     </div>
 </div>
