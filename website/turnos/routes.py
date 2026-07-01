@@ -2556,14 +2556,18 @@ def validar_asistencia_qr(qr_token):
         flash('No tienes permisos para escanear un QR de asistencia, intenta iniciar sesion con una cuenta de empleado valida', 'error')
         return redirect(url_for('auth.login'))
 
-    reserva = Reserva.query.filter_by(qr_token=qr_token).first()
+    reserva = _reserva_desde_qr_valido(qr_token)
     if not reserva:
         flash('Ese QR no contiene datos válidos.', 'error')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('turnos.escanear_qr'))
 
     if reserva.asistencia_validada:
         flash('El qr provisto ya fue registrado escaneado previamente, intente con otro', 'error')
         return redirect(url_for('dashboard'))
+
+    if not _reserva_es_del_dia_actual(reserva):
+        flash('Solo se puede validar la asistencia de turnos del día actual.', 'error')
+        return redirect(url_for('turnos.escanear_qr'))
 
     monto_pendiente = _monto_pendiente_de_reserva(reserva)
     if request.method == 'POST':
@@ -2584,6 +2588,78 @@ def validar_asistencia_qr(qr_token):
     )
 
 
+def _normalizar_qr_asistencia(qr_raw):
+    qr_contenido = (qr_raw or '').strip()
+    if qr_contenido.startswith('QR:'):
+        qr_contenido = qr_contenido[3:].strip()
+
+    qr_contenido = qr_contenido.split('#', 1)[0].split('?', 1)[0].strip()
+    if '/validar-asistencia/' in qr_contenido:
+        qr_contenido = qr_contenido.rstrip('/').rsplit('/validar-asistencia/', 1)[-1]
+    elif re.match(r'^[a-z][a-z0-9+.-]*://', qr_contenido, re.IGNORECASE):
+        return ''
+
+    qr_token = qr_contenido.strip().strip('/')
+    if not re.match(r'^[A-Za-z0-9_-]{16,160}$', qr_token):
+        return ''
+    return qr_token
+
+
+def _reserva_es_del_dia_actual(reserva):
+    turno = reserva.turno
+    return bool(turno and turno.hora_inicio.date() == _ahora_local().date())
+
+
+def _reserva_desde_qr_valido(qr_token):
+    reserva = Reserva.query.filter_by(qr_token=qr_token).first()
+    if not reserva or not reserva.turno or reserva.turno.cancelado:
+        return None
+    return reserva
+
+
+@turnos_bp.route('/escanear-qr', methods=['GET', 'POST'])
+@login_required
+def escanear_qr():
+    """Escanea un QR de asistencia desde la cámara del empleado."""
+    if not _es_empleado_o_admin(current_user):
+        flash('No tienes permisos para escanear un QR de asistencia, intenta iniciar sesion con una cuenta de empleado valida', 'error')
+        return redirect(url_for('auth.login'))
+
+    if request.method == 'POST':
+        qr_token = _normalizar_qr_asistencia(request.form.get('qr_token', ''))
+        reserva = _reserva_desde_qr_valido(qr_token) if qr_token else None
+        if not reserva:
+            flash('Ese QR no contiene datos válidos.', 'error')
+            return redirect(url_for('turnos.escanear_qr'))
+        return redirect(url_for('turnos.validar_asistencia_qr', qr_token=qr_token))
+
+    return render_template('turnos/escanear_qr.html')
+
+
+@turnos_bp.route('/escanear-qr/validar', methods=['POST'])
+@login_required
+def validar_qr_escaneado():
+    """Valida un QR detectado por cámara sin abandonar la pantalla de escaneo."""
+    if not _es_empleado_o_admin(current_user):
+        return jsonify({'valid': False, 'message': 'No tienes permisos para escanear un QR de asistencia.'}), 403
+
+    qr_token = _normalizar_qr_asistencia(request.form.get('qr_token', ''))
+    reserva = _reserva_desde_qr_valido(qr_token) if qr_token else None
+    if not reserva:
+        return jsonify({'valid': False, 'message': 'Ese QR no contiene datos válidos.'})
+
+    if reserva.asistencia_validada:
+        return jsonify({'valid': False, 'message': 'El qr provisto ya fue registrado escaneado previamente, intente con otro'})
+
+    if not _reserva_es_del_dia_actual(reserva):
+        return jsonify({'valid': False, 'message': 'Solo se puede validar la asistencia de turnos del día actual.'})
+
+    return jsonify({
+        'valid': True,
+        'redirect_url': url_for('turnos.validar_asistencia_qr', qr_token=qr_token),
+    })
+
+
 @turnos_bp.route('/validar-asistencia', methods=['GET', 'POST'])
 @login_required
 def validar_asistencia_manual():
@@ -2593,11 +2669,7 @@ def validar_asistencia_manual():
         return redirect(url_for('auth.login'))
 
     if request.method == 'POST':
-        qr_token = request.form.get('qr_token', '').strip()
-        if qr_token.startswith('QR:'):
-            qr_token = qr_token[3:].strip()
-        if '/validar-asistencia/' in qr_token:
-            qr_token = qr_token.rstrip('/').rsplit('/', 1)[-1]
+        qr_token = _normalizar_qr_asistencia(request.form.get('qr_token', ''))
         if not qr_token:
             flash('Debes ingresar un token QR', 'error')
             return redirect(url_for('turnos.validar_asistencia_manual'))

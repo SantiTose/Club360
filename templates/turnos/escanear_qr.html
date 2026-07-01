@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Escanear QR - Club 360{% endblock %}
+
+{% block content %}
+<section class="calendar-page qr-scan-page">
+    <div class="calendar-page-header">
+        <div>
+            <span class="turno-detail-kicker">Asistencia</span>
+            <h2>Escanear QR</h2>
+            <p class="text-muted">Apuntá la cámara al código de la reserva para abrir la validación.</p>
+        </div>
+    </div>
+
+    <div class="calendar-toolbar-card qr-scan-card">
+        <div class="qr-camera-frame">
+            <video id="qr-video" autoplay muted playsinline></video>
+            <canvas id="qr-canvas" hidden></canvas>
+            <div class="qr-scan-target" aria-hidden="true"></div>
+        </div>
+
+        <div class="qr-scan-status" id="qr-scan-status" role="status">
+            Iniciando cámara...
+        </div>
+
+        <form method="POST" id="qr-scan-form" class="qr-scan-hidden-form" hidden>
+            <input type="hidden" id="qr_token_scanned" name="qr_token">
+        </form>
+
+        <div class="button-group" style="justify-content: flex-start;">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Volver</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const video = document.getElementById('qr-video');
+    const canvas = document.getElementById('qr-canvas');
+    const status = document.getElementById('qr-scan-status');
+    const scannedInput = document.getElementById('qr_token_scanned');
+    const qrValidationUrl = "{{ url_for('turnos.validar_qr_escaneado') }}";
+
+    if (!video || !canvas || !status || !scannedInput) return;
+
+    let stream = null;
+    let scanning = true;
+    let validating = false;
+    let transientStatusTimer = null;
+
+    function setStatus(message, state) {
+        if (transientStatusTimer) {
+            window.clearTimeout(transientStatusTimer);
+            transientStatusTimer = null;
+        }
+        status.textContent = message;
+        status.dataset.state = state || 'info';
+    }
+
+    function setTransientError(message) {
+        setStatus(message, 'error');
+        transientStatusTimer = window.setTimeout(() => {
+            transientStatusTimer = null;
+            if (scanning && !validating) {
+                setStatus('Cámara activa. Buscando QR...', 'info');
+            }
+        }, 3000);
+    }
+
+    function normalizeQrValue(value) {
+        let qrValue = String(value || '').trim();
+        if (qrValue.startsWith('QR:')) {
+            qrValue = qrValue.slice(3).trim();
+        }
+
+        qrValue = qrValue.split('#', 1)[0].split('?', 1)[0].trim();
+        if (qrValue.includes('/validar-asistencia/')) {
+            qrValue = qrValue.replace(/\/+$/, '').split('/validar-asistencia/').pop();
+        } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(qrValue)) {
+            return '';
+        }
+
+        qrValue = qrValue.replace(/^\/+|\/+$/g, '');
+        return /^[A-Za-z0-9_-]{16,160}$/.test(qrValue) ? qrValue : '';
+    }
+
+    async function submitQrValue(value) {
+        if (validating) return false;
+
+        const qrValue = normalizeQrValue(value);
+        if (!qrValue) {
+            setTransientError('Ese QR no contiene datos válidos.');
+            return false;
+        }
+
+        validating = true;
+        setStatus('QR detectado. Verificando...', 'info');
+
+        try {
+            const response = await fetch(qrValidationUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({ qr_token: qrValue })
+            });
+            const result = await response.json();
+
+            if (!response.ok || !result.valid) {
+                validating = false;
+                setTransientError(result.message || 'Ese QR no contiene datos válidos.');
+                return false;
+            }
+
+            scanning = false;
+            if (stream) {
+                stream.getTracks().forEach((track) => track.stop());
+            }
+            scannedInput.value = qrValue;
+            setStatus('QR detectado. Abriendo validación...', 'success');
+            window.location.href = result.redirect_url;
+            return true;
+        } catch (error) {
+            validating = false;
+            setTransientError('No se pudo validar el QR. Intentá nuevamente.');
+            return false;
+        }
+    }
+
+    async function startScanner() {
+        if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+            setStatus('Este navegador no permite escanear QR desde la cámara.', 'error');
+            return;
+        }
+
+        const supportedFormats = await BarcodeDetector.getSupportedFormats();
+        if (!supportedFormats.includes('qr_code')) {
+            setStatus('Este navegador no permite leer códigos QR.', 'error');
+            return;
+        }
+
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+        } catch (error) {
+            setStatus('No se pudo acceder a la cámara. Revisá los permisos del navegador.', 'error');
+            return;
+        }
+
+        video.srcObject = stream;
+        await video.play();
+        setStatus('Cámara activa. Buscando QR...', 'info');
+
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+
+        async function scanFrame() {
+            if (!scanning) return;
+
+            if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                try {
+                    const codes = await detector.detect(canvas);
+                    if (codes.length > 0) {
+                        if (await submitQrValue(codes[0].rawValue)) {
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    setStatus('No se pudo leer la imagen de la cámara.', 'error');
+                    return;
+                }
+            }
+
+            window.setTimeout(scanFrame, 250);
+        }
+
+        scanFrame();
+    }
+
+    startScanner();
+});
+</script>
+{% endblock %}
