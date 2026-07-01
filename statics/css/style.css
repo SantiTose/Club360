@@ -376,6 +376,24 @@ p {
     transform: translateY(-1px);
 }
 
+.btn:disabled,
+.btn.is-disabled,
+.btn[aria-disabled='true'] {
+    background: #c6cfca;
+    color: #f8faf9;
+    box-shadow: none;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+}
+
+.btn:disabled:hover,
+.btn.is-disabled:hover,
+.btn[aria-disabled='true']:hover {
+    box-shadow: none;
+    transform: none;
+}
+
 .btn-primary {
     background: linear-gradient(140deg, var(--petrol), var(--petrol-dark));
     color: #fff;

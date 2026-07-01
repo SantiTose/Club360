@@ -99,6 +99,19 @@ def _crear_pago_no_abonado_con_deuda(usuario, turno):
     ))
 
 
+def _crear_pago_no_abonado_completo(usuario, turno):
+    referencia = f"reserva-{turno.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}"
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=8000.0,
+        metodo_pago='tarjeta_credito',
+        estado='completado',
+        tipo_clase=TipoClase.NO_ABONADA,
+        fecha_pago=turno.hora_inicio,
+        referencia_transaccion=f'{referencia}-total',
+    ))
+
+
 def _crear_entrada_lista_espera(usuario, turno, tipo_clase, posicion):
     db.session.add(ListaEspera(
         usuario_id=usuario.id,
@@ -200,13 +213,15 @@ def _buscar_turno(actividad, fecha, hora):
     ).first()
 
 
-def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
+def _crear_escenarios_turnos_demo(maria, pepe, carlos, mati, usuarios_espera_basquet):
     # En 2026, los equivalentes viernes/sabado de esa semana son 10/07 y 11/07.
     viernes_padel = _buscar_turno('padel', date(2026, 7, 10), 19)
     sabado_futbol = _buscar_turno('futbol', date(2026, 7, 11), 13)
     miercoles_basquet = _buscar_turno('basquet', date(2026, 7, 8), 10)
     miercoles_basquet_deuda = _buscar_turno('basquet', date(2026, 7, 15), 10)
     lunes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 13), 14)
+    viernes_padel_mati = _buscar_turno('padel', date(2026, 7, 17), 16)
+    sabado_futbol_mati = _buscar_turno('futbol', date(2026, 7, 18), 13)
 
     if viernes_padel:
         viernes_padel.capacidad_maxima = 1
@@ -263,6 +278,14 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, usuarios_espera_basquet):
     if miercoles_basquet_deuda:
         _crear_reserva_en_turno(maria, miercoles_basquet_deuda, TipoClase.NO_ABONADA)
         _crear_pago_no_abonado_con_deuda(maria, miercoles_basquet_deuda)
+
+    if viernes_padel_mati:
+        _crear_reserva_en_turno(mati, viernes_padel_mati, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_completo(mati, viernes_padel_mati)
+
+    if sabado_futbol_mati:
+        _crear_reserva_en_turno(mati, sabado_futbol_mati, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_completo(mati, sabado_futbol_mati)
 
 
 def _crear_reserva_demo(usuario, actividad, tipo_clase=TipoClase.NO_ABONADA):
@@ -421,6 +444,20 @@ def init_database():
             tarjeta_credito_saldo=100000.0
         )
 
+        mati_cliente = Usuario(
+            nombre='Mati',
+            apellido='Demo',
+            dni='90123457',
+            email='mati@example.com',
+            password=generate_password_hash('cliente123'),
+            tipo_usuario='cliente',
+            estado='activo',
+            tarjeta_credito_marca='Visa',
+            tarjeta_credito_ultimos4='2222',
+            tarjeta_credito_vencimiento=date(2030, 12, 31),
+            tarjeta_credito_saldo=100000.0
+        )
+
         usuarios_espera_basquet = [
             _crear_cliente_seed('Lucia', 'Ramos', '91000001', 'lucia.ramos@example.com'),
             _crear_cliente_seed('Tomas', 'Silva', '91000002', 'tomas.silva@example.com'),
@@ -445,6 +482,7 @@ def init_database():
             paulina_suspendida,
             pepe_gonzalez,
             carlos_cordero,
+            mati_cliente,
             *usuarios_espera_basquet,
         ]
 
@@ -464,7 +502,7 @@ def init_database():
         _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
         db.session.flush()
-        _crear_escenarios_turnos_demo(cliente2, pepe_gonzalez, carlos_cordero, usuarios_espera_basquet)
+        _crear_escenarios_turnos_demo(cliente2, pepe_gonzalez, carlos_cordero, mati_cliente, usuarios_espera_basquet)
         db.session.commit()
         print("✓ Clientes creados")
         
@@ -487,6 +525,7 @@ def init_database():
         print("- Tarjeta vencida y sin fondos: pedro@example.com / cliente123")
         print("- Pepe Gonzalez: abonadoexample@gmail.com / cliente123")
         print("- Carlos Cordero: noabonadoexample@gmail.com / cliente123")
+        print("- Mati Demo: mati@example.com / cliente123")
 
 
 if __name__ == '__main__':

@@ -21,7 +21,7 @@
     {% endif %}
 
     <div class="profile-edit-grid">
-        <form method="POST" class="profile-edit-panel auth-form" novalidate>
+        <form method="POST" class="profile-edit-panel auth-form" id="profile-data-form" novalidate>
             {% if requiere_tarjeta %}<fieldset disabled>{% endif %}
             <input type="hidden" name="action" value="perfil">
             <h2>Datos personales</h2>
@@ -40,9 +40,9 @@
                         required
                     >
                     {% if field_errors.get('nombre') %}
-                        <small class="form-text error">{{ field_errors['nombre'] }}</small>
+                        <small class="form-text error" data-profile-error-for="nombre">{{ field_errors['nombre'] }}</small>
                     {% else %}
-                        <small class="form-text">Entre 2 y 20 caracteres.</small>
+                        <small class="form-text" data-profile-error-for="nombre">Entre 2 y 20 caracteres.</small>
                     {% endif %}
                 </div>
 
@@ -59,9 +59,9 @@
                         required
                     >
                     {% if field_errors.get('apellido') %}
-                        <small class="form-text error">{{ field_errors['apellido'] }}</small>
+                        <small class="form-text error" data-profile-error-for="apellido">{{ field_errors['apellido'] }}</small>
                     {% else %}
-                        <small class="form-text">Entre 2 y 20 caracteres.</small>
+                        <small class="form-text" data-profile-error-for="apellido">Entre 2 y 20 caracteres.</small>
                     {% endif %}
                 </div>
             </div>
@@ -78,29 +78,38 @@
                         autocomplete="email"
                         required
                     >
-                    {% if field_errors.get('email') %}<small class="form-text error">{{ field_errors['email'] }}</small>{% endif %}
+                    {% if field_errors.get('email') %}
+                        <small class="form-text error" data-profile-error-for="email">{{ field_errors['email'] }}</small>
+                    {% else %}
+                        <small class="form-text" data-profile-error-for="email"></small>
+                    {% endif %}
                 </div>
 
                 <div class="form-group">
                     <label for="fecha_nacimiento" class="form-label">Fecha de nacimiento</label>
                     <input
-                        type="date"
+                        type="text"
                         id="fecha_nacimiento"
                         name="fecha_nacimiento"
-                        class="form-control {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}"
+                        class="form-control js-date-input {% if field_errors.get('fecha_nacimiento') %}is-invalid{% endif %}"
                         value="{{ form_data.get('fecha_nacimiento', '') }}"
+                        inputmode="numeric"
+                        autocomplete="bday"
+                        placeholder="dd/mm/yyyy"
+                        maxlength="10"
+                        pattern="(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}"
                         required
                     >
                     {% if field_errors.get('fecha_nacimiento') %}
-                        <small class="form-text error">{{ field_errors['fecha_nacimiento'] }}</small>
+                        <small class="form-text error" data-profile-error-for="fecha_nacimiento">{{ field_errors['fecha_nacimiento'] }}</small>
                     {% else %}
-                        <small class="form-text">Debe corresponder a una persona mayor de edad.</small>
+                        <small class="form-text" data-profile-error-for="fecha_nacimiento">Debe corresponder a una persona mayor de edad.</small>
                     {% endif %}
                 </div>
             </div>
 
             <div class="button-group">
-                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <button type="submit" class="btn btn-primary" id="profile-data-submit">Guardar cambios</button>
             </div>
             {% if requiere_tarjeta %}</fieldset>{% endif %}
         </form>
@@ -203,10 +212,10 @@
                 <article class="profile-card-item">
                     <div class="profile-card-summary">
                         <strong>{{ tarjeta.marca }} terminada en {{ tarjeta.ultimos4 }}</strong>
-                        <span>Vence {{ tarjeta.vencimiento.strftime('%m/%Y') }}{% if tarjeta.es_principal %} · Principal{% endif %}</span>
+                        <span>Vence {{ tarjeta.vencimiento.strftime('%m/%y') }}{% if tarjeta.es_principal %} · Principal{% endif %}</span>
                     </div>
 
-                    <form method="POST" class="profile-card-inline-form">
+                    <form method="POST" class="profile-card-inline-form" novalidate>
                         <input type="hidden" name="action" value="editar_tarjeta">
                         <input type="hidden" name="tarjeta_id" value="{{ tarjeta.id }}">
                         <div class="profile-card-field-grid">
@@ -216,7 +225,7 @@
                             </div>
                             <div class="form-group">
                                 <label for="tarjeta_vencimiento_{{ tarjeta.id }}" class="form-label">Vencimiento</label>
-                                <input type="text" id="tarjeta_vencimiento_{{ tarjeta.id }}" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/2030" maxlength="7" pattern="(0[1-9]|1[0-2])/[0-9]{4}" required>
+                                <input type="text" id="tarjeta_vencimiento_{{ tarjeta.id }}" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/27" maxlength="5" pattern="(0[1-9]|1[0-2])/[0-9]{2}" required>
                             </div>
                             <div class="form-group">
                                 <label for="tarjeta_cvv_{{ tarjeta.id }}" class="form-label">CVV</label>
@@ -249,7 +258,7 @@
                 {% endfor %}
             </div>
 
-            <form method="POST" class="profile-add-card-form">
+            <form method="POST" class="profile-add-card-form" novalidate>
                 <input type="hidden" name="action" value="agregar_tarjeta">
                 <h3>Agregar tarjeta</h3>
                 <div class="profile-card-field-grid">
@@ -259,7 +268,7 @@
                     </div>
                     <div class="form-group">
                         <label for="nueva_tarjeta_vencimiento" class="form-label">Vencimiento</label>
-                        <input type="text" id="nueva_tarjeta_vencimiento" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/2030" maxlength="7" pattern="(0[1-9]|1[0-2])/[0-9]{4}" required>
+                        <input type="text" id="nueva_tarjeta_vencimiento" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/27" maxlength="5" pattern="(0[1-9]|1[0-2])/[0-9]{2}" required>
                     </div>
                     <div class="form-group">
                         <label for="nueva_tarjeta_cvv" class="form-label">CVV</label>
@@ -290,4 +299,140 @@
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('profile-data-form');
+    if (!form) return;
+
+    const submitButton = document.getElementById('profile-data-submit');
+    const fields = {
+        nombre: document.getElementById('nombre'),
+        apellido: document.getElementById('apellido'),
+        email: document.getElementById('email'),
+        fecha_nacimiento: document.getElementById('fecha_nacimiento')
+    };
+
+    const defaults = {
+        nombre: 'Entre 2 y 20 caracteres.',
+        apellido: 'Entre 2 y 20 caracteres.',
+        email: '',
+        fecha_nacimiento: 'Debe corresponder a una persona mayor de edad.'
+    };
+
+    function messageFor(fieldName) {
+        return form.querySelector(`[data-profile-error-for="${fieldName}"]`);
+    }
+
+    function edad(fecha) {
+        const hoy = new Date();
+        let anios = hoy.getFullYear() - fecha.getFullYear();
+        const mes = hoy.getMonth() - fecha.getMonth();
+        if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) {
+            anios -= 1;
+        }
+        return anios;
+    }
+
+    function parseDate(value) {
+        if (!value) return null;
+        const [day, month, year] = value.split('/').map(Number);
+        if (!year || !month || !day) return null;
+        const parsed = new Date(year, month - 1, day);
+        if (
+            parsed.getFullYear() !== year ||
+            parsed.getMonth() !== month - 1 ||
+            parsed.getDate() !== day
+        ) {
+            return null;
+        }
+        return parsed;
+    }
+
+    function validateField(fieldName) {
+        const field = fields[fieldName];
+        const value = (field.value || '').trim();
+
+        if (fieldName === 'nombre' || fieldName === 'apellido') {
+            if (value.length < 2 || value.length > 20) {
+                return `El ${fieldName} debe tener entre 2 y 20 caracteres`;
+            }
+            return '';
+        }
+
+        if (fieldName === 'email') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                return 'El email no es válido';
+            }
+            return '';
+        }
+
+        if (fieldName === 'fecha_nacimiento') {
+            const fecha = parseDate(value);
+            if (!fecha) {
+                return 'Debes ingresar una fecha de nacimiento válida';
+            }
+            if (edad(fecha) < 18) {
+                return 'La fecha de nacimiento debe corresponder a una persona mayor de edad';
+            }
+            return '';
+        }
+
+        return '';
+    }
+
+    function renderFieldState(fieldName, error) {
+        const field = fields[fieldName];
+        const message = messageFor(fieldName);
+        field.classList.toggle('is-invalid', Boolean(error));
+
+        if (!message) return;
+        message.textContent = error || defaults[fieldName];
+        message.classList.toggle('error', Boolean(error));
+        message.hidden = !error && !defaults[fieldName];
+    }
+
+    function validateForm() {
+        let isValid = true;
+        Object.keys(fields).forEach((fieldName) => {
+            const error = validateField(fieldName);
+            renderFieldState(fieldName, error);
+            if (error) isValid = false;
+        });
+
+        if (submitButton) {
+            submitButton.disabled = !isValid;
+            submitButton.setAttribute('aria-disabled', String(!isValid));
+            submitButton.classList.toggle('is-disabled', !isValid);
+        }
+        return isValid;
+    }
+
+    Object.values(fields).forEach((field) => {
+        field.addEventListener('input', validateForm);
+        field.addEventListener('change', validateForm);
+        field.addEventListener('blur', validateForm);
+    });
+
+    form.addEventListener('submit', function(event) {
+        if (!validateForm()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+
+    if (submitButton) {
+        submitButton.addEventListener('click', function(event) {
+            if (!validateForm()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+    }
+
+    validateForm();
+});
+</script>
 {% endblock %}

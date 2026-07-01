@@ -25,7 +25,7 @@
                 <div class="form-group">
                     {% if turno %}
                     <label>Fecha</label>
-                    <input type="date" name="fecha" class="form-control" value="{{ turno.hora_inicio.strftime('%Y-%m-%d') }}" required>
+                    <input type="text" name="fecha" class="form-control js-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" pattern="(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/[0-9]{4}" value="{{ turno.hora_inicio.strftime('%d/%m/%Y') }}" required>
                     {% else %}
                     <label>Día</label>
                     <select name="dia_semana" class="form-control" required>

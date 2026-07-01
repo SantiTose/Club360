@@ -81,9 +81,68 @@ function club360FormatCardNumber(value) {
 }
 
 function club360FormatCardExpiry(value) {
-    const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
+    const monthValue = String(value || '').trim().match(/^(\d{4})-(\d{2})$/);
+    if (monthValue) {
+        return `${monthValue[2]}/${monthValue[1].slice(2)}`;
+    }
+
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 4);
     if (digits.length <= 2) return digits;
     return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function club360FormatDateInput(value) {
+    const isoValue = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoValue) {
+        return `${isoValue[3]}/${isoValue[2]}/${isoValue[1]}`;
+    }
+
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+    let day = '';
+    let month = '';
+    let year = '';
+
+    function isValidDayPrefix(nextValue) {
+        if (!nextValue) return true;
+        if (nextValue.length === 1) return /^\d$/.test(nextValue);
+        return /^(0[1-9]|[12][0-9]|3[01])$/.test(nextValue);
+    }
+
+    function isValidMonthPrefix(nextValue) {
+        if (!nextValue) return true;
+        if (nextValue.length === 1) return /^\d$/.test(nextValue);
+        return /^(0[1-9]|1[0-2])$/.test(nextValue);
+    }
+
+    digits.split('').forEach((digit) => {
+        if (day.length < 2) {
+            if (!day && Number(digit) > 3) {
+                day = `0${digit}`;
+                return;
+            }
+            const nextDay = `${day}${digit}`;
+            if (isValidDayPrefix(nextDay)) day = nextDay;
+            return;
+        }
+
+        if (month.length < 2) {
+            if (!month && Number(digit) > 1) {
+                month = `0${digit}`;
+                return;
+            }
+            const nextMonth = `${month}${digit}`;
+            if (isValidMonthPrefix(nextMonth)) month = nextMonth;
+            return;
+        }
+
+        if (year.length < 4) {
+            year += digit;
+        }
+    });
+
+    if (!month) return day;
+    if (!year) return `${day}/${month}`;
+    return `${day}/${month}/${year}`;
 }
 
 function club360InitCardInputs(root = document) {
@@ -104,6 +163,15 @@ function club360InitCardInputs(root = document) {
         input.value = club360FormatCardExpiry(input.value);
         input.addEventListener('input', () => {
             input.value = club360FormatCardExpiry(input.value);
+        });
+    });
+}
+
+function club360InitDateInputs(root = document) {
+    root.querySelectorAll('.js-date-input').forEach((input) => {
+        input.value = club360FormatDateInput(input.value);
+        input.addEventListener('input', () => {
+            input.value = club360FormatDateInput(input.value);
         });
     });
 }
@@ -676,6 +744,7 @@ window.Club360Dialogs = {
 window.addEventListener('DOMContentLoaded', function() {
     club360InitPasswordToggles();
     club360InitCardInputs();
+    club360InitDateInputs();
 
     const modal = document.getElementById('confirm-modal');
     if (!modal) return;

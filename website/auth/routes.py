@@ -83,10 +83,13 @@ def _validar_password_distinta_a_actual(usuario, password, field_errors):
 
 
 def _parsear_fecha_nacimiento(fecha_raw):
-    try:
-        return datetime.strptime(fecha_raw, '%Y-%m-%d').date()
-    except (TypeError, ValueError):
-        return None
+    fecha = (fecha_raw or '').strip()
+    for formato in ('%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(fecha, formato).date()
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _edad(fecha_nacimiento):
@@ -144,6 +147,8 @@ def _parsear_vencimiento_tarjeta(vencimiento_raw):
             anio += 2000
 
     if mes < 1 or mes > 12:
+        return None
+    if anio > 2032:
         return None
 
     hoy = date.today()
@@ -271,7 +276,7 @@ def _asegurar_tarjeta_legacy(usuario):
 
 
 def _render_editar_perfil(field_errors=None, form_data=None):
-    fecha_formateada = current_user.fecha_nacimiento.isoformat() if current_user.fecha_nacimiento else ''
+    fecha_formateada = current_user.fecha_nacimiento.strftime('%d/%m/%Y') if current_user.fecha_nacimiento else ''
     tarjetas = _tarjetas_del_cliente(current_user)
     return render_template(
         'auth/editar_perfil.html',
@@ -436,9 +441,6 @@ def login():
         if usuario and check_password_hash(usuario.password, password):
             login_user(usuario, remember=bool(remember))
             if usuario.tipo_usuario == TipoUsuario.CLIENTE and not _cliente_tiene_tarjeta(usuario):
-                return redirect(url_for('auth.editar_perfil'))
-            if usuario.requiere_cambio_password and usuario.tipo_usuario == TipoUsuario.CLIENTE:
-                flash('Ingresaste con una contraseña temporal. Cambiala desde Editar perfil para continuar.', 'warning')
                 return redirect(url_for('auth.editar_perfil'))
             if usuario.requiere_cambio_password:
                 flash('Debes cambiar tu contraseña temporal para continuar', 'warning')

@@ -216,7 +216,16 @@ def _validar_regla_horaria(inicio, fin):
 
 def _construir_inicio_fin(fecha_raw, hora_raw):
     try:
-        fecha = datetime.strptime(fecha_raw, '%Y-%m-%d').date()
+        fecha_texto = (fecha_raw or '').strip()
+        fecha = None
+        for formato in ('%d/%m/%Y', '%Y-%m-%d'):
+            try:
+                fecha = datetime.strptime(fecha_texto, formato).date()
+                break
+            except (ValueError, TypeError):
+                continue
+        if fecha is None:
+            raise ValueError
         hora = int(hora_raw)
     except (ValueError, TypeError):
         return None, None, 'Fecha u horario inválidos'
