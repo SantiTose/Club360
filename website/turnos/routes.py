@@ -2562,7 +2562,7 @@ def validar_asistencia_qr(qr_token):
         return redirect(url_for('turnos.escanear_qr'))
 
     if reserva.asistencia_validada:
-        flash('El qr provisto ya fue registrado escaneado previamente, intente con otro', 'error')
+        flash('El QR provisto ya fue validado previamente.', 'error')
         return redirect(url_for('dashboard'))
 
     if not _reserva_es_del_dia_actual(reserva):
@@ -2649,7 +2649,7 @@ def validar_qr_escaneado():
         return jsonify({'valid': False, 'message': 'Ese QR no contiene datos válidos.'})
 
     if reserva.asistencia_validada:
-        return jsonify({'valid': False, 'message': 'El qr provisto ya fue registrado escaneado previamente, intente con otro'})
+        return jsonify({'valid': False, 'message': 'El QR provisto ya fue validado previamente.'})
 
     if not _reserva_es_del_dia_actual(reserva):
         return jsonify({'valid': False, 'message': 'Solo se puede validar la asistencia de turnos del día actual.'})

@@ -5,7 +5,7 @@ from flask_login import LoginManager, login_required, current_user
 from flask_migrate import Migrate
 from sqlalchemy import text, inspect, func
 import secrets
-from datetime import datetime
+from datetime import datetime, date
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -283,6 +283,7 @@ def create_app(config_name='development'):
         _ensure_pago_tipo_clase_column()
         _ensure_creditos_clientes_table()
         _backfill_reserva_qr_tokens()
+        _backfill_demo_fechas_nacimiento()
         _repair_mojibake_text_values()
 
     return app
@@ -992,4 +993,30 @@ def _backfill_reserva_qr_tokens():
         reserva.qr_token = secrets.token_urlsafe(24)
 
     if reservas_sin_qr:
+        db.session.commit()
+
+
+def _backfill_demo_fechas_nacimiento():
+    from website.models import Usuario
+
+    fechas_demo = {
+        'felipe@example.com': date(1990, 1, 1),
+        'maria@example.com': date(1990, 3, 3),
+        'pedro@example.com': date(1990, 1, 1),
+        'paulina@example.com': date(1990, 1, 1),
+        'abonadoexample@gmail.com': date(1990, 1, 1),
+        'noabonadoexample@gmail.com': date(1990, 1, 1),
+        'mati@example.com': date(1990, 1, 1),
+    }
+
+    changed = False
+    usuarios = Usuario.query.filter(Usuario.email.in_(fechas_demo.keys())).all()
+    for usuario in usuarios:
+        if usuario.fecha_nacimiento:
+            continue
+        usuario.fecha_nacimiento = fechas_demo[usuario.email]
+        usuario.autorizacion_menor = False
+        changed = True
+
+    if changed:
         db.session.commit()

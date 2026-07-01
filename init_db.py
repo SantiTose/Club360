@@ -52,6 +52,8 @@ def _crear_cliente_seed(nombre, apellido, dni, email, password='cliente123', sal
         password=generate_password_hash(password),
         tipo_usuario='cliente',
         estado='activo',
+        fecha_nacimiento=date(1990, 1, 1),
+        autorizacion_menor=False,
         tarjeta_credito_marca='Visa',
         tarjeta_credito_ultimos4='1111',
         tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -213,19 +215,21 @@ def _buscar_turno(actividad, fecha, hora):
     ).first()
 
 
-def _crear_escenarios_turnos_demo(maria, pepe, carlos, mati, usuarios_espera_basquet):
+def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_espera_basquet):
     # En 2026, los equivalentes viernes/sabado de esa semana son 10/07 y 11/07.
     viernes_padel = _buscar_turno('padel', date(2026, 7, 10), 19)
     sabado_futbol = _buscar_turno('futbol', date(2026, 7, 11), 13)
     miercoles_basquet = _buscar_turno('basquet', date(2026, 7, 8), 10)
     miercoles_basquet_deuda = _buscar_turno('basquet', date(2026, 7, 15), 10)
     lunes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 13), 14)
+    martes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 14), 14)
     viernes_padel_mati = _buscar_turno('padel', date(2026, 7, 17), 16)
     sabado_futbol_mati = _buscar_turno('futbol', date(2026, 7, 18), 13)
+    viernes_futbol_abonada = _buscar_turno('futbol', date(2026, 7, 3), 18)
 
     if viernes_padel:
-        viernes_padel.capacidad_maxima = 1
-        viernes_padel.cupos_disponibles = 1
+        viernes_padel.capacidad_maxima = 2
+        viernes_padel.cupos_disponibles = 2
         abono_maria_padel = AbonoCliente(
             usuario_id=maria.id,
             actividad='padel',
@@ -247,14 +251,37 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, mati, usuarios_espera_bas
             fecha_pago=viernes_padel.hora_inicio,
             referencia_transaccion=f'abono-total-{abono_maria_padel.id}-{maria.id}-{int(datetime.utcnow().timestamp())}',
         ))
+        abono_felipe_padel = AbonoCliente(
+            usuario_id=felipe.id,
+            actividad='padel',
+            dia_semana=4,
+            hora_inicio=19,
+            fecha_desde=date(2026, 7, 1),
+            fecha_hasta=date(2026, 7, 31),
+            estado=EstadoAbono.ACTIVO,
+        )
+        db.session.add(abono_felipe_padel)
+        db.session.flush()
+        _crear_reserva_en_turno(felipe, viernes_padel, TipoClase.ABONADA, abono_felipe_padel)
+        db.session.add(Pago(
+            usuario_id=felipe.id,
+            monto=8000.0,
+            metodo_pago='pendiente',
+            estado='pendiente',
+            tipo_clase=TipoClase.ABONADA,
+            fecha_pago=viernes_padel.hora_inicio,
+            referencia_transaccion=f'abono-total-{abono_felipe_padel.id}-{felipe.id}-{int(datetime.utcnow().timestamp())}',
+        ))
         _crear_entrada_lista_espera(pepe, viernes_padel, TipoClase.ABONADA, 1)
         _crear_entrada_lista_espera(carlos, viernes_padel, TipoClase.NO_ABONADA, 1)
 
     if sabado_futbol:
-        sabado_futbol.capacidad_maxima = 1
-        sabado_futbol.cupos_disponibles = 1
+        sabado_futbol.capacidad_maxima = 2
+        sabado_futbol.cupos_disponibles = 2
         _crear_reserva_en_turno(maria, sabado_futbol, TipoClase.NO_ABONADA)
         _crear_pago_no_abonado_con_deuda(maria, sabado_futbol)
+        _crear_reserva_en_turno(felipe, sabado_futbol, TipoClase.NO_ABONADA)
+        _crear_pago_no_abonado_con_deuda(felipe, sabado_futbol)
         _crear_entrada_lista_espera(carlos, sabado_futbol, TipoClase.NO_ABONADA, 1)
         _crear_entrada_lista_espera(pepe, sabado_futbol, TipoClase.NO_ABONADA, 2)
 
@@ -266,10 +293,53 @@ def _crear_escenarios_turnos_demo(maria, pepe, carlos, mati, usuarios_espera_bas
         for posicion, usuario in enumerate(usuarios_espera_basquet[5:14], start=1):
             _crear_entrada_lista_espera(usuario, lunes_basquet_lleno, TipoClase.NO_ABONADA, posicion)
 
+    if not martes_basquet_lleno:
+        martes_basquet_lleno = Turno(
+            actividad='basquet',
+            hora_inicio=datetime(2026, 7, 14, 14, 0),
+            hora_fin=datetime(2026, 7, 14, 15, 0),
+            capacidad_maxima=1,
+            cupos_disponibles=1,
+            cancelado=False,
+        )
+        db.session.add(martes_basquet_lleno)
+        db.session.flush()
+    else:
+        martes_basquet_lleno.capacidad_maxima = 1
+        martes_basquet_lleno.cupos_disponibles = 1
+
+    _crear_reserva_en_turno(usuarios_espera_basquet[0], martes_basquet_lleno, TipoClase.NO_ABONADA)
+    _crear_pago_no_abonado_completo(usuarios_espera_basquet[0], martes_basquet_lleno)
+
     viernes_padel_deuda = _buscar_turno('padel', date(2026, 7, 3), 16)
     if viernes_padel_deuda:
         _crear_reserva_en_turno(maria, viernes_padel_deuda, TipoClase.NO_ABONADA)
         _crear_pago_no_abonado_con_deuda(maria, viernes_padel_deuda)
+
+    if not viernes_futbol_abonada:
+        viernes_futbol_abonada = Turno(
+            actividad='futbol',
+            hora_inicio=datetime(2026, 7, 3, 18, 0),
+            hora_fin=datetime(2026, 7, 3, 19, 0),
+            capacidad_maxima=10,
+            cupos_disponibles=10,
+            cancelado=False,
+        )
+        db.session.add(viernes_futbol_abonada)
+        db.session.flush()
+
+    abono_maria_futbol = AbonoCliente(
+        usuario_id=maria.id,
+        actividad='futbol',
+        dia_semana=4,
+        hora_inicio=18,
+        fecha_desde=date(2026, 7, 1),
+        fecha_hasta=date(2026, 7, 31),
+        estado=EstadoAbono.ACTIVO,
+    )
+    db.session.add(abono_maria_futbol)
+    db.session.flush()
+    _crear_reserva_en_turno(maria, viernes_futbol_abonada, TipoClase.ABONADA, abono_maria_futbol)
 
     if miercoles_basquet:
         _crear_reserva_en_turno(maria, miercoles_basquet, TipoClase.NO_ABONADA)
@@ -368,6 +438,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -382,6 +454,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 3, 3),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -396,6 +470,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2024, 12, 31),
@@ -410,6 +486,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado=EstadoUsuario.SUSPENDIDO,
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -424,6 +502,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -438,6 +518,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='1111',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -452,6 +534,8 @@ def init_database():
             password=generate_password_hash('cliente123'),
             tipo_usuario='cliente',
             estado='activo',
+            fecha_nacimiento=date(1990, 1, 1),
+            autorizacion_menor=False,
             tarjeta_credito_marca='Visa',
             tarjeta_credito_ultimos4='2222',
             tarjeta_credito_vencimiento=date(2030, 12, 31),
@@ -502,18 +586,20 @@ def init_database():
         _crear_suspensiones_demo_paulina(paulina_suspendida)
         clases_demo = _crear_clases_demo_recurrentes_hasta_fin_anio()
         db.session.flush()
-        _crear_escenarios_turnos_demo(cliente2, pepe_gonzalez, carlos_cordero, mati_cliente, usuarios_espera_basquet)
+        _crear_escenarios_turnos_demo(cliente1, cliente2, pepe_gonzalez, carlos_cordero, mati_cliente, usuarios_espera_basquet)
         db.session.commit()
         print("✓ Clientes creados")
         
         print("Clases demo recurrentes creadas hasta fin de anio:")
         print("  - Basquet: lunes 14:00 con 5 cupos")
+        print("  - Basquet: martes 14/07/2026 14:00 con 1 cupo, lleno y sin lista de espera")
         print("  - Basquet: miercoles 10:00 con 10 cupos")
         print("  - Padel: viernes 16:00 con 10 cupos")
         print("  - Padel: viernes 19:00 con 10 cupos")
         print("  - Futbol: sabado 13:00 con 10 cupos")
+        print("  - Futbol: viernes 03/07/2026 18:00 puntual con Maria abonada")
         print(f"  Total por deporte: {clases_demo}")
-        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026 y 15/07/2026.")
+        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026, 14/07/2026 y 15/07/2026.")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")

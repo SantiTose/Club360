@@ -222,14 +222,17 @@
                             <div class="form-group">
                                 <label for="tarjeta_credito_{{ tarjeta.id }}" class="form-label">Nueva numeración</label>
                                 <input type="text" id="tarjeta_credito_{{ tarjeta.id }}" name="tarjeta_credito" inputmode="numeric" autocomplete="off" class="form-control js-card-number" placeholder="4111 1111 1111 1111" maxlength="19" required>
+                                <small class="form-text" data-card-error-for="tarjeta_credito"></small>
                             </div>
                             <div class="form-group">
                                 <label for="tarjeta_vencimiento_{{ tarjeta.id }}" class="form-label">Vencimiento</label>
                                 <input type="text" id="tarjeta_vencimiento_{{ tarjeta.id }}" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/27" maxlength="5" pattern="(0[1-9]|1[0-2])/[0-9]{2}" required>
+                                <small class="form-text" data-card-error-for="tarjeta_vencimiento"></small>
                             </div>
                             <div class="form-group">
                                 <label for="tarjeta_cvv_{{ tarjeta.id }}" class="form-label">CVV</label>
                                 <input type="text" id="tarjeta_cvv_{{ tarjeta.id }}" name="tarjeta_cvv" inputmode="numeric" autocomplete="off" pattern="[0-9]{3}" maxlength="3" class="form-control js-only-digits" placeholder="123" required>
+                                <small class="form-text" data-card-error-for="tarjeta_cvv"></small>
                             </div>
                         </div>
                         <div class="profile-card-actions">
@@ -265,14 +268,17 @@
                     <div class="form-group">
                         <label for="nueva_tarjeta_credito" class="form-label">Número</label>
                         <input type="text" id="nueva_tarjeta_credito" name="tarjeta_credito" inputmode="numeric" autocomplete="off" class="form-control js-card-number" placeholder="4111 1111 1111 1111" maxlength="19" required>
+                        <small class="form-text" data-card-error-for="tarjeta_credito"></small>
                     </div>
                     <div class="form-group">
                         <label for="nueva_tarjeta_vencimiento" class="form-label">Vencimiento</label>
                         <input type="text" id="nueva_tarjeta_vencimiento" name="tarjeta_vencimiento" inputmode="numeric" autocomplete="off" class="form-control js-card-expiry" placeholder="03/27" maxlength="5" pattern="(0[1-9]|1[0-2])/[0-9]{2}" required>
+                        <small class="form-text" data-card-error-for="tarjeta_vencimiento"></small>
                     </div>
                     <div class="form-group">
                         <label for="nueva_tarjeta_cvv" class="form-label">CVV</label>
                         <input type="text" id="nueva_tarjeta_cvv" name="tarjeta_cvv" inputmode="numeric" autocomplete="off" pattern="[0-9]{3}" maxlength="3" class="form-control js-only-digits" placeholder="123" required>
+                        <small class="form-text" data-card-error-for="tarjeta_cvv"></small>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Agregar tarjeta</button>
@@ -320,6 +326,12 @@ document.addEventListener('DOMContentLoaded', function() {
         apellido: 'Entre 2 y 20 caracteres.',
         email: '',
         fecha_nacimiento: 'Debe corresponder a una persona mayor de edad.'
+    };
+    const touchedFields = {
+        nombre: Boolean(messageFor('nombre')?.classList.contains('error')),
+        apellido: Boolean(messageFor('apellido')?.classList.contains('error')),
+        email: Boolean(messageFor('email')?.classList.contains('error')),
+        fecha_nacimiento: Boolean(messageFor('fecha_nacimiento')?.classList.contains('error'))
     };
 
     function messageFor(fieldName) {
@@ -383,22 +395,23 @@ document.addEventListener('DOMContentLoaded', function() {
         return '';
     }
 
-    function renderFieldState(fieldName, error) {
+    function renderFieldState(fieldName, error, showError) {
         const field = fields[fieldName];
         const message = messageFor(fieldName);
-        field.classList.toggle('is-invalid', Boolean(error));
+        const shouldShowError = Boolean(error && showError);
+        field.classList.toggle('is-invalid', shouldShowError);
 
         if (!message) return;
-        message.textContent = error || defaults[fieldName];
-        message.classList.toggle('error', Boolean(error));
-        message.hidden = !error && !defaults[fieldName];
+        message.textContent = shouldShowError ? error : defaults[fieldName];
+        message.classList.toggle('error', shouldShowError);
+        message.hidden = !shouldShowError && !defaults[fieldName];
     }
 
-    function validateForm() {
+    function validateForm(showAllErrors = false) {
         let isValid = true;
         Object.keys(fields).forEach((fieldName) => {
             const error = validateField(fieldName);
-            renderFieldState(fieldName, error);
+            renderFieldState(fieldName, error, showAllErrors || touchedFields[fieldName]);
             if (error) isValid = false;
         });
 
@@ -410,14 +423,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return isValid;
     }
 
-    Object.values(fields).forEach((field) => {
-        field.addEventListener('input', validateForm);
-        field.addEventListener('change', validateForm);
-        field.addEventListener('blur', validateForm);
+    Object.entries(fields).forEach(([fieldName, field]) => {
+        const markAndValidate = () => {
+            touchedFields[fieldName] = true;
+            validateForm();
+        };
+        field.addEventListener('input', markAndValidate);
+        field.addEventListener('change', markAndValidate);
+        field.addEventListener('blur', markAndValidate);
     });
 
     form.addEventListener('submit', function(event) {
-        if (!validateForm()) {
+        Object.keys(touchedFields).forEach((fieldName) => {
+            touchedFields[fieldName] = true;
+        });
+        if (!validateForm(true)) {
             event.preventDefault();
             event.stopPropagation();
         }
@@ -425,14 +445,147 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (submitButton) {
         submitButton.addEventListener('click', function(event) {
-            if (!validateForm()) {
+            Object.keys(touchedFields).forEach((fieldName) => {
+                touchedFields[fieldName] = true;
+            });
+            if (!validateForm(true)) {
                 event.preventDefault();
                 event.stopPropagation();
             }
         });
     }
 
-    validateForm();
+    validateForm(false);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const cardForms = document.querySelectorAll('.profile-card-inline-form, .profile-add-card-form');
+    if (!cardForms.length) return;
+
+    function digitsOnly(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function isValidLuhn(number) {
+        let total = 0;
+        const reversed = number.split('').reverse();
+        reversed.forEach((digit, index) => {
+            let value = Number(digit);
+            if (index % 2 === 1) {
+                value *= 2;
+                if (value > 9) value -= 9;
+            }
+            total += value;
+        });
+        return total % 10 === 0;
+    }
+
+    function parseExpiry(value) {
+        const match = String(value || '').trim().match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+        if (!match) return null;
+
+        const month = Number(match[1]);
+        const year = 2000 + Number(match[2]);
+        if (year > 2032) return null;
+
+        const today = new Date();
+        const expiry = new Date(year, month, 0);
+        const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const expiryMonth = new Date(expiry.getFullYear(), expiry.getMonth(), 1);
+
+        return expiryMonth >= currentMonth ? expiry : null;
+    }
+
+    function validateCardNumber(input) {
+        const number = digitsOnly(input.value);
+        if (!number) return 'Debes ingresar una tarjeta de crédito';
+        if (number.length !== 16) return 'La tarjeta debe tener 16 dígitos';
+        if (new Set(number).size === 1 || !isValidLuhn(number)) return 'El número de tarjeta no es válido';
+        return '';
+    }
+
+    function validateExpiry(input) {
+        if (!String(input.value || '').trim()) return 'Debes ingresar una fecha de vencimiento válida';
+        if (!parseExpiry(input.value)) return 'La fecha de vencimiento no es válida';
+        return '';
+    }
+
+    function validateCvv(input) {
+        const cvv = digitsOnly(input.value);
+        if (!cvv) return 'Debes ingresar el CVV';
+        if (!/^\d{3}$/.test(cvv)) return 'El código de seguridad debe tener 3 dígitos';
+        return '';
+    }
+
+    function messageFor(form, fieldName) {
+        return form.querySelector(`[data-card-error-for="${fieldName}"]`);
+    }
+
+    function renderCardField(input, message, error, showError) {
+        const shouldShowError = Boolean(error && showError);
+        input.classList.toggle('is-invalid', shouldShowError);
+        if (!message) return;
+
+        message.textContent = shouldShowError ? error : '';
+        message.classList.toggle('error', shouldShowError);
+        message.hidden = !shouldShowError;
+    }
+
+    function validateCardForm(form, touchedFields, showAllErrors = false) {
+        const numberInput = form.querySelector('[name="tarjeta_credito"]');
+        const expiryInput = form.querySelector('[name="tarjeta_vencimiento"]');
+        const cvvInput = form.querySelector('[name="tarjeta_cvv"]');
+        const submitButton = form.querySelector('button[type="submit"]');
+
+        const errors = {
+            tarjeta_credito: validateCardNumber(numberInput),
+            tarjeta_vencimiento: validateExpiry(expiryInput),
+            tarjeta_cvv: validateCvv(cvvInput)
+        };
+
+        renderCardField(numberInput, messageFor(form, 'tarjeta_credito'), errors.tarjeta_credito, showAllErrors || touchedFields.tarjeta_credito);
+        renderCardField(expiryInput, messageFor(form, 'tarjeta_vencimiento'), errors.tarjeta_vencimiento, showAllErrors || touchedFields.tarjeta_vencimiento);
+        renderCardField(cvvInput, messageFor(form, 'tarjeta_cvv'), errors.tarjeta_cvv, showAllErrors || touchedFields.tarjeta_cvv);
+
+        const isValid = !errors.tarjeta_credito && !errors.tarjeta_vencimiento && !errors.tarjeta_cvv;
+        if (submitButton) {
+            submitButton.disabled = !isValid;
+            submitButton.setAttribute('aria-disabled', String(!isValid));
+            submitButton.classList.toggle('is-disabled', !isValid);
+        }
+
+        return isValid;
+    }
+
+    cardForms.forEach((form) => {
+        const touchedFields = {
+            tarjeta_credito: false,
+            tarjeta_vencimiento: false,
+            tarjeta_cvv: false
+        };
+
+        form.querySelectorAll('[name="tarjeta_credito"], [name="tarjeta_vencimiento"], [name="tarjeta_cvv"]').forEach((input) => {
+            const markAndValidate = () => {
+                touchedFields[input.name] = true;
+                validateCardForm(form, touchedFields);
+            };
+            input.addEventListener('input', markAndValidate);
+            input.addEventListener('change', markAndValidate);
+            input.addEventListener('blur', markAndValidate);
+        });
+
+        form.addEventListener('submit', function(event) {
+            Object.keys(touchedFields).forEach((fieldName) => {
+                touchedFields[fieldName] = true;
+            });
+            if (!validateCardForm(form, touchedFields, true)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+
+        validateCardForm(form, touchedFields, false);
+    });
 });
 </script>
 {% endblock %}
