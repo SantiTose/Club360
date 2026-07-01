@@ -35,6 +35,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const video = document.getElementById('qr-video');
@@ -130,18 +131,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function startScanner() {
-        if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-            setStatus('Este navegador no permite escanear QR desde la cámara.', 'error');
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setStatus('La cámara requiere abrir Club 360 desde localhost o HTTPS.', 'error');
             return;
         }
 
-        const supportedFormats = await BarcodeDetector.getSupportedFormats();
-        if (!supportedFormats.includes('qr_code')) {
+        let barcodeDetector = null;
+        if ('BarcodeDetector' in window) {
+            const supportedFormats = await BarcodeDetector.getSupportedFormats();
+            if (supportedFormats.includes('qr_code')) {
+                barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+            }
+        }
+
+        if (!barcodeDetector && typeof window.jsQR !== 'function') {
             setStatus('Este navegador no permite leer códigos QR.', 'error');
             return;
         }
-
-        const detector = new BarcodeDetector({ formats: ['qr_code'] });
 
         try {
             stream = await navigator.mediaDevices.getUserMedia({
@@ -168,9 +174,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 try {
-                    const codes = await detector.detect(canvas);
-                    if (codes.length > 0) {
-                        if (await submitQrValue(codes[0].rawValue)) {
+                    let qrValue = '';
+                    if (barcodeDetector) {
+                        const codes = await barcodeDetector.detect(canvas);
+                        qrValue = codes[0]?.rawValue || '';
+                    } else {
+                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: 'dontInvert'
+                        });
+                        qrValue = code?.data || '';
+                    }
+
+                    if (qrValue) {
+                        if (await submitQrValue(qrValue)) {
                             return;
                         }
                     }
