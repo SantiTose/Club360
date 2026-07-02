@@ -114,6 +114,18 @@ def _crear_pago_no_abonado_completo(usuario, turno):
     ))
 
 
+def _crear_pago_abonado_completo(usuario, turno, abono):
+    db.session.add(Pago(
+        usuario_id=usuario.id,
+        monto=8000.0,
+        metodo_pago='tarjeta_credito',
+        estado='completado',
+        tipo_clase=TipoClase.ABONADA,
+        fecha_pago=turno.hora_inicio,
+        referencia_transaccion=f'abono-total-{abono.id}-{usuario.id}-{int(datetime.utcnow().timestamp())}',
+    ))
+
+
 def _crear_entrada_lista_espera(usuario, turno, tipo_clase, posicion):
     db.session.add(ListaEspera(
         usuario_id=usuario.id,
@@ -354,8 +366,19 @@ def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_es
         _crear_pago_no_abonado_completo(mati, viernes_padel_mati)
 
     if sabado_futbol_mati:
-        _crear_reserva_en_turno(mati, sabado_futbol_mati, TipoClase.NO_ABONADA)
-        _crear_pago_no_abonado_completo(mati, sabado_futbol_mati)
+        abono_mati_futbol = AbonoCliente(
+            usuario_id=mati.id,
+            actividad='futbol',
+            dia_semana=5,
+            hora_inicio=13,
+            fecha_desde=date(2026, 7, 1),
+            fecha_hasta=date(2026, 7, 31),
+            estado=EstadoAbono.ACTIVO,
+        )
+        db.session.add(abono_mati_futbol)
+        db.session.flush()
+        _crear_reserva_en_turno(mati, sabado_futbol_mati, TipoClase.ABONADA, abono_mati_futbol)
+        _crear_pago_abonado_completo(mati, sabado_futbol_mati, abono_mati_futbol)
 
 
 def _crear_reserva_demo(usuario, actividad, tipo_clase=TipoClase.NO_ABONADA):
@@ -599,7 +622,7 @@ def init_database():
         print("  - Futbol: sabado 13:00 con 10 cupos")
         print("  - Futbol: viernes 03/07/2026 18:00 puntual con Maria abonada")
         print(f"  Total por deporte: {clases_demo}")
-        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026, 14/07/2026 y 15/07/2026.")
+        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026, 14/07/2026, 15/07/2026, 17/07/2026 y 18/07/2026.")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")
