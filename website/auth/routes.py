@@ -1,4 +1,4 @@
-from flask import current_app, render_template, redirect, url_for, request, flash
+from flask import current_app, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from website.auth import auth_bp
 from website import db
@@ -664,6 +664,23 @@ def editar_perfil():
         return redirect(url_for('auth.editar_perfil'))
 
     return _render_editar_perfil()
+
+
+@auth_bp.route('/perfil/validar-email')
+@login_required
+def validar_email_perfil():
+    if current_user.tipo_usuario != TipoUsuario.CLIENTE:
+        return jsonify({'valid': False, 'message': 'No tienes permisos para validar este email.'}), 403
+
+    email = request.args.get('email', '').strip().lower()
+    if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
+        return jsonify({'valid': False, 'available': False, 'message': 'El email no es válido'})
+
+    existe = Usuario.query.filter(Usuario.email == email, Usuario.id != current_user.id).first() is not None
+    if existe:
+        return jsonify({'valid': False, 'available': False, 'message': 'El email ya está registrado'})
+
+    return jsonify({'valid': True, 'available': True, 'message': ''})
 
 
 @auth_bp.route('/reset-password', methods=['GET', 'POST'])

@@ -314,6 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!form) return;
 
     const submitButton = document.getElementById('profile-data-submit');
+    const emailValidationUrl = "{{ url_for('auth.validar_email_perfil') }}";
     const fields = {
         nombre: document.getElementById('nombre'),
         apellido: document.getElementById('apellido'),
@@ -333,6 +334,9 @@ document.addEventListener('DOMContentLoaded', function() {
         email: Boolean(messageFor('email')?.classList.contains('error')),
         fecha_nacimiento: Boolean(messageFor('fecha_nacimiento')?.classList.contains('error'))
     };
+    let emailRemoteError = '';
+    let emailCheckPending = false;
+    let emailValidationTimer = null;
 
     function messageFor(fieldName) {
         return form.querySelector(`[data-profile-error-for="${fieldName}"]`);
@@ -378,6 +382,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
                 return 'El email no es válido';
             }
+            if (emailRemoteError) {
+                return emailRemoteError;
+            }
             return '';
         }
 
@@ -393,6 +400,44 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         return '';
+    }
+
+    function scheduleEmailValidation() {
+        const email = (fields.email.value || '').trim().toLowerCase();
+        emailRemoteError = '';
+
+        if (emailValidationTimer) {
+            window.clearTimeout(emailValidationTimer);
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            emailCheckPending = false;
+            return;
+        }
+
+        emailCheckPending = true;
+        validateForm();
+        emailValidationTimer = window.setTimeout(async () => {
+            try {
+                const response = await fetch(`${emailValidationUrl}?email=${encodeURIComponent(email)}`);
+                const result = await response.json();
+                const currentEmail = (fields.email.value || '').trim().toLowerCase();
+                if (currentEmail !== email) return;
+
+                emailRemoteError = result.valid ? '' : (result.message || 'El email ya está registrado');
+            } catch (error) {
+                const currentEmail = (fields.email.value || '').trim().toLowerCase();
+                if (currentEmail === email) {
+                    emailRemoteError = 'No se pudo validar el email. Intentá nuevamente.';
+                }
+            } finally {
+                const currentEmail = (fields.email.value || '').trim().toLowerCase();
+                if (currentEmail === email) {
+                    emailCheckPending = false;
+                    validateForm();
+                }
+            }
+        }, 350);
     }
 
     function renderFieldState(fieldName, error, showError) {
@@ -414,6 +459,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderFieldState(fieldName, error, showAllErrors || touchedFields[fieldName]);
             if (error) isValid = false;
         });
+        if (emailCheckPending) isValid = false;
 
         if (submitButton) {
             submitButton.disabled = !isValid;
@@ -426,6 +472,9 @@ document.addEventListener('DOMContentLoaded', function() {
     Object.entries(fields).forEach(([fieldName, field]) => {
         const markAndValidate = () => {
             touchedFields[fieldName] = true;
+            if (fieldName === 'email') {
+                scheduleEmailValidation();
+            }
             validateForm();
         };
         field.addEventListener('input', markAndValidate);
