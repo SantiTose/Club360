@@ -238,6 +238,7 @@ def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_es
     viernes_padel_mati = _buscar_turno('padel', date(2026, 7, 17), 16)
     sabado_futbol_mati = _buscar_turno('futbol', date(2026, 7, 18), 13)
     viernes_futbol_abonada = _buscar_turno('futbol', date(2026, 7, 3), 18)
+    jueves_padel_lleno_sin_espera = _buscar_turno('padel', date(2026, 7, 9), 15)
 
     if viernes_padel:
         viernes_padel.capacidad_maxima = 2
@@ -322,6 +323,20 @@ def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_es
 
     _crear_reserva_en_turno(usuarios_espera_basquet[0], martes_basquet_lleno, TipoClase.NO_ABONADA)
     _crear_pago_no_abonado_completo(usuarios_espera_basquet[0], martes_basquet_lleno)
+
+    if not jueves_padel_lleno_sin_espera:
+        jueves_padel_lleno_sin_espera = Turno(
+            actividad='padel',
+            hora_inicio=datetime(2026, 7, 9, 15, 0),
+            hora_fin=datetime(2026, 7, 9, 16, 0),
+            capacidad_maxima=10,
+            cupos_disponibles=0,
+            cancelado=False,
+        )
+        db.session.add(jueves_padel_lleno_sin_espera)
+    else:
+        jueves_padel_lleno_sin_espera.capacidad_maxima = 10
+        jueves_padel_lleno_sin_espera.cupos_disponibles = 0
 
     viernes_padel_deuda = _buscar_turno('padel', date(2026, 7, 3), 16)
     if viernes_padel_deuda:
@@ -621,8 +636,9 @@ def init_database():
         print("  - Padel: viernes 19:00 con 10 cupos")
         print("  - Futbol: sabado 13:00 con 10 cupos")
         print("  - Futbol: viernes 03/07/2026 18:00 puntual con Maria abonada")
+        print("  - Padel: jueves 09/07/2026 15:00 puntual lleno sin lista de espera")
         print(f"  Total por deporte: {clases_demo}")
-        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 10/07/2026, 11/07/2026, 13/07/2026, 14/07/2026, 15/07/2026, 17/07/2026 y 18/07/2026.")
+        print("Escenarios demo creados para 03/07/2026, 08/07/2026, 09/07/2026, 10/07/2026, 11/07/2026, 13/07/2026, 14/07/2026, 15/07/2026, 17/07/2026 y 18/07/2026.")
         
         print("\n✅ Base de datos inicializada correctamente!")
         print("\nCuentas de prueba:")

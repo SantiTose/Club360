@@ -194,6 +194,14 @@ def _resolver_redirect_reserva():
     return redirect(url_for('turnos.ver_turnos_disponibles'))
 
 
+def _mensaje_agregado_lista_espera(reserva_interna):
+    return (
+        'El cliente fue agregado a la lista de espera con exito.'
+        if reserva_interna else
+        'Fuiste agregado a la lista de espera con exito.'
+    )
+
+
 def _validar_regla_horaria(inicio, fin):
     if inicio.weekday() == 6:
         return False, 'No se permiten turnos los domingos'
@@ -1980,10 +1988,10 @@ def reservar_turno(turno_id):
         _procesar_suspension_automatica(cliente_objetivo)
     restricciones = _obtener_restricciones_suspension(cliente_objetivo)
     if not usar_credito and tipo_clase == TipoClase.ABONADA and restricciones['suspendido_abonado']:
-        flash('La cuenta del cliente está suspendida para reservas abonadas. Debe regularizar su abono vencido.', 'error')
+        flash('La cuenta del cliente está suspendida para clases de esta modalidad', 'error')
         return _resolver_redirect_reserva()
     if not usar_credito and tipo_clase == TipoClase.NO_ABONADA and restricciones['suspendido_no_abonado']:
-        flash('La cuenta del cliente está suspendida para clases no abonadas por acumular 3 clases vencidas impagas.', 'error')
+        flash('La cuenta del cliente está suspendida para clases de esta modalidad', 'error')
         return _resolver_redirect_reserva()
 
     if turno.cancelado:
@@ -2028,7 +2036,7 @@ def reservar_turno(turno_id):
         else:
             _agregar_a_lista_espera(turno, cliente_objetivo.id, tipo_clase)
             db.session.commit()
-            flash('Fuiste agregado a la lista de espera con exito.', 'info')
+            flash(_mensaje_agregado_lista_espera(reserva_interna), 'info')
         return _resolver_redirect_reserva()
 
     if invitacion_activa and invitacion_activa.usuario_id == cliente_objetivo.id:
@@ -2046,7 +2054,7 @@ def reservar_turno(turno_id):
 
         if usar_credito:
             if restricciones['suspendido_no_abonado']:
-                flash('La reserva falló debido a que el usuario se encuentra suspendido para turnos no abonados.', 'error')
+                flash('La cuenta del cliente está suspendida para clases de esta modalidad', 'error')
                 return _resolver_redirect_reserva()
 
             reserva = Reserva(
@@ -2121,7 +2129,7 @@ def reservar_turno(turno_id):
                         mensaje += ' Se aplicó un crédito a una clase del abono.'
                     flash(mensaje, 'success')
                     if turnos_en_espera:
-                        flash('Fuiste agregado a la lista de espera con exito.', 'info')
+                        flash(_mensaje_agregado_lista_espera(reserva_interna), 'info')
                     for turno_espera in turnos_en_espera:
                         personas_en_espera = ListaEspera.query.filter_by(turno_id=turno_espera.id).count()
                         if personas_en_espera == 10:
@@ -2227,7 +2235,7 @@ def reservar_turno(turno_id):
         if personas_en_espera == 10:
             _notificar_admin_lista_espera_llena(turno, TIPO_LISTA_GENERAL, personas_en_espera)
 
-        flash('Fuiste agregado a la lista de espera con exito.', 'info')
+        flash(_mensaje_agregado_lista_espera(reserva_interna), 'info')
     
     return _resolver_redirect_reserva()
 

@@ -133,6 +133,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const fechaConfirmacion = new Date(event.start).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
             const horarioConfirmacion = helpers.getHourRange(event.start, event.end);
             const esAntesDelDia15 = new Date().getDate() < 15;
+            const textoAccionListaEspera = permiteAsignarCliente ? 'Anotar' : 'Anotarme';
+            const textoBotonListaEspera = permiteAsignarCliente ? 'Anotar en lista de espera' : 'Anotarme en lista de espera';
             const mensajeAbono = p.tiene_abono
                 ? '<p class="text-muted" style="margin-bottom:.75rem;">Ya tenés modalidad abonada activa para esta franja. Al confirmar se cobrará esta clase con tarjeta.</p>'
                 : esAntesDelDia15
@@ -153,8 +155,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 : usaCredito
                 ? `Vas a usar un crédito para reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`
                 : `Vas a reservar ${helpers.escapeHtml(actividad)} el ${helpers.escapeHtml(fechaConfirmacion)} de ${helpers.escapeHtml(horarioConfirmacion)}.`;
-            const accionConfirmacion = usaCredito && !isFull ? 'Reservar con crédito' : isFull ? 'Anotarme' : 'Reservar';
-            const textoBoton = isFull ? 'Anotarme en lista de espera' : 'Reservar turno';
+            const accionConfirmacion = usaCredito && !isFull ? 'Reservar con crédito' : isFull ? textoAccionListaEspera : 'Reservar';
+            const textoBoton = isFull ? textoBotonListaEspera : 'Reservar turno';
             const textoBotonFinal = usaCredito && !isFull ? 'Reservar turno con crédito' : textoBoton;
             const boton = p.ya_reservado
                 ? `<div>
