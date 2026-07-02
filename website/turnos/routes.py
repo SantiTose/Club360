@@ -3,6 +3,7 @@ import secrets
 import calendar
 import re
 from datetime import datetime, timedelta, time
+from zoneinfo import ZoneInfo
 
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app, send_file
 from flask_login import login_required, current_user
@@ -81,7 +82,7 @@ def _es_feriado_nacional(fecha_hora):
 
 
 def _ahora_local():
-    return datetime.now()
+    return datetime.now(ZoneInfo('America/Argentina/Buenos_Aires')).replace(tzinfo=None)
 
 
 def _horas_anticipacion(turno):
@@ -236,7 +237,7 @@ def _construir_inicio_fin(fecha_raw, hora_raw):
     inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora, minute=0, second=0, microsecond=0)
     fin = inicio + timedelta(hours=1)
 
-    if fin <= datetime.utcnow():
+    if fin <= _ahora_local():
         return None, None, 'No se pueden crear o editar turnos en fechas u horarios ya finalizados'
 
     valido, error = _validar_regla_horaria(inicio, fin)
@@ -247,12 +248,14 @@ def _construir_inicio_fin(fecha_raw, hora_raw):
 
 
 def _proxima_fecha_para_dia(dia_semana, hora):
-    hoy = datetime.utcnow().date()
+    ahora = _ahora_local()
+    hoy = ahora.date()
     dias_hasta_turno = (dia_semana - hoy.weekday()) % 7
     fecha = hoy + timedelta(days=dias_hasta_turno)
     inicio = datetime.combine(fecha, datetime.min.time()).replace(hour=hora, minute=0, second=0, microsecond=0)
+    fin = inicio + timedelta(hours=1)
 
-    if inicio <= datetime.utcnow():
+    if fin <= ahora:
         fecha += timedelta(days=7)
 
     return fecha
@@ -272,7 +275,7 @@ def _construir_turnos_recurrentes_hasta_fin_anio(dia_semana_raw, hora_raw):
         return [], 'Horario inválido. Debe estar entre 08 y 21'
 
     fecha = _proxima_fecha_para_dia(dia_semana, hora)
-    fin_anio = datetime.utcnow().date().replace(month=12, day=31)
+    fin_anio = _ahora_local().date().replace(month=12, day=31)
     turnos = []
 
     while fecha <= fin_anio:
@@ -417,7 +420,7 @@ def _pagos_no_abonados_vencidos(usuario_id):
         .all()
     )
     vencidos = []
-    ahora = datetime.utcnow()
+    ahora = _ahora_local()
     for pago in pagos:
         turno = _obtener_turno_desde_pago(pago)
         if turno and turno.hora_inicio < ahora:
@@ -427,7 +430,7 @@ def _pagos_no_abonados_vencidos(usuario_id):
 
 def _fecha_limite_pago_abono(abono):
     limite_mensual = abono.fecha_desde.replace(day=11)
-    fecha_creacion = (abono.fecha_creacion or datetime.utcnow()).date()
+    fecha_creacion = (abono.fecha_creacion or _ahora_local()).date()
     limite_desde_alta = fecha_creacion + timedelta(days=7)
     return max(limite_mensual, limite_desde_alta)
 
@@ -1509,7 +1512,7 @@ def _cancelar_abono_si_sin_reservas_futuras(abono_id):
 
 
 def _cancelar_reservas_futuras_de_abono(abono, generar_creditos=False, eliminar_pagos_pendientes=True):
-    ahora = datetime.utcnow()
+    ahora = _ahora_local()
     reservas = (
         Reserva.query
         .join(Turno, Reserva.turno_id == Turno.id)
@@ -1730,7 +1733,7 @@ def _enviar_emails_qr_reservas(reservas, asunto='Reserva confirmada - Club 360')
 
 def _enviar_recordatorios_qr(base_dir, usuario_id=None):
     """Envia recordatorio por email con QR el mismo dia de la clase."""
-    hoy = datetime.utcnow().date().isoformat()
+    hoy = _ahora_local().date().isoformat()
 
     query = (
         Reserva.query
@@ -1858,7 +1861,7 @@ def eventos_turnos():
 
         turnos = (
             Turno.query
-            .filter(Turno.hora_fin >= datetime.utcnow())
+            .filter(Turno.hora_fin >= _ahora_local())
             .filter(Turno.cancelado == False)
             .order_by(Turno.hora_inicio.asc())
             .all()
@@ -2368,7 +2371,7 @@ def mis_turnos():
         Reserva.query
         .join(Turno, Reserva.turno_id == Turno.id)
         .filter(Reserva.usuario_id == current_user.id)
-        .filter(Turno.hora_fin >= datetime.utcnow())
+        .filter(Turno.hora_fin >= _ahora_local())
         .order_by(Turno.hora_inicio.asc())
         .all()
     )
@@ -2556,30 +2559,33 @@ def validar_asistencia_qr(qr_token):
         flash('No tienes permisos para escanear un QR de asistencia, intenta iniciar sesion con una cuenta de empleado valida', 'error')
         return redirect(url_for('auth.login'))
 
-    reserva = _reserva_desde_qr_valido(qr_token)
-    if not reserva:
-        flash('Ese QR no contiene datos válidos.', 'error')
+    reserva, error_qr = _validar_reserva_qr_basica(qr_token)
+    if error_qr:
+        flash(error_qr, 'error')
         return redirect(url_for('turnos.escanear_qr'))
 
     if reserva.asistencia_validada:
         flash('El QR provisto ya fue validado previamente.', 'error')
         return redirect(url_for('dashboard'))
 
-    if not _reserva_es_del_dia_actual(reserva):
-        flash('Solo se puede validar la asistencia de turnos del día actual.', 'error')
-        return redirect(url_for('turnos.escanear_qr'))
-
     monto_pendiente = _monto_pendiente_de_reserva(reserva)
     if request.method == 'POST':
         if monto_pendiente > 0:
             flash('No se puede validar la asistencia hasta que el turno esté pagado al 100%.', 'error')
             return redirect(url_for('turnos.validar_asistencia_qr', qr_token=qr_token))
+        if not _reserva_esta_en_ventana_de_validacion(reserva):
+            flash('Solo se puede validar la asistencia el mismo día del turno y hasta que finaliza.', 'error')
+            return redirect(url_for('turnos.escanear_qr'))
 
         reserva.asistencia_validada = True
         reserva.fecha_asistencia = datetime.utcnow()
         db.session.commit()
         flash('Asistencia validada correctamente', 'success')
         return redirect(url_for('dashboard'))
+
+    if monto_pendiente <= 0 and not _reserva_esta_en_ventana_de_validacion(reserva):
+        flash('Solo se puede validar la asistencia el mismo día del turno y hasta que finaliza.', 'error')
+        return redirect(url_for('turnos.escanear_qr'))
 
     return render_template(
         'turnos/validar_asistencia.html',
@@ -2605,16 +2611,21 @@ def _normalizar_qr_asistencia(qr_raw):
     return qr_token
 
 
-def _reserva_es_del_dia_actual(reserva):
+def _reserva_esta_en_ventana_de_validacion(reserva):
     turno = reserva.turno
-    return bool(turno and turno.hora_inicio.date() == _ahora_local().date())
+    if not turno:
+        return False
+    ahora = _ahora_local()
+    return ahora.date() == turno.hora_inicio.date() and ahora <= turno.hora_fin
 
 
-def _reserva_desde_qr_valido(qr_token):
+def _validar_reserva_qr_basica(qr_token):
     reserva = Reserva.query.filter_by(qr_token=qr_token).first()
-    if not reserva or not reserva.turno or reserva.turno.cancelado:
-        return None
-    return reserva
+    if not reserva or not reserva.turno:
+        return None, 'Ese QR no contiene datos válidos.'
+    if reserva.turno.cancelado:
+        return None, 'Ese QR no contiene datos válidos.'
+    return reserva, None
 
 
 @turnos_bp.route('/escanear-qr', methods=['GET', 'POST'])
@@ -2627,9 +2638,9 @@ def escanear_qr():
 
     if request.method == 'POST':
         qr_token = _normalizar_qr_asistencia(request.form.get('qr_token', ''))
-        reserva = _reserva_desde_qr_valido(qr_token) if qr_token else None
-        if not reserva:
-            flash('Ese QR no contiene datos válidos.', 'error')
+        reserva, error_qr = _validar_reserva_qr_basica(qr_token) if qr_token else (None, 'Ese QR no contiene datos válidos.')
+        if error_qr:
+            flash(error_qr, 'error')
             return redirect(url_for('turnos.escanear_qr'))
         return redirect(url_for('turnos.validar_asistencia_qr', qr_token=qr_token))
 
@@ -2644,15 +2655,24 @@ def validar_qr_escaneado():
         return jsonify({'valid': False, 'message': 'No tienes permisos para escanear un QR de asistencia.'}), 403
 
     qr_token = _normalizar_qr_asistencia(request.form.get('qr_token', ''))
-    reserva = _reserva_desde_qr_valido(qr_token) if qr_token else None
-    if not reserva:
-        return jsonify({'valid': False, 'message': 'Ese QR no contiene datos válidos.'})
+    reserva, error_qr = _validar_reserva_qr_basica(qr_token) if qr_token else (None, 'Ese QR no contiene datos válidos.')
+    if error_qr:
+        return jsonify({'valid': False, 'message': error_qr})
 
     if reserva.asistencia_validada:
         return jsonify({'valid': False, 'message': 'El QR provisto ya fue validado previamente.'})
 
-    if not _reserva_es_del_dia_actual(reserva):
-        return jsonify({'valid': False, 'message': 'Solo se puede validar la asistencia de turnos del día actual.'})
+    if _monto_pendiente_de_reserva(reserva) > 0:
+        return jsonify({
+            'valid': False,
+            'message': 'No se puede validar la asistencia hasta que el turno esté pagado al 100%.'
+        })
+
+    if not _reserva_esta_en_ventana_de_validacion(reserva):
+        return jsonify({
+            'valid': False,
+            'message': 'Solo se puede validar la asistencia el mismo día del turno y hasta que finaliza.'
+        })
 
     return jsonify({
         'valid': True,
