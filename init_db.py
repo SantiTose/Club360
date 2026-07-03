@@ -237,6 +237,7 @@ def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_es
     martes_basquet_lleno = _buscar_turno('basquet', date(2026, 7, 14), 14)
     viernes_padel_mati = _buscar_turno('padel', date(2026, 7, 17), 16)
     sabado_futbol_mati = _buscar_turno('futbol', date(2026, 7, 18), 13)
+    viernes_futbol_maria = _buscar_turno('futbol', date(2026, 7, 3), 15)
     viernes_futbol_abonada = _buscar_turno('futbol', date(2026, 7, 3), 18)
     jueves_padel_lleno_sin_espera = _buscar_turno('padel', date(2026, 7, 9), 15)
 
@@ -342,6 +343,21 @@ def _crear_escenarios_turnos_demo(felipe, maria, pepe, carlos, mati, usuarios_es
     if viernes_padel_deuda:
         _crear_reserva_en_turno(maria, viernes_padel_deuda, TipoClase.NO_ABONADA)
         _crear_pago_no_abonado_con_deuda(maria, viernes_padel_deuda)
+
+    if not viernes_futbol_maria:
+        viernes_futbol_maria = Turno(
+            actividad='futbol',
+            hora_inicio=datetime(2026, 7, 3, 15, 0),
+            hora_fin=datetime(2026, 7, 3, 16, 0),
+            capacidad_maxima=10,
+            cupos_disponibles=10,
+            cancelado=False,
+        )
+        db.session.add(viernes_futbol_maria)
+        db.session.flush()
+
+    _crear_reserva_en_turno(maria, viernes_futbol_maria, TipoClase.NO_ABONADA)
+    _crear_pago_no_abonado_completo(maria, viernes_futbol_maria)
 
     if not viernes_futbol_abonada:
         viernes_futbol_abonada = Turno(
@@ -635,6 +651,7 @@ def init_database():
         print("  - Padel: viernes 16:00 con 10 cupos")
         print("  - Padel: viernes 19:00 con 10 cupos")
         print("  - Futbol: sabado 13:00 con 10 cupos")
+        print("  - Futbol: viernes 03/07/2026 15:00 puntual con Maria no abonada")
         print("  - Futbol: viernes 03/07/2026 18:00 puntual con Maria abonada")
         print("  - Padel: jueves 09/07/2026 15:00 puntual lleno sin lista de espera")
         print(f"  Total por deporte: {clases_demo}")
